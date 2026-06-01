@@ -1,0 +1,30 @@
+const express = require('express');
+const healthRoute = require('./health.route');
+const { requireAuth } = require('../middlewares/authenticate');
+
+const categoryAdminRoutes = require('../modules/category/category.route');
+const productAdminRoutes = require('../modules/product/product.route');
+const warrantyBatchAdminRoutes = require('../modules/warrantyBatch/warrantyBatch.route');
+const inventoryAdminRoutes = require('../modules/inventory/inventory.route');
+const stockTxAdminRoutes = require('../modules/stockTransaction/stockTransaction.route');
+const authAdminRoutes = require('../modules/auth/auth.route');
+const productController = require('../modules/product/product.controller');
+const categoryController = require('../modules/category/category.controller');
+const productValidators = require('../modules/product/product.validation');
+
+const router = express.Router();
+
+router.use('/health', healthRoute);
+
+router.get('/public/products', productController.searchPublicProducts);
+router.get('/public/products/:sku/inventory', productValidators.skuParamValidator, productController.getPublicInventoryBySku);
+router.get('/public/categories', categoryController.listCategories);
+
+router.use('/admin/auth', authAdminRoutes);
+router.use('/admin/categories', requireAuth, categoryAdminRoutes);
+router.use('/admin/products', requireAuth, productAdminRoutes);
+router.use('/admin', requireAuth, warrantyBatchAdminRoutes);
+router.use('/admin/inventory', requireAuth, inventoryAdminRoutes);
+router.use('/admin', requireAuth, stockTxAdminRoutes);
+
+module.exports = router;
