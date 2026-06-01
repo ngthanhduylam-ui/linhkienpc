@@ -1,39 +1,79 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 export function AdminLoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated, loading } = useAuth();
+
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!loading && isAuthenticated) {
+    const to = location.state?.from || "/admin";
+    return <Navigate to={to} replace />;
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-bold text-brand-900">Admin Login</h1>
-        <p className="mt-1 text-sm text-slate-600">LINHKIENPC inventory management</p>
+        <h1 className="text-2xl font-bold text-brand-900">Đăng nhập quản trị</h1>
+        <p className="mt-1 text-sm text-slate-600">LINHKIENPC quản lý tồn kho</p>
 
-        <form className="mt-6 space-y-4">
+        <form
+          className="mt-6 space-y-4"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setError("");
+            setIsSubmitting(true);
+            try {
+              await login(username, password);
+              const to = location.state?.from || "/admin";
+              navigate(to, { replace: true });
+            } catch (err) {
+              setError(err?.message || "Đăng nhập thất bại.");
+            } finally {
+              setIsSubmitting(false);
+            }
+          }}
+        >
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Username</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Tên đăng nhập</label>
             <input
               className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="admin"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Mật khẩu</label>
             <input
               type="password"
               className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="••••••••"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
             />
           </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
           <button
-            type="button"
-            className="h-11 w-full rounded-md bg-brand-700 text-sm font-medium text-white hover:bg-brand-900"
+            type="submit"
+            disabled={isSubmitting}
+            className="h-11 w-full rounded-md bg-brand-700 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Login
+            {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
           </button>
         </form>
 
         <div className="mt-5 text-center text-sm">
           <Link to="/" className="text-brand-700 hover:underline">
-            Back to public search
+            Quay về trang tra cứu
           </Link>
         </div>
       </div>

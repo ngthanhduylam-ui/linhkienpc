@@ -1,11 +1,11 @@
 import { NavLink } from "react-router-dom";
 
 const sidebarItems = [
-  { label: "Products", to: "/admin/products" },
-  { label: "Warranty Batches", to: "/admin/warranty-batches" },
-  { label: "Stock In", to: "/admin/stock-in" },
-  { label: "Stock Out", to: "/admin/stock-out" },
-  { label: "Transaction History", to: "/admin/transaction-history" }
+  { label: "Sản phẩm", to: "/admin/products" },
+  { label: "Lô bảo hành", to: "/admin/warranty-batches" },
+  { label: "Nhập kho", to: "/admin/stock-in" },
+  { label: "Xuất kho", to: "/admin/stock-out" },
+  { label: "Lịch sử giao dịch", to: "/admin/transaction-history" }
 ];
 
 export function AdminSidebar({ isOpen, onClose }) {
@@ -22,7 +22,7 @@ export function AdminSidebar({ isOpen, onClose }) {
       >
         <div className="mb-6 px-2">
           <h2 className="text-xl font-bold text-brand-900">LINHKIENPC</h2>
-          <p className="text-xs text-slate-500">Admin Management</p>
+          <p className="text-xs text-slate-500">Quản trị hệ thống</p>
         </div>
 
         <nav className="space-y-1">

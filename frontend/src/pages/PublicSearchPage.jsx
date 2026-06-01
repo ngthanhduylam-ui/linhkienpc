@@ -35,7 +35,7 @@ export function PublicSearchPage() {
       } catch (err) {
         if (!isCancelled && requestIdRef.current === currentRequestId) {
           setResults([]);
-          setError(err?.message || "Failed to fetch inventory.");
+          setError(err?.message || "Không thể tải dữ liệu tồn kho.");
         }
       } finally {
         if (!isCancelled && requestIdRef.current === currentRequestId) {

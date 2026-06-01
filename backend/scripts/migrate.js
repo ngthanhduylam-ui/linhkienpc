@@ -22,12 +22,21 @@ async function getAppliedMigrations() {
 
 async function applyMigration(fileName) {
   const filePath = path.join(migrationsDir, fileName);
-  const sql = await fs.readFile(filePath, 'utf8');
+  const rawSql = await fs.readFile(filePath, 'utf8');
 
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-    await connection.query(sql);
+const statements = rawSql
+  .replace(/^\uFEFF/, '')
+  .split(';')
+  .map((statement) => statement.trim())
+  .filter(Boolean);
+
+const connection = await pool.getConnection();
+try {
+  await connection.beginTransaction();
+
+  for (const statement of statements) {
+    await connection.query(statement);
+  }
     await connection.query(
       `INSERT INTO ${MIGRATION_TABLE} (file_name) VALUES (?)`,
       [fileName]

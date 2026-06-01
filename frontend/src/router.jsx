@@ -1,8 +1,12 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
-import { PublicSearchPage } from "./pages/PublicSearchPage";
-import { AdminLoginPage } from "./pages/AdminLoginPage";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AdminLayout } from "./layouts/AdminLayout";
+import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { AdminSectionPage } from "./pages/AdminSectionPage";
+import { PublicSearchPage } from "./pages/PublicSearchPage";
+import { StockInPage } from "./pages/StockInPage";
+import { StockOutPage } from "./pages/StockOutPage";
+import { TransactionHistoryPage } from "./pages/TransactionHistoryPage";
 
 export const appRouter = createBrowserRouter([
   {
@@ -15,14 +19,19 @@ export const appRouter = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: <AdminLayout />,
+    element: <ProtectedRoute />,
     children: [
-      { index: true, element: <Navigate to="/admin/products" replace /> },
-      { path: "products", element: <AdminSectionPage title="Products" /> },
-      { path: "warranty-batches", element: <AdminSectionPage title="Warranty Batches" /> },
-      { path: "stock-in", element: <AdminSectionPage title="Stock In" /> },
-      { path: "stock-out", element: <AdminSectionPage title="Stock Out" /> },
-      { path: "transaction-history", element: <AdminSectionPage title="Transaction History" /> }
+      {
+        element: <AdminLayout />,
+        children: [
+          { index: true, element: <Navigate to="/admin/products" replace /> },
+          { path: "products", element: <AdminSectionPage title="San pham" /> },
+          { path: "warranty-batches", element: <AdminSectionPage title="Lo bao hanh" /> },
+          { path: "stock-in", element: <StockInPage /> },
+          { path: "stock-out", element: <StockOutPage /> },
+          { path: "transaction-history", element: <TransactionHistoryPage /> }
+        ]
+      }
     ]
   }
 ]);
