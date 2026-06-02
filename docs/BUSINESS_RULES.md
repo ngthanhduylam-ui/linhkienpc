@@ -135,3 +135,19 @@ SUM(IN quantity theo note) - SUM(OUT quantity theo note)
 - Logout revoke refresh token bằng `revoked_at`.
 - Admin inactive không được login.
 - Protected admin API dùng `requireAuth` middleware.
+## Định hướng phát triển tương lai
+
+Các tính năng có thể triển khai trong tương lai nhưng hiện chưa tồn tại:
+
+- Giá vốn
+- Giá bán
+- Công nợ khách hàng
+- Công nợ nhà cung cấp
+- Purchase Order
+- Sales Order
+- Import Excel
+- Export Excel
+- Barcode
+- QR Code
+
+Không được giả định các tính năng này đã tồn tại khi phát triển hệ thống.

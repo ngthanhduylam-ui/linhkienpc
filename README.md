@@ -158,3 +158,13 @@ Admin:
 - [Database](docs/DATABASE.md)
 - [API](docs/API.md)
 - [Business Rules](docs/BUSINESS_RULES.md)
+## Trạng thái dự án
+
+Version: Internal Beta
+
+Mục tiêu hiện tại:
+- Quản lý tồn kho nội bộ
+- Thay thế dần việc tra cứu trên Sapo
+- Kiểm thử thực tế trong môi trường cửa hàng
+
+Chưa phải ERP hoặc hệ thống bán hàng hoàn chỉnh.
