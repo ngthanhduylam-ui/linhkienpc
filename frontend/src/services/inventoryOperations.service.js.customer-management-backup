@@ -16,54 +16,8 @@ export async function listCustomers(keyword = "") {
   return response?.data || [];
 }
 
-export async function listCustomersPage({ keyword = "", page = 1, limit = 10 } = {}) {
-  const query = { page, limit };
-  if (keyword.trim()) query.keyword = keyword.trim();
-
-  const response = await apiGet("/admin/customers", query);
-  return {
-    items: response?.data || [],
-    meta: response?.meta || { page, limit, total: 0 }
-  };
-}
-
-export async function getCustomerRequest(id) {
-  const response = await apiGet(`/admin/customers/${encodeURIComponent(id)}`);
-  return response?.data;
-}
-
-export async function listCustomerTransactions(id, { page = 1, limit = 10 } = {}) {
-  const response = await apiGet(`/admin/customers/${encodeURIComponent(id)}/transactions`, { page, limit });
-  return {
-    items: response?.data || [],
-    meta: response?.meta || { page, limit, total: 0 }
-  };
-}
-
 export async function createCustomer(payload) {
   const response = await apiPost("/admin/customers", payload);
-  return response?.data;
-}
-
-export async function listSuppliers(keyword = "") {
-  const query = keyword.trim() ? { keyword: keyword.trim(), limit: 20 } : { limit: 20 };
-  const response = await apiGet("/admin/suppliers", query);
-  return response?.data || [];
-}
-
-export async function listSuppliersPage({ keyword = "", page = 1, limit = 10 } = {}) {
-  const query = { page, limit };
-  if (keyword.trim()) query.keyword = keyword.trim();
-
-  const response = await apiGet("/admin/suppliers", query);
-  return {
-    items: response?.data || [],
-    meta: response?.meta || { page, limit, total: 0 }
-  };
-}
-
-export async function createSupplier(payload) {
-  const response = await apiPost("/admin/suppliers", payload);
   return response?.data;
 }
 

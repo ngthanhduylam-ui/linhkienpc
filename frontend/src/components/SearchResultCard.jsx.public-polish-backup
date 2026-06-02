@@ -1,16 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
-export function SearchResultCard({ product, autoExpand = false }) {
-  const [expanded, setExpanded] = useState(autoExpand);
-  const sortedNoteGroups = useMemo(
-    () => [...(product.noteGroups || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0)),
-    [product.noteGroups]
-  );
-  const hasNotes = sortedNoteGroups.length > 0;
-
-  useEffect(() => {
-    setExpanded(autoExpand);
-  }, [autoExpand, product.sku]);
+export function SearchResultCard({ product }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasNotes = (product.noteGroups || []).length > 0;
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -45,20 +37,18 @@ export function SearchResultCard({ product, autoExpand = false }) {
         <div className="mt-3">
           {hasNotes ? (
             <ul className="space-y-2">
-              {sortedNoteGroups.map((group) => (
+              {product.noteGroups.map((group) => (
                 <li
                   key={`${product.sku}-${group.note}`}
-                  className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm"
+                  className="flex min-h-11 items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm"
                 >
-                  <span className="break-all font-semibold text-slate-800">{group.note}</span>
-                  <span className="shrink-0 text-base font-bold text-brand-800">Còn {group.quantity}</span>
+                  <span className="font-semibold text-slate-800">{group.note}</span>
+                  <span className="text-lg font-bold text-brand-800">{group.quantity}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              Không có thông tin bảo hành theo ghi chú.
-            </p>
+            <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Chưa có ghi chú nhập kho.</p>
           )}
         </div>
       )}

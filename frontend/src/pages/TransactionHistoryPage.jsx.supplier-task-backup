@@ -14,12 +14,6 @@ function mapTxnType(type) {
   return type || "-";
 }
 
-function getPartner(item) {
-  if (item.txn_type === "IN" && item.supplier) return item.supplier;
-  if (item.txn_type === "OUT" && item.customer) return item.customer;
-  return item.supplier || item.customer || null;
-}
-
 export function TransactionHistoryPage() {
   const [skuInput, setSkuInput] = useState("");
   const [txnTypeInput, setTxnTypeInput] = useState("");
@@ -110,7 +104,7 @@ export function TransactionHistoryPage() {
               <th className="px-3 py-2 font-medium">SKU</th>
               <th className="px-3 py-2 font-medium">Số lượng</th>
               <th className="px-3 py-2 font-medium">Loại</th>
-              <th className="px-3 py-2 font-medium">Đối tác</th>
+              <th className="px-3 py-2 font-medium">Khách hàng</th>
               <th className="px-3 py-2 font-medium">Ghi chú</th>
               <th className="px-3 py-2 font-medium">Admin</th>
             </tr>
@@ -141,10 +135,10 @@ export function TransactionHistoryPage() {
                   <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                   <td className="px-3 py-2 text-slate-700">{mapTxnType(item.txn_type)}</td>
                   <td className="px-3 py-2 text-slate-700">
-                    {getPartner(item) ? (
+                    {item.customer ? (
                       <div>
-                        <p className="font-medium text-slate-800">{getPartner(item).name}</p>
-                        {getPartner(item).phone && <p className="mt-1 text-xs text-slate-500">{getPartner(item).phone}</p>}
+                        <p className="font-medium text-slate-800">{item.customer.name}</p>
+                        {item.customer.phone && <p className="mt-1 text-xs text-slate-500">{item.customer.phone}</p>}
                       </div>
                     ) : (
                       "-"

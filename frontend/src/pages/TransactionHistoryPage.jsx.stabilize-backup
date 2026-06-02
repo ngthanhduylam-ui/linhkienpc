@@ -14,16 +14,13 @@ function mapTxnType(type) {
   return type || "-";
 }
 
-function getPartner(item) {
-  if (item.txn_type === "IN" && item.supplier) return item.supplier;
-  if (item.txn_type === "OUT" && item.customer) return item.customer;
-  return item.supplier || item.customer || null;
-}
-
 export function TransactionHistoryPage() {
   const [skuInput, setSkuInput] = useState("");
   const [txnTypeInput, setTxnTypeInput] = useState("");
-  const [filters, setFilters] = useState({ sku: "", txn_type: "" });
+  const [filters, setFilters] = useState({
+    sku: "",
+    txn_type: ""
+  });
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [items, setItems] = useState([]);
@@ -31,7 +28,10 @@ export function TransactionHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
+  const totalPages = useMemo(() => {
+    const pages = Math.ceil(total / limit);
+    return pages > 0 ? pages : 1;
+  }, [total, limit]);
 
   useEffect(() => {
     let active = true;
@@ -46,6 +46,7 @@ export function TransactionHistoryPage() {
           page,
           limit
         });
+
         if (!active) return;
         setItems(result.items);
         setTotal(Number(result.meta?.total || 0));
@@ -68,7 +69,10 @@ export function TransactionHistoryPage() {
   function handleSearch(event) {
     event.preventDefault();
     setPage(1);
-    setFilters({ sku: skuInput.trim(), txn_type: txnTypeInput });
+    setFilters({
+      sku: skuInput.trim(),
+      txn_type: txnTypeInput
+    });
   }
 
   return (
@@ -110,7 +114,7 @@ export function TransactionHistoryPage() {
               <th className="px-3 py-2 font-medium">SKU</th>
               <th className="px-3 py-2 font-medium">Số lượng</th>
               <th className="px-3 py-2 font-medium">Loại</th>
-              <th className="px-3 py-2 font-medium">Đối tác</th>
+              <th className="px-3 py-2 font-medium">Khách hàng</th>
               <th className="px-3 py-2 font-medium">Ghi chú</th>
               <th className="px-3 py-2 font-medium">Admin</th>
             </tr>
@@ -126,9 +130,8 @@ export function TransactionHistoryPage() {
 
             {!isLoading && items.length === 0 && (
               <tr>
-                <td className="px-3 py-8 text-center" colSpan={7}>
-                  <p className="text-sm font-medium text-slate-700">Không có giao dịch phù hợp.</p>
-                  <p className="mt-1 text-xs text-slate-500">Thử đổi SKU hoặc loại giao dịch để tìm lại.</p>
+                <td className="px-3 py-4 text-slate-500" colSpan={7}>
+                  Không có giao dịch phù hợp.
                 </td>
               </tr>
             )}
@@ -141,10 +144,10 @@ export function TransactionHistoryPage() {
                   <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                   <td className="px-3 py-2 text-slate-700">{mapTxnType(item.txn_type)}</td>
                   <td className="px-3 py-2 text-slate-700">
-                    {getPartner(item) ? (
+                    {item.customer ? (
                       <div>
-                        <p className="font-medium text-slate-800">{getPartner(item).name}</p>
-                        {getPartner(item).phone && <p className="mt-1 text-xs text-slate-500">{getPartner(item).phone}</p>}
+                        <p className="font-medium text-slate-800">{item.customer.name}</p>
+                        {item.customer.phone && <p className="mt-1 text-xs text-slate-500">{item.customer.phone}</p>}
                       </div>
                     ) : (
                       "-"

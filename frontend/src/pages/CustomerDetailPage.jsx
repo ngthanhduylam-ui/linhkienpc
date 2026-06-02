@@ -1,0 +1,158 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { getCustomerRequest, listCustomerTransactions } from "../services/inventoryOperations.service";
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("vi-VN");
+}
+
+function mapTxnType(type) {
+  if (type === "IN") return "Nhập";
+  if (type === "OUT") return "Xuất";
+  return type || "-";
+}
+
+export function CustomerDetailPage() {
+  const { id } = useParams();
+  const [customer, setCustomer] = useState(null);
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadData() {
+      setIsLoading(true);
+      setError("");
+      try {
+        const [customerData, transactionResult] = await Promise.all([
+          getCustomerRequest(id),
+          listCustomerTransactions(id, { page, limit })
+        ]);
+        if (!active) return;
+        setCustomer(customerData);
+        setItems(transactionResult.items);
+        setTotal(Number(transactionResult.meta?.total || 0));
+      } catch (err) {
+        if (!active) return;
+        setError(err?.message || "Không thể tải thông tin khách hàng.");
+        setCustomer(null);
+        setItems([]);
+        setTotal(0);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+
+    loadData();
+    return () => {
+      active = false;
+    };
+  }, [id, page, limit]);
+
+  return (
+    <section className="space-y-5">
+      <div>
+        <Link to="/admin/customers" className="text-sm font-medium text-brand-700 hover:text-brand-900">
+          ← Quay lại danh sách khách hàng
+        </Link>
+        <h2 className="mt-3 text-2xl font-semibold text-slate-900">Chi tiết khách hàng</h2>
+      </div>
+
+      {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+      {customer && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-900">{customer.name}</h3>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Số điện thoại</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{customer.phone || "-"}</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Địa chỉ</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{customer.address || "-"}</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Số giao dịch</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{customer.transaction_count || 0}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">Lịch sử giao dịch</h3>
+
+        <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+          <div className="hidden grid-cols-[1.1fr_0.7fr_1fr_0.7fr_1.5fr] gap-3 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 md:grid">
+            <span>Ngày</span>
+            <span>Loại</span>
+            <span>SKU</span>
+            <span>Số lượng</span>
+            <span>Ghi chú</span>
+          </div>
+
+          {isLoading && <p className="px-3 py-4 text-sm text-slate-500">Đang tải dữ liệu...</p>}
+
+          {!isLoading && items.length === 0 && (
+            <div className="px-3 py-8 text-center">
+              <p className="text-sm font-medium text-slate-700">Khách hàng chưa có giao dịch.</p>
+              <p className="mt-1 text-xs text-slate-500">Giao dịch nhập/xuất kho có gắn khách hàng sẽ hiển thị tại đây.</p>
+            </div>
+          )}
+
+          {!isLoading &&
+            items.map((item) => (
+              <div
+                key={item.id}
+                className="border-t border-slate-100 px-3 py-3 md:grid md:grid-cols-[1.1fr_0.7fr_1fr_0.7fr_1.5fr] md:gap-3"
+              >
+                <p className="text-sm text-slate-700">{formatDateTime(item.occurred_at)}</p>
+                <p className="mt-1 text-sm font-semibold text-brand-800 md:mt-0">{mapTxnType(item.txn_type)}</p>
+                <p className="mt-1 break-all text-sm text-slate-700 md:mt-0">{item.product?.sku || "-"}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 md:mt-0">{item.quantity}</p>
+                <p className="mt-1 text-sm text-slate-600 md:mt-0">{item.note || "-"}</p>
+              </div>
+            ))}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-sm text-slate-600">
+            Tổng: <span className="font-medium">{total}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1 || isLoading}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Trước
+            </button>
+            <span className="text-sm text-slate-700">
+              Trang {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => (prev < totalPages ? prev + 1 : prev))}
+              disabled={page >= totalPages || isLoading}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

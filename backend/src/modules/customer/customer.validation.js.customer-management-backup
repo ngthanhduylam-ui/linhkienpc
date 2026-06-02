@@ -1,11 +1,8 @@
 const validateRequest = require('../../middlewares/validateRequest');
 
-const idPattern = /^\d+$/;
-
 const listCustomersValidator = validateRequest({
   query: {
     keyword: { required: false, type: 'string', maxLength: 100 },
-    page: { required: false, type: 'string', maxLength: 6 },
     limit: { required: false, type: 'string', maxLength: 3 }
   }
 });
@@ -18,25 +15,7 @@ const createCustomerValidator = validateRequest({
   }
 });
 
-const idParamValidator = validateRequest({
-  params: {
-    id: { required: true, type: 'string', pattern: idPattern }
-  }
-});
-
-const listCustomerTransactionsValidator = validateRequest({
-  params: {
-    id: { required: true, type: 'string', pattern: idPattern }
-  },
-  query: {
-    page: { required: false, type: 'string', maxLength: 6 },
-    limit: { required: false, type: 'string', maxLength: 3 }
-  }
-});
-
 module.exports = {
   listCustomersValidator,
-  createCustomerValidator,
-  idParamValidator,
-  listCustomerTransactionsValidator
+  createCustomerValidator
 };

@@ -51,7 +51,9 @@ function buildSuggestedSku(productName, category) {
       const intelModelMatch =
         normalizedName.match(/(?:^|\s)i[3579]\s*[- ]?([0-9]{3,5}[a-z]{0,2})\b/) ||
         normalizedName.match(/\b([0-9]{4,5}[a-z]{0,2})\b/);
-      if (intelModelMatch?.[1]) return `cpu.intel.${intelModelMatch[1]}`;
+      if (intelModelMatch?.[1]) {
+        return `cpu.intel.${intelModelMatch[1]}`;
+      }
       return `cpu.intel.${toDotToken(normalizedName)}`;
     }
 
@@ -59,7 +61,9 @@ function buildSuggestedSku(productName, category) {
       const amdModelMatch =
         normalizedName.match(/(?:^|\s)(?:r|ryzen)\s*([3579])\s*[- ]?([0-9]{3,5}[a-z]{0,2})\b/) ||
         normalizedName.match(/(?:^|\s)r([3579])\s*[- ]?([0-9]{3,5}[a-z]{0,2})\b/);
-      if (amdModelMatch?.[1] && amdModelMatch?.[2]) return `cpu.amd.r${amdModelMatch[1]}${amdModelMatch[2]}`;
+      if (amdModelMatch?.[1] && amdModelMatch?.[2]) {
+        return `cpu.amd.r${amdModelMatch[1]}${amdModelMatch[2]}`;
+      }
       return `cpu.amd.${toDotToken(normalizedName)}`;
     }
   }
@@ -132,14 +136,18 @@ export function ProductManagementPage() {
     if (isSkuManuallyEdited && newProductSku.trim()) return;
 
     const suggestedSku = buildSuggestedSku(newProductName, selectedCreateCategory);
-    if (suggestedSku) setNewProductSku(suggestedSku);
+    if (suggestedSku) {
+      setNewProductSku(suggestedSku);
+    }
   }, [isModalOpen, newProductName, selectedCreateCategory, isSkuManuallyEdited, newProductSku]);
 
   useEffect(() => {
     if (!isModalOpen) return undefined;
 
     function handleKeyDown(event) {
-      if (event.key === "Escape") closeCreateModal();
+      if (event.key === "Escape") {
+        closeCreateModal();
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -198,7 +206,9 @@ export function ProductManagementPage() {
       const createdCategoryId = created?.id;
       const nextCategories = await reloadCategories();
       const matched =
-        (createdCategoryId ? nextCategories.find((item) => Number(item.id) === Number(createdCategoryId)) : null) ||
+        (createdCategoryId
+          ? nextCategories.find((item) => Number(item.id) === Number(createdCategoryId))
+          : null) ||
         nextCategories.find((item) => normalizeText(item.name) === normalizeText(createdCategoryName));
 
       if (!matched) {
@@ -293,7 +303,7 @@ export function ProductManagementPage() {
         <label className="mb-1 block text-sm font-medium text-slate-700">Tìm sản phẩm</label>
         <input
           className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-          placeholder="Tìm theo tên sản phẩm, SKU hoặc danh mục"
+          placeholder="Tìm theo tên sản phẩm hoặc SKU"
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
         />
@@ -326,10 +336,7 @@ export function ProductManagementPage() {
             ))}
           </div>
         ) : (
-          <div className="px-4 py-8 text-center">
-            <p className="text-sm font-medium text-slate-700">Không tìm thấy sản phẩm.</p>
-            <p className="mt-1 text-xs text-slate-500">Thử tìm bằng tên, SKU hoặc danh mục khác.</p>
-          </div>
+          <p className="px-4 py-6 text-sm text-slate-500">Không tìm thấy sản phẩm.</p>
         )}
       </div>
 

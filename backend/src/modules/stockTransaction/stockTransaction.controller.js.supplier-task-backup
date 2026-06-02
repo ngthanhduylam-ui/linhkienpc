@@ -6,7 +6,7 @@ exports.stockIn = asyncHandler(async (req, res) => {
     adminId: req.auth.adminId,
     sku: req.body.sku,
     quantity: req.body.quantity,
-    supplierId: req.body.supplier_id,
+    customerId: req.body.customer_id,
     note: req.body.note
   });
 
