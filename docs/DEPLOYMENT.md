@@ -1,0 +1,8 @@
+- Ubuntu version
+- Node version
+- MySQL version
+- PM2 commands
+- Nginx config
+- Cloudflare Tunnel setup
+- Backup procedure
+- Restore procedure
