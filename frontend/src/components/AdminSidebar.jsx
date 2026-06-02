@@ -1,10 +1,8 @@
 import { NavLink } from "react-router-dom";
 
 const sidebarItems = [
+  { label: "Quản lý kho", to: "/admin/inventory-workbench" },
   { label: "Sản phẩm", to: "/admin/products" },
-  { label: "Lô bảo hành", to: "/admin/warranty-batches" },
-  { label: "Nhập kho", to: "/admin/stock-in" },
-  { label: "Xuất kho", to: "/admin/stock-out" },
   { label: "Lịch sử giao dịch", to: "/admin/transaction-history" }
 ];
 

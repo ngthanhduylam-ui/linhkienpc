@@ -1,14 +1,39 @@
 import { apiGet, apiPost } from "../api/apiClient";
 
 export async function listActiveProducts() {
-  const response = await apiGet("/admin/products", { page: 1, limit: 500 });
+  const response = await apiGet("/admin/products", { page: 1, limit: 100 });
   return response?.data || [];
 }
 
-export async function listBatchesByProduct(productId) {
-  if (!productId) return [];
-  const response = await apiGet(`/admin/products/${productId}/batches`, { page: 1, limit: 500 });
+export async function listActiveCategories() {
+  const response = await apiGet("/public/categories", { page: 1, limit: 100 });
   return response?.data || [];
+}
+
+export async function createProductRequest(payload) {
+  console.log("[InventoryWorkbench] BEFORE createProductRequest", payload);
+  const response = await apiPost("/admin/products", payload);
+  console.log("[InventoryWorkbench] API response payload", response);
+  return response?.data;
+}
+
+export async function createCategoryRequest(payload) {
+  const rawName = (payload?.name || "").trim();
+  const asciiName = rawName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const baseCode = asciiName.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const uniqueSuffix = Date.now().toString(36).slice(-6);
+  const finalBase = baseCode.length >= 2 ? baseCode : "dm";
+  const code = `${finalBase}-${uniqueSuffix}`.slice(0, 50);
+
+  const response = await apiPost("/admin/categories", {
+    name: rawName,
+    code
+  });
+  return response?.data;
 }
 
 export async function stockInRequest(payload) {
@@ -21,6 +46,11 @@ export async function stockOutRequest(payload) {
   return response?.data;
 }
 
+export async function getProductInventoryRequest(sku) {
+  const response = await apiGet(`/public/products/${encodeURIComponent(sku)}/inventory`);
+  return response?.data;
+}
+
 export async function listStockTransactions(params) {
   const query = {
     page: params.page || 1,
@@ -28,8 +58,8 @@ export async function listStockTransactions(params) {
   };
 
   if (params.sku) query.sku = params.sku;
-  if (params.batch_code) query.batch_code = params.batch_code;
   if (params.txn_type) query.txn_type = params.txn_type;
+  if (params.note) query.note = params.note;
 
   const response = await apiGet("/admin/stock-transactions", query);
   return {

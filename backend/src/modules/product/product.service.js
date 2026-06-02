@@ -7,9 +7,11 @@ async function getProductById(id) {
     `
       SELECT
         p.id, p.sku, p.name, p.category_id, p.spec_summary, p.is_active, p.created_at, p.updated_at,
-        c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active
+        c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active,
+        COALESCE(pib.quantity, 0) AS total_quantity
       FROM products p
       JOIN categories c ON c.id = p.category_id
+      LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
       WHERE p.id = ?
       LIMIT 1
     `,
@@ -21,6 +23,7 @@ async function getProductById(id) {
   }
 
   const row = rows[0];
+  const noteGroupMap = await buildNoteGroups([row.id]);
   return {
     id: row.id,
     sku: row.sku,
@@ -34,6 +37,8 @@ async function getProductById(id) {
     },
     category_is_active: row.category_is_active === 1,
     spec_summary: row.spec_summary,
+    total_quantity: Number(row.total_quantity || 0),
+    note_groups: noteGroupMap.get(row.id) || [],
     is_active: row.is_active === 1,
     created_at: row.created_at,
     updated_at: row.updated_at
@@ -77,15 +82,18 @@ async function listAdminProducts(query) {
     `
       SELECT
         p.id, p.sku, p.name, p.category_id, p.spec_summary, p.is_active, p.created_at, p.updated_at,
-        c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active
+        c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active,
+        COALESCE(pib.quantity, 0) AS total_quantity
       FROM products p
       JOIN categories c ON c.id = p.category_id
+      LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
       ${whereSql}
       ORDER BY p.id DESC
       LIMIT ? OFFSET ?
     `,
     [...params, limit, offset]
   );
+  const noteGroupMap = await buildNoteGroups(rows.map((row) => row.id));
 
   return {
     items: rows.map((row) => ({
@@ -101,6 +109,8 @@ async function listAdminProducts(query) {
       },
       category_is_active: row.category_is_active === 1,
       spec_summary: row.spec_summary,
+      total_quantity: Number(row.total_quantity || 0),
+      note_groups: noteGroupMap.get(row.id) || [],
       is_active: row.is_active === 1,
       created_at: row.created_at,
       updated_at: row.updated_at
@@ -115,20 +125,38 @@ async function createProduct(payload) {
   const { sku, name, category_id, spec_summary = null, is_active = true } = payload;
   await ensureCategoryExists(category_id);
 
+  const connection = await pool.getConnection();
   try {
-    const [result] = await pool.query(
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
       `
-        INSERT INTO products (sku, name, category_id, spec_summary, is_active)
-        VALUES (?, ?, ?, ?, ?)
-      `,
+      INSERT INTO products (sku, name, category_id, spec_summary, is_active)
+      VALUES (?, ?, ?, ?, ?)
+    `,
       [sku.trim(), name.trim(), category_id, spec_summary, is_active ? 1 : 0]
     );
+
+    await connection.query(
+      `
+      INSERT INTO product_inventory_balances (product_id, quantity)
+      VALUES (?, 0)
+      ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+    `,
+      [result.insertId]
+    );
+
+    await connection.commit();
+
     return getProductById(result.insertId);
   } catch (error) {
+    await connection.rollback();
     if (error && error.code === 'ER_DUP_ENTRY') {
       throw new AppError('SKU already exists.', 409, 'SKU_ALREADY_EXISTS');
     }
     throw error;
+  } finally {
+    connection.release();
   }
 }
 
@@ -173,6 +201,79 @@ async function setProductActive(id, isActive) {
   return getProductById(id);
 }
 
+async function buildNoteGroups(productIds) {
+  if (!productIds.length) {
+    return new Map();
+  }
+
+  const placeholders = productIds.map(() => '?').join(',');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        grouped.product_id,
+        grouped.note_key,
+        grouped.note,
+        grouped.in_quantity - grouped.out_quantity AS remaining_quantity
+      FROM (
+        SELECT
+          normalized.product_id,
+          normalized.note_key,
+          MIN(normalized.note) AS note,
+          SUM(CASE WHEN normalized.txn_type = 'IN' THEN normalized.quantity ELSE 0 END) AS in_quantity,
+          SUM(CASE WHEN normalized.txn_type = 'OUT' THEN normalized.quantity ELSE 0 END) AS out_quantity
+        FROM (
+          SELECT
+            st.product_id,
+            st.txn_type,
+            st.quantity,
+            TRIM(st.note) AS note,
+            REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(st.note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '') AS note_key
+          FROM stock_transactions st
+          WHERE st.product_id IN (${placeholders})
+            AND st.txn_type IN ('IN', 'OUT')
+            AND st.note IS NOT NULL
+            AND TRIM(st.note) <> ''
+        ) normalized
+        GROUP BY normalized.product_id, normalized.note_key
+      ) grouped
+      WHERE grouped.in_quantity - grouped.out_quantity > 0
+      ORDER BY grouped.product_id ASC, grouped.note_key ASC
+    `,
+    productIds
+  );
+
+  const [balanceRows] = await pool.query(
+    `
+      SELECT product_id, quantity
+      FROM product_inventory_balances
+      WHERE product_id IN (${placeholders})
+    `,
+    productIds
+  );
+
+  const remainingByProduct = new Map(
+    balanceRows.map((row) => [row.product_id, Math.max(Number(row.quantity || 0), 0)])
+  );
+  const map = new Map();
+  for (const row of rows) {
+    const remainingProductQuantity = remainingByProduct.get(row.product_id) || 0;
+    const quantity = Math.min(Number(row.remaining_quantity || 0), remainingProductQuantity);
+    if (quantity <= 0) {
+      continue;
+    }
+
+    if (!map.has(row.product_id)) {
+      map.set(row.product_id, []);
+    }
+    map.get(row.product_id).push({
+      note: row.note,
+      quantity
+    });
+    remainingByProduct.set(row.product_id, remainingProductQuantity - quantity);
+  }
+  return map;
+}
+
 async function searchPublicProducts(query) {
   const { page, limit, offset } = parsePagination(query);
   const q = (query.q || '').trim();
@@ -182,7 +283,17 @@ async function searchPublicProducts(query) {
 
   if (q) {
     const pattern = `%${escapeLike(q)}%`;
-    whereParts.push('(p.sku LIKE ? OR p.name LIKE ? OR wb_search.batch_code LIKE ?)');
+    whereParts.push(`(
+      p.sku LIKE ?
+      OR p.name LIKE ?
+      OR EXISTS (
+        SELECT 1
+        FROM stock_transactions stx
+        WHERE stx.product_id = p.id
+          AND stx.txn_type = 'IN'
+          AND stx.note LIKE ?
+      )
+    )`);
     params.push(pattern, pattern, pattern);
   }
 
@@ -190,11 +301,8 @@ async function searchPublicProducts(query) {
 
   const [countRows] = await pool.query(
     `
-      SELECT COUNT(DISTINCT p.id) AS total
+      SELECT COUNT(*) AS total
       FROM products p
-      LEFT JOIN warranty_batches wb_search
-        ON wb_search.product_id = p.id
-       AND wb_search.is_active = 1
       ${whereSql}
     `,
     params
@@ -202,71 +310,29 @@ async function searchPublicProducts(query) {
 
   const [products] = await pool.query(
     `
-      SELECT p.id, p.sku, p.name
+      SELECT
+        p.id,
+        p.sku,
+        p.name,
+        COALESCE(pib.quantity, 0) AS total_quantity
       FROM products p
-      LEFT JOIN warranty_batches wb_search
-        ON wb_search.product_id = p.id
-       AND wb_search.is_active = 1
+      LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
       ${whereSql}
-      GROUP BY p.id, p.sku, p.name
       ORDER BY p.id DESC
       LIMIT ? OFFSET ?
     `,
     [...params, limit, offset]
   );
 
-  if (!products.length) {
-    return {
-      items: [],
-      page,
-      limit,
-      total: Number(countRows[0].total || 0),
-      searchMode: 'fuzzy_contains'
-    };
-  }
-
-  const productIds = products.map((item) => item.id);
-  const placeholders = productIds.map(() => '?').join(',');
-
-  const [batchRows] = await pool.query(
-    `
-      SELECT
-        wb.product_id,
-        wb.batch_code,
-        COALESCE(ib.quantity, 0) AS quantity
-      FROM warranty_batches wb
-      LEFT JOIN inventory_balances ib
-        ON ib.product_id = wb.product_id
-       AND ib.warranty_batch_id = wb.id
-      WHERE wb.product_id IN (${placeholders})
-        AND wb.is_active = 1
-      ORDER BY wb.batch_code ASC
-    `,
-    productIds
-  );
-
-  const batchMap = new Map();
-  for (const row of batchRows) {
-    if (!batchMap.has(row.product_id)) {
-      batchMap.set(row.product_id, []);
-    }
-    batchMap.get(row.product_id).push({
-      batch_code: row.batch_code,
-      quantity: Number(row.quantity || 0)
-    });
-  }
+  const noteGroupMap = await buildNoteGroups(products.map((item) => item.id));
 
   return {
-    items: products.map((product) => {
-      const batches = batchMap.get(product.id) || [];
-      const totalQuantity = batches.reduce((sum, batch) => sum + batch.quantity, 0);
-      return {
-        sku: product.sku,
-        name: product.name,
-        total_quantity: totalQuantity,
-        batches
-      };
-    }),
+    items: products.map((product) => ({
+      sku: product.sku,
+      name: product.name,
+      total_quantity: Number(product.total_quantity || 0),
+      note_groups: noteGroupMap.get(product.id) || []
+    })),
     page,
     limit,
     total: Number(countRows[0].total || 0),
@@ -277,9 +343,10 @@ async function searchPublicProducts(query) {
 async function getPublicInventoryBySku(sku) {
   const [products] = await pool.query(
     `
-      SELECT id, sku, name, is_active
-      FROM products
-      WHERE sku = ? AND is_active = 1
+      SELECT p.id, p.sku, p.name, p.is_active, COALESCE(pib.quantity, 0) AS total_quantity
+      FROM products p
+      LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+      WHERE p.sku = ? AND p.is_active = 1
       LIMIT 1
     `,
     [sku]
@@ -290,39 +357,17 @@ async function getPublicInventoryBySku(sku) {
   }
 
   const product = products[0];
-  const [rows] = await pool.query(
-    `
-      SELECT
-        wb.id AS warranty_batch_id,
-        wb.batch_code,
-        wb.is_active,
-        COALESCE(ib.quantity, 0) AS quantity,
-        COALESCE(ib.updated_at, wb.updated_at) AS updated_at
-      FROM warranty_batches wb
-      LEFT JOIN inventory_balances ib
-        ON ib.product_id = wb.product_id
-       AND ib.warranty_batch_id = wb.id
-      WHERE wb.product_id = ?
-        AND wb.is_active = 1
-      ORDER BY wb.batch_code ASC
-    `,
-    [product.id]
-  );
+  const noteGroupMap = await buildNoteGroups([product.id]);
 
   return {
     product: {
       id: product.id,
       sku: product.sku,
       name: product.name,
+      total_quantity: Number(product.total_quantity || 0),
       is_active: product.is_active === 1
     },
-    batches: rows.map((row) => ({
-      warranty_batch_id: row.warranty_batch_id,
-      batch_code: row.batch_code,
-      is_active: row.is_active === 1,
-      quantity: Number(row.quantity),
-      updated_at: row.updated_at
-    }))
+    note_groups: noteGroupMap.get(product.id) || []
   };
 }
 

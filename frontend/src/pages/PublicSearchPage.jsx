@@ -66,7 +66,9 @@ export function PublicSearchPage() {
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
         <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <h1 className="text-center text-3xl font-bold tracking-tight text-brand-900">LINHKIENPC</h1>
-          <p className="mt-2 text-center text-sm text-slate-600">Tra cứu tồn kho theo SKU, tên sản phẩm và lô bảo hành.</p>
+          <p className="mt-2 text-center text-sm text-slate-600">
+            Tra cứu tồn kho theo SKU, tên sản phẩm và ghi chú nhập kho.
+          </p>
 
           <form
             className="mt-6"
@@ -78,7 +80,7 @@ export function PublicSearchPage() {
             <label className="mb-2 block text-sm font-medium text-slate-700">Tìm kiếm</label>
             <input
               className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none ring-brand-500 placeholder:text-slate-400 focus:ring-2"
-              placeholder="Tìm kiếm: 12400f, intel, 07.26, cpu.intel..."
+              placeholder="Tìm: 12400f, intel, BH07.26..."
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               onKeyDown={(event) => {
@@ -99,10 +101,7 @@ export function PublicSearchPage() {
                   <div className="h-5 w-2/3 rounded bg-slate-200" />
                   <div className="mt-3 h-4 w-1/2 rounded bg-slate-200" />
                   <div className="mt-4 h-4 w-1/3 rounded bg-slate-200" />
-                  <div className="mt-4 space-y-2">
-                    <div className="h-8 rounded bg-slate-100" />
-                    <div className="h-8 rounded bg-slate-100" />
-                  </div>
+                  <div className="mt-4 h-8 rounded bg-slate-100" />
                 </div>
               ))}
             </div>

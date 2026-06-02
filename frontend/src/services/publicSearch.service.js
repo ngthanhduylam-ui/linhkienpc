@@ -9,9 +9,9 @@ export async function searchPublicProducts(keyword) {
     name: product.name,
     sku: product.sku,
     totalQuantity: Number(product.total_quantity || 0),
-    batches: (product.batches || []).map((batch) => ({
-      batchCode: batch.batch_code,
-      quantity: Number(batch.quantity || 0)
+    noteGroups: (product.note_groups || []).map((item) => ({
+      note: item.note,
+      quantity: Number(item.quantity || 0)
     }))
   }));
 }

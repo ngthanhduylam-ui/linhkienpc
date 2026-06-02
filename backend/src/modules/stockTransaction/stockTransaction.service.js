@@ -1,7 +1,6 @@
 const { pool } = require('../../config/database');
 const AppError = require('../../utils/AppError');
 const { parsePagination, parseNullableInt } = require('../../utils/parsers');
-const inventoryService = require('../inventory/inventory.service');
 
 function validateQuantity(quantity) {
   if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -9,85 +8,194 @@ function validateQuantity(quantity) {
   }
 }
 
-async function adjustStock({ adminId, txnType, sku, batch_code = null, quantity, note = null }) {
+function normalizeWarrantyNote(note) {
+  return (note || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+async function resolveProductBySku(connection, sku) {
+  const [rows] = await connection.query(
+    `
+      SELECT id, sku, is_active
+      FROM products
+      WHERE sku = ?
+      LIMIT 1
+    `,
+    [sku]
+  );
+
+  if (!rows.length) {
+    throw new AppError('SKU not found.', 404, 'SKU_NOT_FOUND');
+  }
+
+  const product = rows[0];
+  if (product.is_active !== 1) {
+    throw new AppError('Product is inactive.', 400, 'PRODUCT_INACTIVE');
+  }
+
+  return {
+    product_id: product.id,
+    sku: product.sku
+  };
+}
+
+async function lockProductBalance(connection, productId) {
+  const [rows] = await connection.query(
+    `
+      SELECT id, quantity
+      FROM product_inventory_balances
+      WHERE product_id = ?
+      FOR UPDATE
+    `,
+    [productId]
+  );
+  return rows[0] || null;
+}
+
+async function listRemainingWarrantyNoteGroups(connection, productId, maxQuantity = null) {
+  const [rows] = await connection.query(
+    `
+      SELECT
+        grouped.note_key,
+        grouped.in_quantity - grouped.out_quantity AS remaining_quantity
+      FROM (
+        SELECT
+          normalized.note_key,
+          SUM(CASE WHEN normalized.txn_type = 'IN' THEN normalized.quantity ELSE 0 END) AS in_quantity,
+          SUM(CASE WHEN normalized.txn_type = 'OUT' THEN normalized.quantity ELSE 0 END) AS out_quantity
+        FROM (
+          SELECT
+            txn_type,
+            quantity,
+            REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '') AS note_key
+          FROM stock_transactions
+          WHERE product_id = ?
+            AND txn_type IN ('IN', 'OUT')
+            AND note IS NOT NULL
+            AND TRIM(note) <> ''
+        ) normalized
+        GROUP BY normalized.note_key
+      ) grouped
+      WHERE grouped.in_quantity - grouped.out_quantity > 0
+      ORDER BY grouped.note_key ASC
+    `,
+    [productId]
+  );
+
+  let remainingProductQuantity = maxQuantity === null ? null : Math.max(Number(maxQuantity || 0), 0);
+  const groups = [];
+
+  for (const row of rows) {
+    const rowQuantity = Number(row.remaining_quantity || 0);
+    const quantity = remainingProductQuantity === null ? rowQuantity : Math.min(rowQuantity, remainingProductQuantity);
+    if (quantity <= 0) {
+      continue;
+    }
+
+    groups.push({
+      note: row.note_key,
+      quantity
+    });
+
+    if (remainingProductQuantity !== null) {
+      remainingProductQuantity -= quantity;
+    }
+  }
+
+  return groups;
+}
+
+async function adjustStock({ adminId, txnType, sku, quantity, note = null, warrantyNote = null }) {
   validateQuantity(quantity);
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    const resolved = await inventoryService.resolveSkuBatchForTransaction(connection, { sku, batch_code });
+    const resolved = await resolveProductBySku(connection, sku);
+    const currentBalance = await lockProductBalance(connection, resolved.product_id);
+    const currentQuantity = Number(currentBalance?.quantity || 0);
 
-    const [balanceRows] = await connection.query(
-      `
-        SELECT id, quantity
-        FROM inventory_balances
-        WHERE product_id = ? AND warranty_batch_id = ?
-        FOR UPDATE
-      `,
-      [resolved.product_id, resolved.warranty_batch_id]
-    );
-
-    let nextQuantity = 0;
+    let nextQuantity = currentQuantity;
+    let transactionNote = note && note.trim() ? note.trim() : null;
 
     if (txnType === 'IN') {
-      if (balanceRows.length) {
-        nextQuantity = Number(balanceRows[0].quantity) + quantity;
-        await connection.query(
-          `
-            UPDATE inventory_balances
-            SET quantity = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `,
-          [nextQuantity, balanceRows[0].id]
-        );
-      } else {
-        nextQuantity = quantity;
-        await connection.query(
-          `
-            INSERT INTO inventory_balances (product_id, warranty_batch_id, quantity)
-            VALUES (?, ?, ?)
-          `,
-          [resolved.product_id, resolved.warranty_batch_id, nextQuantity]
-        );
-      }
+      nextQuantity = currentQuantity + quantity;
     } else if (txnType === 'OUT') {
-      if (!balanceRows.length) {
-        throw new AppError('Insufficient stock.', 422, 'INSUFFICIENT_STOCK');
-      }
-
-      const currentQuantity = Number(balanceRows[0].quantity);
       if (currentQuantity < quantity) {
         throw new AppError('Insufficient stock.', 422, 'INSUFFICIENT_STOCK', [
           { field: 'quantity', issue: 'exceeds_available_stock', available: currentQuantity }
         ]);
       }
 
+      const remainingNoteGroups = await listRemainingWarrantyNoteGroups(
+        connection,
+        resolved.product_id,
+        currentQuantity
+      );
+      const selectedWarrantyNote = normalizeWarrantyNote(warrantyNote || note);
+
+      if (remainingNoteGroups.length && !selectedWarrantyNote) {
+        throw new AppError('Warranty note selection is required.', 400, 'WARRANTY_NOTE_REQUIRED', [
+          { field: 'warranty_note', issue: 'required_when_warranty_groups_exist' }
+        ]);
+      }
+
+      if (remainingNoteGroups.length && selectedWarrantyNote) {
+        const selectedGroup = remainingNoteGroups.find((group) => group.note === selectedWarrantyNote);
+        if (!selectedGroup) {
+          throw new AppError('Warranty note group not found.', 404, 'WARRANTY_NOTE_NOT_FOUND', [
+            { field: 'warranty_note', issue: 'not_found' }
+          ]);
+        }
+        if (selectedGroup.quantity < quantity) {
+          throw new AppError('Insufficient warranty note stock.', 422, 'INSUFFICIENT_WARRANTY_NOTE_STOCK', [
+            {
+              field: 'quantity',
+              issue: 'exceeds_selected_warranty_note_stock',
+              warranty_note: selectedWarrantyNote,
+              available: selectedGroup.quantity
+            }
+          ]);
+        }
+        transactionNote = selectedWarrantyNote;
+      }
+
       nextQuantity = currentQuantity - quantity;
+    } else {
+      throw new AppError('Invalid transaction type.', 400, 'VALIDATION_ERROR');
+    }
+
+    if (currentBalance) {
       await connection.query(
         `
-          UPDATE inventory_balances
+          UPDATE product_inventory_balances
           SET quantity = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `,
-        [nextQuantity, balanceRows[0].id]
+        [nextQuantity, currentBalance.id]
       );
     } else {
-      throw new AppError('Invalid transaction type.', 400, 'VALIDATION_ERROR');
+      await connection.query(
+        `
+          INSERT INTO product_inventory_balances (product_id, quantity)
+          VALUES (?, ?)
+        `,
+        [resolved.product_id, nextQuantity]
+      );
     }
 
     const [txResult] = await connection.query(
       `
         INSERT INTO stock_transactions
           (txn_type, product_id, warranty_batch_id, quantity, note, created_by_admin_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, NULL, ?, ?, ?)
       `,
-      [txnType, resolved.product_id, resolved.warranty_batch_id, quantity, note, adminId]
+      [txnType, resolved.product_id, quantity, transactionNote, adminId]
     );
 
     const [txRows] = await connection.query(
       `
-        SELECT id, txn_type, product_id, warranty_batch_id, quantity, note, created_by_admin_id, occurred_at
+        SELECT id, txn_type, product_id, quantity, note, created_by_admin_id, occurred_at
         FROM stock_transactions
         WHERE id = ?
         LIMIT 1
@@ -95,14 +203,14 @@ async function adjustStock({ adminId, txnType, sku, batch_code = null, quantity,
       [txResult.insertId]
     );
 
-    const [balanceAfterRows] = await connection.query(
+    const [balanceRows] = await connection.query(
       `
         SELECT quantity, updated_at
-        FROM inventory_balances
-        WHERE product_id = ? AND warranty_batch_id = ?
+        FROM product_inventory_balances
+        WHERE product_id = ?
         LIMIT 1
       `,
-      [resolved.product_id, resolved.warranty_batch_id]
+      [resolved.product_id]
     );
 
     await connection.commit();
@@ -112,9 +220,8 @@ async function adjustStock({ adminId, txnType, sku, batch_code = null, quantity,
       transaction: txRows[0],
       inventory_balance: {
         sku: resolved.sku,
-        batch_code: resolved.batch_code,
-        quantity: Number(balanceAfterRows[0].quantity),
-        updated_at: balanceAfterRows[0].updated_at
+        quantity: Number(balanceRows[0].quantity),
+        updated_at: balanceRows[0].updated_at
       }
     };
   } catch (error) {
@@ -125,23 +232,22 @@ async function adjustStock({ adminId, txnType, sku, batch_code = null, quantity,
   }
 }
 
-async function stockIn({ adminId, sku, batch_code, quantity, note }) {
-  return adjustStock({ adminId, txnType: 'IN', sku, batch_code, quantity, note });
+async function stockIn({ adminId, sku, quantity, note }) {
+  return adjustStock({ adminId, txnType: 'IN', sku, quantity, note });
 }
 
-async function stockOut({ adminId, sku, batch_code, quantity, note }) {
-  return adjustStock({ adminId, txnType: 'OUT', sku, batch_code, quantity, note });
+async function stockOut({ adminId, sku, quantity, note, warrantyNote }) {
+  return adjustStock({ adminId, txnType: 'OUT', sku, quantity, note, warrantyNote });
 }
 
 async function listTransactions(query) {
   const { page, limit, offset } = parsePagination(query);
   const sku = (query.sku || '').trim();
-  const batchCode = (query.batch_code || '').trim();
   const txnType = (query.txn_type || '').trim();
   const from = (query.from || '').trim();
   const to = (query.to || '').trim();
   const productId = parseNullableInt(query.product_id, 'product_id');
-  const warrantyBatchId = parseNullableInt(query.warranty_batch_id, 'warranty_batch_id');
+  const noteKeyword = (query.note || query.batch_code || '').trim();
 
   const whereParts = ['1=1'];
   const params = [];
@@ -149,10 +255,6 @@ async function listTransactions(query) {
   if (sku) {
     whereParts.push('p.sku = ?');
     params.push(sku);
-  }
-  if (batchCode) {
-    whereParts.push('wb.batch_code = ?');
-    params.push(batchCode);
   }
   if (txnType) {
     whereParts.push('st.txn_type = ?');
@@ -170,9 +272,9 @@ async function listTransactions(query) {
     whereParts.push('st.product_id = ?');
     params.push(productId);
   }
-  if (warrantyBatchId !== null) {
-    whereParts.push('st.warranty_batch_id = ?');
-    params.push(warrantyBatchId);
+  if (noteKeyword) {
+    whereParts.push('st.note LIKE ?');
+    params.push(`%${noteKeyword}%`);
   }
 
   const whereSql = `WHERE ${whereParts.join(' AND ')}`;
@@ -182,7 +284,6 @@ async function listTransactions(query) {
       SELECT COUNT(*) AS total
       FROM stock_transactions st
       JOIN products p ON p.id = st.product_id
-      JOIN warranty_batches wb ON wb.id = st.warranty_batch_id
       ${whereSql}
     `,
     params
@@ -211,7 +312,7 @@ async function listTransactions(query) {
       FROM stock_transactions st
       JOIN products p ON p.id = st.product_id
       JOIN categories c ON c.id = p.category_id
-      JOIN warranty_batches wb ON wb.id = st.warranty_batch_id
+      LEFT JOIN warranty_batches wb ON wb.id = st.warranty_batch_id
       JOIN admins a ON a.id = st.created_by_admin_id
       ${whereSql}
       ORDER BY st.id DESC
@@ -235,11 +336,13 @@ async function listTransactions(query) {
         name: row.category_name,
         is_active: row.category_is_active === 1
       },
-      warranty_batch: {
-        id: row.batch_id,
-        batch_code: row.batch_code,
-        is_active: row.batch_is_active === 1
-      },
+      warranty_batch: row.batch_id
+        ? {
+            id: row.batch_id,
+            batch_code: row.batch_code,
+            is_active: row.batch_is_active === 1
+          }
+        : null,
       quantity: Number(row.quantity),
       note: row.note,
       created_by_admin: {

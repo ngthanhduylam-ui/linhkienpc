@@ -1,8 +1,8 @@
-﻿CREATE TABLE IF NOT EXISTS stock_transactions (
+CREATE TABLE IF NOT EXISTS stock_transactions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   txn_type ENUM('IN','OUT') NOT NULL,
   product_id BIGINT UNSIGNED NOT NULL,
-  warranty_batch_id BIGINT UNSIGNED NOT NULL,
+  warranty_batch_id BIGINT UNSIGNED NULL,
   quantity INT UNSIGNED NOT NULL,
   note VARCHAR(500) NULL,
   created_by_admin_id BIGINT UNSIGNED NOT NULL,

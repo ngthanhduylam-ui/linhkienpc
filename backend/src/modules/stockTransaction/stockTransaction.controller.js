@@ -5,7 +5,6 @@ exports.stockIn = asyncHandler(async (req, res) => {
   const result = await stockTxService.stockIn({
     adminId: req.auth.adminId,
     sku: req.body.sku,
-    batch_code: req.body.batch_code,
     quantity: req.body.quantity,
     note: req.body.note
   });
@@ -17,9 +16,9 @@ exports.stockOut = asyncHandler(async (req, res) => {
   const result = await stockTxService.stockOut({
     adminId: req.auth.adminId,
     sku: req.body.sku,
-    batch_code: req.body.batch_code,
     quantity: req.body.quantity,
-    note: req.body.note
+    note: req.body.note,
+    warrantyNote: req.body.warranty_note
   });
 
   res.status(201).json({ success: true, data: result, meta: { server_time: new Date().toISOString() } });
