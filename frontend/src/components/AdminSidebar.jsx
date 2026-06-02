@@ -1,10 +1,20 @@
 import { NavLink } from "react-router-dom";
 
-const sidebarItems = [
-  { label: "Quản lý kho", to: "/admin/inventory-workbench" },
+const inventoryItems = [
+  { label: "Nhập hàng", to: "/admin/stock-in" },
+  { label: "Xuất hàng", to: "/admin/stock-out" }
+];
+
+const mainItems = [
   { label: "Sản phẩm", to: "/admin/products" },
   { label: "Lịch sử giao dịch", to: "/admin/transaction-history" }
 ];
+
+function navClassName({ isActive }) {
+  return `block rounded-md px-3 py-2 text-sm ${
+    isActive ? "bg-brand-50 text-brand-900" : "text-slate-700 hover:bg-slate-100"
+  }`;
+}
 
 export function AdminSidebar({ isOpen, onClose }) {
   return (
@@ -23,21 +33,25 @@ export function AdminSidebar({ isOpen, onClose }) {
           <p className="text-xs text-slate-500">Quản trị hệ thống</p>
         </div>
 
-        <nav className="space-y-1">
-          {sidebarItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `block rounded-md px-3 py-2 text-sm ${
-                  isActive ? "bg-brand-50 text-brand-900" : "text-slate-700 hover:bg-slate-100"
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
+        <nav className="space-y-4">
+          <div>
+            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Quản lý kho</p>
+            <div className="space-y-1">
+              {inventoryItems.map((item) => (
+                <NavLink key={item.to} to={item.to} onClick={onClose} className={navClassName}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            {mainItems.map((item) => (
+              <NavLink key={item.to} to={item.to} onClick={onClose} className={navClassName}>
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
         </nav>
       </aside>
     </>

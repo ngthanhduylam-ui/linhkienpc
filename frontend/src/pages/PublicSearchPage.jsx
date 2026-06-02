@@ -3,32 +3,74 @@ import { Link } from "react-router-dom";
 import { SearchResultCard } from "../components/SearchResultCard";
 import { searchPublicProducts } from "../services/publicSearch.service";
 
+const SEARCH_HISTORY_KEY = "public_search_history";
+const MAX_HISTORY_ITEMS = 10;
+
+function loadSearchHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSearchHistory(items) {
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
+}
+
+function addKeywordToHistory(searchInput, currentHistory) {
+  const trimmed = searchInput.trim();
+  if (!trimmed) return currentHistory;
+
+  const nextHistory = [trimmed, ...currentHistory.filter((item) => item.toLowerCase() !== trimmed.toLowerCase())].slice(
+    0,
+    MAX_HISTORY_ITEMS
+  );
+  saveSearchHistory(nextHistory);
+  return nextHistory;
+}
+
 export function PublicSearchPage() {
-  const [keyword, setKeyword] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [results, setResults] = useState([]);
+  const [history, setHistory] = useState(() => loadSearchHistory());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const inputRef = useRef(null);
   const requestIdRef = useRef(0);
+
+  const trimmedKeyword = searchInput.trim();
+  const hasSearched = debouncedKeyword.trim().length > 0;
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedKeyword(keyword.trim());
+      setDebouncedKeyword(searchInput.trim());
     }, 300);
     return () => clearTimeout(timer);
-  }, [keyword]);
+  }, [searchInput]);
 
   useEffect(() => {
+    const searchKeyword = debouncedKeyword.trim();
+
+    if (!searchKeyword) {
+      requestIdRef.current += 1;
+      setResults([]);
+      setError("");
+      setIsLoading(false);
+      return undefined;
+    }
+
     const currentRequestId = requestIdRef.current + 1;
     requestIdRef.current = currentRequestId;
-
     let isCancelled = false;
 
     async function runSearch() {
       setIsLoading(true);
       setError("");
       try {
-        const data = await searchPublicProducts(debouncedKeyword);
+        const data = await searchPublicProducts(searchKeyword);
         if (!isCancelled && requestIdRef.current === currentRequestId) {
           setResults(data);
         }
@@ -50,6 +92,38 @@ export function PublicSearchPage() {
     };
   }, [debouncedKeyword]);
 
+  function rememberKeyword(value = searchInput) {
+    setHistory((currentHistory) => addKeywordToHistory(value, currentHistory));
+  }
+
+  function handleClearSearch() {
+    rememberKeyword(searchInput);
+    setSearchInput("");
+    setDebouncedKeyword("");
+    setResults([]);
+    setError("");
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function handleHistoryClick(value) {
+    setSearchInput(value);
+    setDebouncedKeyword(value.trim());
+    inputRef.current?.focus();
+  }
+
+  function handleRemoveHistoryItem(value) {
+    setHistory((currentHistory) => {
+      const nextHistory = currentHistory.filter((item) => item !== value);
+      saveSearchHistory(nextHistory);
+      return nextHistory;
+    });
+  }
+
+  function handleClearHistory() {
+    saveSearchHistory([]);
+    setHistory([]);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
@@ -67,66 +141,116 @@ export function PublicSearchPage() {
         <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <h1 className="text-center text-3xl font-bold tracking-tight text-brand-900">LINHKIENPC</h1>
           <p className="mt-2 text-center text-sm text-slate-600">
-            Tra cứu tồn kho theo SKU, tên sản phẩm và ghi chú nhập kho.
+            Nhập SKU, tên sản phẩm hoặc ghi chú bảo hành để tra cứu.
           </p>
 
           <form
             className="mt-6"
             onSubmit={(event) => {
               event.preventDefault();
-              setDebouncedKeyword(keyword.trim());
+              const nextKeyword = searchInput.trim();
+              setDebouncedKeyword(nextKeyword);
+              rememberKeyword(nextKeyword);
             }}
           >
             <label className="mb-2 block text-sm font-medium text-slate-700">Tìm kiếm</label>
-            <input
-              className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none ring-brand-500 placeholder:text-slate-400 focus:ring-2"
-              placeholder="Tìm: 12400f, intel, BH07.26..."
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  setDebouncedKeyword(keyword.trim());
-                }
-              }}
-            />
+            <div className="relative">
+              <input
+                ref={inputRef}
+                className="h-14 w-full rounded-lg border border-slate-300 px-4 pr-12 text-base outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
+                placeholder="Nhập SKU, tên sản phẩm hoặc ghi chú bảo hành để tra cứu"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onBlur={() => rememberKeyword(searchInput)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    const nextKeyword = searchInput.trim();
+                    setDebouncedKeyword(nextKeyword);
+                    rememberKeyword(nextKeyword);
+                  }
+                }}
+              />
+
+              {searchInput.trim() && (
+                <button
+                  type="button"
+                  aria-label="Xóa tìm kiếm"
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </form>
-        </section>
 
-        <section className="mt-8 sm:mt-10">
-          {isLoading && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((skeleton) => (
-                <div key={skeleton} className="animate-pulse rounded-xl border border-slate-200 bg-white p-5">
-                  <div className="h-5 w-2/3 rounded bg-slate-200" />
-                  <div className="mt-3 h-4 w-1/2 rounded bg-slate-200" />
-                  <div className="mt-4 h-4 w-1/3 rounded bg-slate-200" />
-                  <div className="mt-4 h-8 rounded bg-slate-100" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!isLoading && error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {!isLoading && !error && results.length === 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-              Không tìm thấy sản phẩm.
-            </div>
-          )}
-
-          {!isLoading && !error && results.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {results.map((item) => (
-                <SearchResultCard key={item.id} product={item} />
-              ))}
+          {!trimmedKeyword && history.length > 0 && (
+            <div className="mt-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-slate-800">Lịch sử tìm kiếm</h2>
+                <button type="button" onClick={handleClearHistory} className="text-xs text-slate-500 hover:text-slate-800">
+                  Xóa lịch sử
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {history.map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700"
+                  >
+                    <button type="button" onClick={() => handleHistoryClick(item)} className="hover:text-brand-800">
+                      {item}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveHistoryItem(item)}
+                      className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                      aria-label={`Xóa ${item} khỏi lịch sử`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </section>
+
+        {hasSearched && (
+          <section className="mt-8 sm:mt-10">
+            {isLoading && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((skeleton) => (
+                  <div key={skeleton} className="animate-pulse rounded-xl border border-slate-200 bg-white p-5">
+                    <div className="h-5 w-2/3 rounded bg-slate-200" />
+                    <div className="mt-3 h-4 w-1/2 rounded bg-slate-200" />
+                    <div className="mt-4 h-4 w-1/3 rounded bg-slate-200" />
+                    <div className="mt-4 h-8 rounded bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isLoading && error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+            )}
+
+            {!isLoading && !error && results.length === 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
+                Không tìm thấy sản phẩm phù hợp.
+              </div>
+            )}
+
+            {!isLoading && !error && results.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {results.map((item) => (
+                  <SearchResultCard key={item.id} product={item} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );

@@ -114,7 +114,6 @@ export function TransactionHistoryPage() {
               <th className="px-3 py-2 font-medium">SKU</th>
               <th className="px-3 py-2 font-medium">Số lượng</th>
               <th className="px-3 py-2 font-medium">Loại</th>
-              <th className="px-3 py-2 font-medium">Khách hàng</th>
               <th className="px-3 py-2 font-medium">Ghi chú</th>
               <th className="px-3 py-2 font-medium">Admin</th>
             </tr>
@@ -122,7 +121,7 @@ export function TransactionHistoryPage() {
           <tbody className="divide-y divide-slate-100">
             {isLoading && (
               <tr>
-                <td className="px-3 py-4 text-slate-500" colSpan={7}>
+                <td className="px-3 py-4 text-slate-500" colSpan={6}>
                   Đang tải dữ liệu...
                 </td>
               </tr>
@@ -130,7 +129,7 @@ export function TransactionHistoryPage() {
 
             {!isLoading && items.length === 0 && (
               <tr>
-                <td className="px-3 py-4 text-slate-500" colSpan={7}>
+                <td className="px-3 py-4 text-slate-500" colSpan={6}>
                   Không có giao dịch phù hợp.
                 </td>
               </tr>
@@ -143,16 +142,6 @@ export function TransactionHistoryPage() {
                   <td className="px-3 py-2 text-slate-700">{item.product?.sku || "-"}</td>
                   <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                   <td className="px-3 py-2 text-slate-700">{mapTxnType(item.txn_type)}</td>
-                  <td className="px-3 py-2 text-slate-700">
-                    {item.customer ? (
-                      <div>
-                        <p className="font-medium text-slate-800">{item.customer.name}</p>
-                        {item.customer.phone && <p className="mt-1 text-xs text-slate-500">{item.customer.phone}</p>}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
                   <td className="px-3 py-2 text-slate-700">{item.note || "-"}</td>
                   <td className="px-3 py-2 text-slate-700">{item.created_by_admin?.username || "-"}</td>
                 </tr>

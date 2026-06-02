@@ -8,7 +8,6 @@ const warrantyBatchAdminRoutes = require('../modules/warrantyBatch/warrantyBatch
 const inventoryAdminRoutes = require('../modules/inventory/inventory.route');
 const stockTxAdminRoutes = require('../modules/stockTransaction/stockTransaction.route');
 const authAdminRoutes = require('../modules/auth/auth.route');
-const customerAdminRoutes = require('../modules/customer/customer.route');
 const productController = require('../modules/product/product.controller');
 const categoryController = require('../modules/category/category.controller');
 const productValidators = require('../modules/product/product.validation');
@@ -23,7 +22,6 @@ router.get('/public/categories', categoryController.listCategories);
 
 router.use('/admin/auth', authAdminRoutes);
 router.use('/admin/categories', requireAuth, categoryAdminRoutes);
-router.use('/admin/customers', requireAuth, customerAdminRoutes);
 router.use('/admin/products', requireAuth, productAdminRoutes);
 router.use('/admin', requireAuth, warrantyBatchAdminRoutes);
 router.use('/admin/inventory', requireAuth, inventoryAdminRoutes);

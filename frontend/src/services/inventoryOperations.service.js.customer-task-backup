@@ -10,17 +10,6 @@ export async function listActiveCategories() {
   return response?.data || [];
 }
 
-export async function listCustomers(keyword = "") {
-  const query = keyword.trim() ? { keyword: keyword.trim(), limit: 20 } : { limit: 20 };
-  const response = await apiGet("/admin/customers", query);
-  return response?.data || [];
-}
-
-export async function createCustomer(payload) {
-  const response = await apiPost("/admin/customers", payload);
-  return response?.data;
-}
-
 export async function createProductRequest(payload) {
   console.log("[InventoryWorkbench] BEFORE createProductRequest", payload);
   const response = await apiPost("/admin/products", payload);

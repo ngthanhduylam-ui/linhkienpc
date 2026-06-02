@@ -51,37 +51,6 @@ async function lockProductBalance(connection, productId) {
   return rows[0] || null;
 }
 
-async function resolveCustomerId(connection, customerId) {
-  if (customerId === undefined || customerId === null || customerId === '') {
-    return null;
-  }
-
-  const parsedCustomerId = Number(customerId);
-  if (!Number.isInteger(parsedCustomerId) || parsedCustomerId < 1) {
-    throw new AppError('customer_id must be a positive integer.', 400, 'VALIDATION_ERROR');
-  }
-
-  const [rows] = await connection.query(
-    `
-      SELECT id, is_active
-      FROM customers
-      WHERE id = ?
-      LIMIT 1
-    `,
-    [parsedCustomerId]
-  );
-
-  if (!rows.length) {
-    throw new AppError('Customer not found.', 404, 'CUSTOMER_NOT_FOUND');
-  }
-
-  if (rows[0].is_active !== 1) {
-    throw new AppError('Customer is inactive.', 400, 'CUSTOMER_INACTIVE');
-  }
-
-  return parsedCustomerId;
-}
-
 async function listRemainingWarrantyNoteGroups(connection, productId, maxQuantity = null) {
   const [rows] = await connection.query(
     `
@@ -135,7 +104,7 @@ async function listRemainingWarrantyNoteGroups(connection, productId, maxQuantit
   return groups;
 }
 
-async function adjustStock({ adminId, txnType, sku, quantity, note = null, warrantyNote = null, customerId = null }) {
+async function adjustStock({ adminId, txnType, sku, quantity, note = null, warrantyNote = null }) {
   validateQuantity(quantity);
 
   const connection = await pool.getConnection();
@@ -143,7 +112,6 @@ async function adjustStock({ adminId, txnType, sku, quantity, note = null, warra
     await connection.beginTransaction();
 
     const resolved = await resolveProductBySku(connection, sku);
-    const resolvedCustomerId = await resolveCustomerId(connection, customerId);
     const currentBalance = await lockProductBalance(connection, resolved.product_id);
     const currentQuantity = Number(currentBalance?.quantity || 0);
 
@@ -219,15 +187,15 @@ async function adjustStock({ adminId, txnType, sku, quantity, note = null, warra
     const [txResult] = await connection.query(
       `
         INSERT INTO stock_transactions
-          (txn_type, product_id, warranty_batch_id, customer_id, quantity, note, created_by_admin_id)
-        VALUES (?, ?, NULL, ?, ?, ?, ?)
+          (txn_type, product_id, warranty_batch_id, quantity, note, created_by_admin_id)
+        VALUES (?, ?, NULL, ?, ?, ?)
       `,
-      [txnType, resolved.product_id, resolvedCustomerId, quantity, transactionNote, adminId]
+      [txnType, resolved.product_id, quantity, transactionNote, adminId]
     );
 
     const [txRows] = await connection.query(
       `
-        SELECT id, txn_type, product_id, customer_id, quantity, note, created_by_admin_id, occurred_at
+        SELECT id, txn_type, product_id, quantity, note, created_by_admin_id, occurred_at
         FROM stock_transactions
         WHERE id = ?
         LIMIT 1
@@ -264,12 +232,12 @@ async function adjustStock({ adminId, txnType, sku, quantity, note = null, warra
   }
 }
 
-async function stockIn({ adminId, sku, quantity, note, customerId }) {
-  return adjustStock({ adminId, txnType: 'IN', sku, quantity, note, customerId });
+async function stockIn({ adminId, sku, quantity, note }) {
+  return adjustStock({ adminId, txnType: 'IN', sku, quantity, note });
 }
 
-async function stockOut({ adminId, sku, quantity, note, warrantyNote, customerId }) {
-  return adjustStock({ adminId, txnType: 'OUT', sku, quantity, note, warrantyNote, customerId });
+async function stockOut({ adminId, sku, quantity, note, warrantyNote }) {
+  return adjustStock({ adminId, txnType: 'OUT', sku, quantity, note, warrantyNote });
 }
 
 async function listTransactions(query) {
@@ -339,17 +307,12 @@ async function listTransactions(query) {
         wb.id AS batch_id,
         wb.batch_code,
         wb.is_active AS batch_is_active,
-        cu.id AS customer_id,
-        cu.name AS customer_name,
-        cu.phone AS customer_phone,
-        cu.address AS customer_address,
         a.id AS admin_id,
         a.username AS admin_username
       FROM stock_transactions st
       JOIN products p ON p.id = st.product_id
       JOIN categories c ON c.id = p.category_id
       LEFT JOIN warranty_batches wb ON wb.id = st.warranty_batch_id
-      LEFT JOIN customers cu ON cu.id = st.customer_id
       JOIN admins a ON a.id = st.created_by_admin_id
       ${whereSql}
       ORDER BY st.id DESC
@@ -378,14 +341,6 @@ async function listTransactions(query) {
             id: row.batch_id,
             batch_code: row.batch_code,
             is_active: row.batch_is_active === 1
-          }
-        : null,
-      customer: row.customer_id
-        ? {
-            id: row.customer_id,
-            name: row.customer_name,
-            phone: row.customer_phone,
-            address: row.customer_address
           }
         : null,
       quantity: Number(row.quantity),

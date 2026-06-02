@@ -2,7 +2,8 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { AdminLoginPage } from "./pages/AdminLoginPage";
-import { ProductManagementPage } from "./pages/ProductManagementPage";
+import { InventoryWorkbenchPage } from "./pages/InventoryWorkbenchPage";
+import { AdminSectionPage } from "./pages/AdminSectionPage";
 import { PublicSearchPage } from "./pages/PublicSearchPage";
 import { StockInPage } from "./pages/StockInPage";
 import { StockOutPage } from "./pages/StockOutPage";
@@ -24,9 +25,9 @@ export const appRouter = createBrowserRouter([
       {
         element: <AdminLayout />,
         children: [
-          { index: true, element: <Navigate to="/admin/stock-in" replace /> },
-          { path: "inventory-workbench", element: <Navigate to="/admin/stock-in" replace /> },
-          { path: "products", element: <ProductManagementPage /> },
+          { index: true, element: <Navigate to="/admin/inventory-workbench" replace /> },
+          { path: "inventory-workbench", element: <InventoryWorkbenchPage /> },
+          { path: "products", element: <AdminSectionPage title="Sản phẩm" /> },
           { path: "stock-in", element: <StockInPage /> },
           { path: "stock-out", element: <StockOutPage /> },
           { path: "transaction-history", element: <TransactionHistoryPage /> }

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CustomerSelector } from "../components/CustomerSelector";
 import { listActiveCategories, listActiveProducts, stockInRequest } from "../services/inventoryOperations.service";
 
 function stripDiacritics(value) {
@@ -29,7 +28,6 @@ export function StockInPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [quantity, setQuantity] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -120,7 +118,6 @@ export function StockInPage() {
       const result = await stockInRequest({
         sku: selectedProduct.sku,
         quantity: numericQuantity,
-        ...(selectedCustomer?.id ? { customer_id: Number(selectedCustomer.id) } : {}),
         note: note.trim() || undefined
       });
 
@@ -255,8 +252,6 @@ export function StockInPage() {
                 placeholder="Nhập số lượng nhập"
               />
             </div>
-
-            <CustomerSelector selectedCustomer={selectedCustomer} onSelect={setSelectedCustomer} />
 
             <div className="mt-4">
               <label className="mb-1 block text-sm font-medium text-slate-700">
