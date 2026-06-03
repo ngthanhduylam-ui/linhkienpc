@@ -1,8 +1,7 @@
 const { pool } = require('../../config/database');
 const AppError = require('../../utils/AppError');
 const { escapeLike, parsePagination, parseNullableInt } = require('../../utils/parsers');
-
-const NO_NOTE_WARRANTY_KEY = '__NO_NOTE__';
+const { NO_NOTE_WARRANTY_KEY, getAdjustedNoteGroups, normalizeNoteKey } = require('../../utils/inventoryNoteGroups');
 
 function validateQuantity(quantity) {
   if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -14,7 +13,7 @@ function normalizeWarrantyNote(note) {
   if (note === NO_NOTE_WARRANTY_KEY) {
     return '';
   }
-  return (note || '').trim().toUpperCase().replace(/\s+/g, '');
+  return normalizeNoteKey(note);
 }
 
 async function resolveProductBySku(connection, sku) {
@@ -118,64 +117,6 @@ async function resolveSupplierId(connection, supplierId) {
   return parsedSupplierId;
 }
 
-async function listRemainingWarrantyNoteGroups(connection, productId, maxQuantity = null) {
-  const [rows] = await connection.query(
-    `
-      SELECT
-        grouped.note_key,
-        grouped.note,
-        grouped.in_quantity - grouped.out_quantity AS remaining_quantity
-      FROM (
-        SELECT
-          normalized.note_key,
-          MIN(normalized.note) AS note,
-          SUM(CASE WHEN normalized.txn_type = 'IN' THEN normalized.quantity ELSE 0 END) AS in_quantity,
-          SUM(CASE WHEN normalized.txn_type = 'OUT' THEN normalized.quantity ELSE 0 END) AS out_quantity
-        FROM (
-          SELECT
-            txn_type,
-            quantity,
-            NULLIF(TRIM(note), '') AS note,
-            CASE
-              WHEN note IS NULL OR TRIM(note) = '' THEN ''
-              ELSE REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
-            END AS note_key
-          FROM stock_transactions
-          WHERE product_id = ?
-            AND txn_type IN ('IN', 'OUT')
-        ) normalized
-        GROUP BY normalized.note_key
-      ) grouped
-      WHERE grouped.in_quantity - grouped.out_quantity > 0
-      ORDER BY grouped.note_key ASC
-    `,
-    [productId]
-  );
-
-  let remainingProductQuantity = maxQuantity === null ? null : Math.max(Number(maxQuantity || 0), 0);
-  const groups = [];
-
-  for (const row of rows) {
-    const rowQuantity = Number(row.remaining_quantity || 0);
-    const quantity = remainingProductQuantity === null ? rowQuantity : Math.min(rowQuantity, remainingProductQuantity);
-    if (quantity <= 0) {
-      continue;
-    }
-
-    groups.push({
-      note: row.note_key,
-      label: row.note || 'Không ghi chú',
-      quantity
-    });
-
-    if (remainingProductQuantity !== null) {
-      remainingProductQuantity -= quantity;
-    }
-  }
-
-  return groups;
-}
-
 async function adjustStock({
   adminId,
   txnType,
@@ -210,11 +151,7 @@ async function adjustStock({
         ]);
       }
 
-      const remainingNoteGroups = await listRemainingWarrantyNoteGroups(
-        connection,
-        resolved.product_id,
-        currentQuantity
-      );
+      const remainingNoteGroups = await getAdjustedNoteGroups(resolved.product_id, connection);
       const hasWarrantySelection =
         warrantyNote !== undefined &&
         warrantyNote !== null &&
@@ -228,7 +165,7 @@ async function adjustStock({
       }
 
       if (remainingNoteGroups.length && hasWarrantySelection) {
-        const selectedGroup = remainingNoteGroups.find((group) => group.note === selectedWarrantyNote);
+        const selectedGroup = remainingNoteGroups.find((group) => group.note_key === selectedWarrantyNote);
         if (!selectedGroup) {
           throw new AppError('Warranty note group not found.', 404, 'WARRANTY_NOTE_NOT_FOUND', [
             { field: 'warranty_note', issue: 'not_found' }

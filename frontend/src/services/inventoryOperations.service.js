@@ -123,6 +123,22 @@ export async function getProductInventoryRequest(sku) {
   return response?.data;
 }
 
+export async function searchInventoryCheckProducts(keyword = "") {
+  const query = keyword.trim() ? { keyword: keyword.trim(), page: 1, limit: 20 } : { page: 1, limit: 20 };
+  const response = await apiGet("/admin/inventory-check/products", query);
+  return response?.data || [];
+}
+
+export async function getInventoryCheckProduct(sku) {
+  const response = await apiGet(`/admin/inventory-check/products/${encodeURIComponent(sku)}`);
+  return response?.data;
+}
+
+export async function moveInventoryNoteGroup(payload) {
+  const response = await apiPost("/admin/inventory-check/note-move", payload);
+  return response?.data;
+}
+
 export async function listStockTransactions(params) {
   const query = {
     page: params.page || 1,

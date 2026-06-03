@@ -7,4 +7,5 @@ SOURCE database/schema/product_inventory_balances.sql;
 SOURCE database/schema/customers.sql;
 SOURCE database/schema/suppliers.sql;
 SOURCE database/schema/stock_transactions.sql;
+SOURCE database/schema/inventory_note_adjustments.sql;
 SOURCE database/schema/admin_refresh_tokens.sql;

@@ -4,6 +4,7 @@ import { AdminLayout } from "./layouts/AdminLayout";
 import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage";
 import { CustomerListPage } from "./pages/CustomerListPage";
+import { InventoryCheckPage } from "./pages/InventoryCheckPage";
 import { ProductManagementPage } from "./pages/ProductManagementPage";
 import { PublicSearchPage } from "./pages/PublicSearchPage";
 import { StockInPage } from "./pages/StockInPage";
@@ -35,6 +36,7 @@ export const appRouter = createBrowserRouter([
           { path: "customers/:id", element: <CustomerDetailPage /> },
           { path: "stock-in", element: <StockInPage /> },
           { path: "stock-out", element: <StockOutPage /> },
+          { path: "inventory-check", element: <InventoryCheckPage /> },
           { path: "transaction-history", element: <TransactionHistoryPage /> }
         ]
       }

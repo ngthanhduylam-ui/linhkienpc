@@ -1,6 +1,7 @@
 const { pool } = require('../../config/database');
 const AppError = require('../../utils/AppError');
 const { parsePagination, parseNullableInt, parseBooleanQuery, escapeLike } = require('../../utils/parsers');
+const { buildAdjustedNoteGroupMap } = require('../../utils/inventoryNoteGroups');
 
 async function getProductById(id) {
   const [rows] = await pool.query(
@@ -23,7 +24,7 @@ async function getProductById(id) {
   }
 
   const row = rows[0];
-  const noteGroupMap = await buildNoteGroups([row.id]);
+  const noteGroupMap = await buildAdjustedNoteGroupMap([row.id]);
   return {
     id: row.id,
     sku: row.sku,
@@ -93,7 +94,7 @@ async function listAdminProducts(query) {
     `,
     [...params, limit, offset]
   );
-  const noteGroupMap = await buildNoteGroups(rows.map((row) => row.id));
+  const noteGroupMap = await buildAdjustedNoteGroupMap(rows.map((row) => row.id));
 
   return {
     items: rows.map((row) => ({
@@ -201,82 +202,6 @@ async function setProductActive(id, isActive) {
   return getProductById(id);
 }
 
-async function buildNoteGroups(productIds) {
-  if (!productIds.length) {
-    return new Map();
-  }
-
-  const placeholders = productIds.map(() => '?').join(',');
-  const [rows] = await pool.query(
-    `
-      SELECT
-        grouped.product_id,
-        grouped.note_key,
-        grouped.note,
-        grouped.in_quantity - grouped.out_quantity AS remaining_quantity
-      FROM (
-        SELECT
-          normalized.product_id,
-          normalized.note_key,
-          MIN(normalized.note) AS note,
-          SUM(CASE WHEN normalized.txn_type = 'IN' THEN normalized.quantity ELSE 0 END) AS in_quantity,
-          SUM(CASE WHEN normalized.txn_type = 'OUT' THEN normalized.quantity ELSE 0 END) AS out_quantity
-        FROM (
-          SELECT
-            st.product_id,
-            st.txn_type,
-            st.quantity,
-            NULLIF(TRIM(st.note), '') AS note,
-            CASE
-              WHEN st.note IS NULL OR TRIM(st.note) = '' THEN ''
-              ELSE REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(st.note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
-            END AS note_key
-          FROM stock_transactions st
-          WHERE st.product_id IN (${placeholders})
-            AND st.txn_type IN ('IN', 'OUT')
-        ) normalized
-        GROUP BY normalized.product_id, normalized.note_key
-      ) grouped
-      WHERE grouped.in_quantity - grouped.out_quantity > 0
-      ORDER BY grouped.product_id ASC, grouped.note_key ASC
-    `,
-    productIds
-  );
-
-  const [balanceRows] = await pool.query(
-    `
-      SELECT product_id, quantity
-      FROM product_inventory_balances
-      WHERE product_id IN (${placeholders})
-    `,
-    productIds
-  );
-
-  const remainingByProduct = new Map(
-    balanceRows.map((row) => [row.product_id, Math.max(Number(row.quantity || 0), 0)])
-  );
-  const map = new Map();
-  for (const row of rows) {
-    const remainingProductQuantity = remainingByProduct.get(row.product_id) || 0;
-    const quantity = Math.min(Number(row.remaining_quantity || 0), remainingProductQuantity);
-    if (quantity <= 0) {
-      continue;
-    }
-
-    if (!map.has(row.product_id)) {
-      map.set(row.product_id, []);
-    }
-    map.get(row.product_id).push({
-      note: row.note || '',
-      label: row.note || 'Không ghi chú',
-      quantity,
-      is_no_note: !row.note
-    });
-    remainingByProduct.set(row.product_id, remainingProductQuantity - quantity);
-  }
-  return map;
-}
-
 async function searchPublicProducts(query) {
   const { page, limit, offset } = parsePagination(query);
   const q = (query.q || '').trim();
@@ -327,7 +252,7 @@ async function searchPublicProducts(query) {
     [...params, limit, offset]
   );
 
-  const noteGroupMap = await buildNoteGroups(products.map((item) => item.id));
+  const noteGroupMap = await buildAdjustedNoteGroupMap(products.map((item) => item.id));
 
   return {
     items: products.map((product) => ({
@@ -360,7 +285,7 @@ async function getPublicInventoryBySku(sku) {
   }
 
   const product = products[0];
-  const noteGroupMap = await buildNoteGroups([product.id]);
+  const noteGroupMap = await buildAdjustedNoteGroupMap([product.id]);
 
   return {
     product: {
