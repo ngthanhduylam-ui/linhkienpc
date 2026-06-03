@@ -136,25 +136,6 @@ async function createCustomer(payload) {
   return getCustomerById(result.insertId);
 }
 
-async function updateCustomer(id, payload) {
-  await getCustomerById(id);
-
-  const name = payload.name.trim();
-  const phone = payload.phone && payload.phone.trim() ? payload.phone.trim() : null;
-  const address = payload.address && payload.address.trim() ? payload.address.trim() : null;
-
-  await pool.query(
-    `
-      UPDATE customers
-      SET name = ?, phone = ?, address = ?
-      WHERE id = ?
-    `,
-    [name, phone, address, id]
-  );
-
-  return getCustomerById(id);
-}
-
 async function listCustomerTransactions(id, query) {
   await getCustomerById(id);
 
@@ -207,6 +188,5 @@ module.exports = {
   listCustomers,
   getCustomerById,
   createCustomer,
-  updateCustomer,
   listCustomerTransactions
 };

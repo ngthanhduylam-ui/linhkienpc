@@ -1,6 +1,8 @@
 const { pool } = require('../../config/database');
 const AppError = require('../../utils/AppError');
-const { parsePagination, parseNullableInt } = require('../../utils/parsers');
+const { escapeLike, parsePagination, parseNullableInt } = require('../../utils/parsers');
+
+const NO_NOTE_WARRANTY_KEY = '__NO_NOTE__';
 
 function validateQuantity(quantity) {
   if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -9,6 +11,9 @@ function validateQuantity(quantity) {
 }
 
 function normalizeWarrantyNote(note) {
+  if (note === NO_NOTE_WARRANTY_KEY) {
+    return '';
+  }
   return (note || '').trim().toUpperCase().replace(/\s+/g, '');
 }
 
@@ -118,22 +123,26 @@ async function listRemainingWarrantyNoteGroups(connection, productId, maxQuantit
     `
       SELECT
         grouped.note_key,
+        grouped.note,
         grouped.in_quantity - grouped.out_quantity AS remaining_quantity
       FROM (
         SELECT
           normalized.note_key,
+          MIN(normalized.note) AS note,
           SUM(CASE WHEN normalized.txn_type = 'IN' THEN normalized.quantity ELSE 0 END) AS in_quantity,
           SUM(CASE WHEN normalized.txn_type = 'OUT' THEN normalized.quantity ELSE 0 END) AS out_quantity
         FROM (
           SELECT
             txn_type,
             quantity,
-            REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '') AS note_key
+            NULLIF(TRIM(note), '') AS note,
+            CASE
+              WHEN note IS NULL OR TRIM(note) = '' THEN ''
+              ELSE REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+            END AS note_key
           FROM stock_transactions
           WHERE product_id = ?
             AND txn_type IN ('IN', 'OUT')
-            AND note IS NOT NULL
-            AND TRIM(note) <> ''
         ) normalized
         GROUP BY normalized.note_key
       ) grouped
@@ -155,6 +164,7 @@ async function listRemainingWarrantyNoteGroups(connection, productId, maxQuantit
 
     groups.push({
       note: row.note_key,
+      label: row.note || 'Không ghi chú',
       quantity
     });
 
@@ -205,15 +215,19 @@ async function adjustStock({
         resolved.product_id,
         currentQuantity
       );
-      const selectedWarrantyNote = normalizeWarrantyNote(warrantyNote || note);
+      const hasWarrantySelection =
+        warrantyNote !== undefined &&
+        warrantyNote !== null &&
+        (warrantyNote === NO_NOTE_WARRANTY_KEY || String(warrantyNote).trim() !== '');
+      const selectedWarrantyNote = normalizeWarrantyNote(hasWarrantySelection ? warrantyNote : note);
 
-      if (remainingNoteGroups.length && !selectedWarrantyNote) {
+      if (remainingNoteGroups.length && !hasWarrantySelection) {
         throw new AppError('Warranty note selection is required.', 400, 'WARRANTY_NOTE_REQUIRED', [
           { field: 'warranty_note', issue: 'required_when_warranty_groups_exist' }
         ]);
       }
 
-      if (remainingNoteGroups.length && selectedWarrantyNote) {
+      if (remainingNoteGroups.length && hasWarrantySelection) {
         const selectedGroup = remainingNoteGroups.find((group) => group.note === selectedWarrantyNote);
         if (!selectedGroup) {
           throw new AppError('Warranty note group not found.', 404, 'WARRANTY_NOTE_NOT_FOUND', [
@@ -230,7 +244,7 @@ async function adjustStock({
             }
           ]);
         }
-        transactionNote = selectedWarrantyNote;
+        transactionNote = selectedWarrantyNote ? selectedWarrantyNote : null;
       }
 
       nextQuantity = currentQuantity - quantity;
@@ -315,7 +329,7 @@ async function stockOut({ adminId, sku, quantity, note, warrantyNote, customerId
 
 async function listTransactions(query) {
   const { page, limit, offset } = parsePagination(query);
-  const sku = (query.sku || '').trim();
+  const keyword = (query.keyword || query.search || query.sku || '').trim();
   const txnType = (query.txn_type || '').trim();
   const from = (query.from || '').trim();
   const to = (query.to || '').trim();
@@ -325,9 +339,10 @@ async function listTransactions(query) {
   const whereParts = ['1=1'];
   const params = [];
 
-  if (sku) {
-    whereParts.push('p.sku = ?');
-    params.push(sku);
+  if (keyword) {
+    const pattern = `%${escapeLike(keyword)}%`;
+    whereParts.push('(p.sku LIKE ? OR p.name LIKE ?)');
+    params.push(pattern, pattern);
   }
   if (txnType) {
     whereParts.push('st.txn_type = ?');

@@ -141,7 +141,7 @@ export function PublicSearchPage() {
 
       <main className="mx-auto max-w-5xl px-4 pb-8 pt-4 sm:px-6 sm:pb-12 sm:pt-8">
         <section className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <h1 className="text-center text-3xl font-extrabold tracking-tight text-brand-900 sm:text-4xl">LINHKIENPC</h1>
+          <h1 className="text-center text-3xl font-extrabold tracking-tight text-brand-900 sm:text-4xl">VI TÍNH PHƯỚC TÀI</h1>
           <p className="mx-auto mt-3 max-w-md text-center text-sm leading-6 text-slate-600 sm:text-base">
             Tra cứu tồn kho và thông tin bảo hành nhanh trên điện thoại.
           </p>

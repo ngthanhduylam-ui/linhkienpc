@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from "../api/apiClient";
+import { apiGet, apiPost } from "../api/apiClient";
 
 export async function listActiveProducts() {
   const response = await apiGet("/admin/products", { page: 1, limit: 100 });
@@ -45,11 +45,6 @@ export async function createCustomer(payload) {
   return response?.data;
 }
 
-export async function updateCustomerRequest(id, payload) {
-  const response = await apiPatch(`/admin/customers/${encodeURIComponent(id)}`, payload);
-  return response?.data;
-}
-
 export async function listSuppliers(keyword = "") {
   const query = keyword.trim() ? { keyword: keyword.trim(), limit: 20 } : { limit: 20 };
   const response = await apiGet("/admin/suppliers", query);
@@ -72,20 +67,10 @@ export async function createSupplier(payload) {
   return response?.data;
 }
 
-export async function updateSupplierRequest(id, payload) {
-  const response = await apiPatch(`/admin/suppliers/${encodeURIComponent(id)}`, payload);
-  return response?.data;
-}
-
 export async function createProductRequest(payload) {
   console.log("[InventoryWorkbench] BEFORE createProductRequest", payload);
   const response = await apiPost("/admin/products", payload);
   console.log("[InventoryWorkbench] API response payload", response);
-  return response?.data;
-}
-
-export async function updateProductRequest(id, payload) {
-  const response = await apiPatch(`/admin/products/${encodeURIComponent(id)}`, payload);
   return response?.data;
 }
 
@@ -129,7 +114,6 @@ export async function listStockTransactions(params) {
     limit: params.limit || 10
   };
 
-  if (params.keyword) query.keyword = params.keyword;
   if (params.sku) query.sku = params.sku;
   if (params.txn_type) query.txn_type = params.txn_type;
   if (params.note) query.note = params.note;

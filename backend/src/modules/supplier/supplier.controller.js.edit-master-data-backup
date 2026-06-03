@@ -23,12 +23,3 @@ exports.createSupplier = asyncHandler(async (req, res) => {
     meta: { server_time: new Date().toISOString() }
   });
 });
-
-exports.updateSupplier = asyncHandler(async (req, res) => {
-  const updated = await supplierService.updateSupplier(Number(req.params.id), req.body);
-  res.json({
-    success: true,
-    data: updated,
-    meta: { server_time: new Date().toISOString() }
-  });
-});

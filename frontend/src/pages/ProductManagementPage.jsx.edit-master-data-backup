@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createCategoryRequest,
   createProductRequest,
   listActiveCategories,
-  listActiveProducts,
-  updateProductRequest
+  listActiveProducts
 } from "../services/inventoryOperations.service";
 
 function stripDiacritics(value) {
@@ -72,23 +71,14 @@ export function ProductManagementPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchInput, setSearchInput] = useState("");
-  const searchInputRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [editProductForm, setEditProductForm] = useState({
-    name: "",
-    sku: "",
-    category_id: "",
-    spec_summary: ""
-  });
 
   const [newProductName, setNewProductName] = useState("");
-  const [newProductCondition, setNewProductCondition] = useState("2nd");
   const [newProductSku, setNewProductSku] = useState("");
   const [newProductCategoryId, setNewProductCategoryId] = useState("");
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(false);
@@ -142,8 +132,8 @@ export function ProductManagementPage() {
     if (isSkuManuallyEdited && newProductSku.trim()) return;
 
     const suggestedSku = buildSuggestedSku(newProductName, selectedCreateCategory);
-    if (suggestedSku) setNewProductSku(`${newProductCondition}.${suggestedSku}`);
-  }, [isModalOpen, newProductName, selectedCreateCategory, newProductCondition, isSkuManuallyEdited, newProductSku]);
+    if (suggestedSku) setNewProductSku(suggestedSku);
+  }, [isModalOpen, newProductName, selectedCreateCategory, isSkuManuallyEdited, newProductSku]);
 
   useEffect(() => {
     if (!isModalOpen) return undefined;
@@ -170,7 +160,6 @@ export function ProductManagementPage() {
 
   function resetCreateForm() {
     setNewProductName("");
-    setNewProductCondition("2nd");
     setNewProductSku("");
     setNewProductCategoryId("");
     setIsSkuManuallyEdited(false);
@@ -190,29 +179,6 @@ export function ProductManagementPage() {
     setIsModalOpen(false);
     resetCreateForm();
     setError("");
-  }
-
-  function openEditModal(product) {
-    setError("");
-    setSuccess("");
-    setEditingProduct(product);
-    setEditProductForm({
-      name: product.name || "",
-      sku: product.sku || "",
-      category_id: product.category_id ? String(product.category_id) : "",
-      spec_summary: product.spec_summary || ""
-    });
-  }
-
-  function closeEditModal() {
-    setEditingProduct(null);
-    setEditProductForm({ name: "", sku: "", category_id: "", spec_summary: "" });
-    setError("");
-  }
-
-  function handleClearSearch() {
-    setSearchInput("");
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
   }
 
   async function handleCreateCategoryInline() {
@@ -296,58 +262,12 @@ export function ProductManagementPage() {
       });
 
       await reloadProducts();
-      setSearchInput("");
+      setSearchInput(created.sku);
       setSuccess(`Tạo sản phẩm thành công: ${created.name} (${created.sku}).`);
       setIsModalOpen(false);
       resetCreateForm();
     } catch (err) {
       setError(err?.message || "Tạo sản phẩm mới thất bại.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleUpdateProduct() {
-    if (!editingProduct) return;
-
-    setError("");
-    setSuccess("");
-
-    const name = editProductForm.name.trim();
-    const sku = editProductForm.sku.trim();
-    const categoryId = editProductForm.category_id;
-
-    if (!name) {
-      setError("Vui lòng nhập tên sản phẩm.");
-      return;
-    }
-    if (!sku) {
-      setError("Vui lòng nhập SKU.");
-      return;
-    }
-    if (!categoryId) {
-      setError("Vui lòng chọn danh mục.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const updated = await updateProductRequest(editingProduct.id, {
-        name,
-        sku,
-        category_id: Number(categoryId),
-        spec_summary: editProductForm.spec_summary.trim() || null
-      });
-      await reloadProducts();
-      setSuccess(`Đã cập nhật sản phẩm: ${updated.name} (${updated.sku}).`);
-      closeEditModal();
-    } catch (err) {
-      const code = err?.payload?.error?.code;
-      if (code === "SKU_ALREADY_EXISTS") {
-        setError("SKU đã tồn tại.");
-      } else {
-        setError(err?.message || "Cập nhật sản phẩm thất bại.");
-      }
     } finally {
       setIsSubmitting(false);
     }
@@ -371,34 +291,20 @@ export function ProductManagementPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <label className="mb-1 block text-sm font-medium text-slate-700">Tìm sản phẩm</label>
-        <div className="relative">
-          <input
-            ref={searchInputRef}
-            className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-            placeholder="Tìm theo tên sản phẩm, SKU hoặc danh mục"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-          {searchInput && (
-            <button
-              type="button"
-              aria-label="Xóa tìm kiếm"
-              onClick={handleClearSearch}
-              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            >
-              ×
-            </button>
-          )}
-        </div>
+        <input
+          className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+          placeholder="Tìm theo tên sản phẩm, SKU hoặc danh mục"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+        />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="hidden grid-cols-12 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid">
-          <span className="col-span-3">Tên sản phẩm</span>
+          <span className="col-span-4">Tên sản phẩm</span>
           <span className="col-span-3">SKU</span>
-          <span className="col-span-2">Danh mục</span>
+          <span className="col-span-3">Danh mục</span>
           <span className="col-span-2 text-right">Tồn hiện tại</span>
-          <span className="col-span-2 text-right">Thao tác</span>
         </div>
 
         {isLoading ? (
@@ -407,24 +313,15 @@ export function ProductManagementPage() {
           <div className="divide-y divide-slate-100">
             {filteredProducts.map((product) => (
               <div key={product.id} className="grid gap-2 px-4 py-4 md:grid-cols-12 md:items-center">
-                <div className="md:col-span-3">
+                <div className="md:col-span-4">
                   <p className="font-semibold text-slate-900">{product.name}</p>
                   <p className="mt-1 text-xs text-slate-500 md:hidden">SKU: {product.sku}</p>
                 </div>
                 <p className="text-sm text-slate-700 md:col-span-3">{product.sku}</p>
-                <p className="text-sm text-slate-700 md:col-span-2">{getCategoryName(product, categories)}</p>
+                <p className="text-sm text-slate-700 md:col-span-3">{getCategoryName(product, categories)}</p>
                 <p className="text-lg font-bold text-brand-800 md:col-span-2 md:text-right">
                   {Number(product.total_quantity || 0)}
                 </p>
-                <div className="md:col-span-2 md:text-right">
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(product)}
-                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Sửa
-                  </button>
-                </div>
               </div>
             ))}
           </div>
@@ -466,18 +363,6 @@ export function ProductManagementPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Tình trạng</label>
-                  <select
-                    className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                    value={newProductCondition}
-                    onChange={(event) => setNewProductCondition(event.target.value)}
-                  >
-                    <option value="new">new</option>
-                    <option value="2nd">2nd</option>
-                  </select>
-                </div>
-
-                <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Mã sản phẩm / SKU *</label>
                   <input
                     className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
@@ -486,11 +371,8 @@ export function ProductManagementPage() {
                       setNewProductSku(event.target.value);
                       setIsSkuManuallyEdited(true);
                     }}
-                    placeholder="2nd.cpu.intel.12400f"
+                    placeholder="cpu.intel.12400f"
                   />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Cấu trúc đề xuất: [new|2nd].[danh mục].[hãng].[tên ngắn]
-                  </p>
                 </div>
 
                 <div>
@@ -570,87 +452,6 @@ export function ProductManagementPage() {
                 className="h-11 rounded-md border border-brand-600 px-4 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? "Đang tạo sản phẩm..." : "Tạo sản phẩm"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
-          <div
-            className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="product-edit-title"
-          >
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 id="product-edit-title" className="text-base font-semibold text-slate-900">
-                Sửa sản phẩm
-              </h3>
-            </div>
-
-            <div className="grid gap-4 overflow-y-auto px-5 py-4 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Tên sản phẩm *</label>
-                <input
-                  className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                  value={editProductForm.name}
-                  onChange={(event) => setEditProductForm((prev) => ({ ...prev, name: event.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">SKU *</label>
-                <input
-                  className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                  value={editProductForm.sku}
-                  onChange={(event) => setEditProductForm((prev) => ({ ...prev, sku: event.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Danh mục *</label>
-                <select
-                  className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                  value={editProductForm.category_id}
-                  onChange={(event) => setEditProductForm((prev) => ({ ...prev, category_id: event.target.value }))}
-                >
-                  <option value="">-- Chọn danh mục --</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={String(category.id)}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-slate-700">Mô tả / spec summary</label>
-                <textarea
-                  className="min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                  value={editProductForm.spec_summary}
-                  onChange={(event) => setEditProductForm((prev) => ({ ...prev, spec_summary: event.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={closeEditModal}
-                className="h-11 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handleUpdateProduct}
-                className="h-11 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
             </div>
           </div>

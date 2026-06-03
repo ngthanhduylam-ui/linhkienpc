@@ -2,7 +2,7 @@ const validateRequest = require('../../middlewares/validateRequest');
 
 const idPattern = /^\d+$/;
 
-const listSuppliersValidator = validateRequest({
+const listCustomersValidator = validateRequest({
   query: {
     keyword: { required: false, type: 'string', maxLength: 100 },
     page: { required: false, type: 'string', maxLength: 6 },
@@ -10,7 +10,7 @@ const listSuppliersValidator = validateRequest({
   }
 });
 
-const createSupplierValidator = validateRequest({
+const createCustomerValidator = validateRequest({
   body: {
     name: { required: true, type: 'string', minLength: 1, maxLength: 100 },
     phone: { required: false, type: 'string', maxLength: 30 },
@@ -18,19 +18,25 @@ const createSupplierValidator = validateRequest({
   }
 });
 
-const updateSupplierValidator = validateRequest({
+const idParamValidator = validateRequest({
+  params: {
+    id: { required: true, type: 'string', pattern: idPattern }
+  }
+});
+
+const listCustomerTransactionsValidator = validateRequest({
   params: {
     id: { required: true, type: 'string', pattern: idPattern }
   },
-  body: {
-    name: { required: true, type: 'string', minLength: 1, maxLength: 100 },
-    phone: { required: false, type: 'string', maxLength: 30 },
-    address: { required: false, type: 'string', maxLength: 255 }
+  query: {
+    page: { required: false, type: 'string', maxLength: 6 },
+    limit: { required: false, type: 'string', maxLength: 3 }
   }
 });
 
 module.exports = {
-  listSuppliersValidator,
-  createSupplierValidator,
-  updateSupplierValidator
+  listCustomersValidator,
+  createCustomerValidator,
+  idParamValidator,
+  listCustomerTransactionsValidator
 };

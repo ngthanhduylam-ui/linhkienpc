@@ -5,3 +5,33 @@
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .delivery-note-page,
+  .delivery-note-page * {
+    visibility: visible;
+  }
+
+  .delivery-note-page {
+    position: absolute;
+    inset: 0 auto auto 0;
+  }
+
+  .delivery-note-controls,
+  .delivery-note-controls * {
+    display: none !important;
+  }
+}

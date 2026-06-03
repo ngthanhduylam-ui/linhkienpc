@@ -9,6 +9,7 @@ export function AdminLoginPage() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,7 +22,7 @@ export function AdminLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <h1 className="text-2xl font-bold text-brand-900">Đăng nhập quản trị</h1>
-        <p className="mt-1 text-sm text-slate-600">LINHKIENPC quản lý tồn kho</p>
+        <p className="mt-1 text-sm text-slate-600">VI TÍNH PHƯỚC TÀI quản lý tồn kho</p>
 
         <form
           className="mt-6 space-y-4"
@@ -51,13 +52,23 @@ export function AdminLoginPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Mật khẩu</label>
-            <input
-              type="password"
-              className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="••••••••"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                className="h-11 w-full rounded-md border border-slate-300 px-3 pr-20 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="••••••••"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+              >
+                {showPassword ? "Ẩn" : "Hiện"}
+              </button>
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -80,3 +91,5 @@ export function AdminLoginPage() {
     </div>
   );
 }
+
+

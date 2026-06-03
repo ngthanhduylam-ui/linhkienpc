@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CustomerSelector } from "../components/CustomerSelector";
 import {
@@ -26,12 +26,178 @@ function getCategoryName(product, categories) {
   return match?.name || "-";
 }
 
+const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
+
+function formatDateTime(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return value || "-";
+  return date.toLocaleString("vi-VN");
+}
+
+function DeliveryNotePreview({ deliveryNote, onClose }) {
+  const [printOptions, setPrintOptions] = useState({
+    showPhone: true,
+    showAddress: true,
+    showWarrantyNote: true,
+    showSignature: true,
+    showAdmin: true
+  });
+  const [footerNote, setFooterNote] = useState("Cảm ơn quý khách.");
+
+  if (!deliveryNote) return null;
+
+  function toggleOption(key) {
+    setPrintOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 px-4 py-6 print:static print:overflow-visible print:bg-white print:p-0">
+      <div className="mx-auto max-w-4xl rounded-xl bg-white shadow-xl print:max-w-none print:rounded-none print:shadow-none">
+        <div className="delivery-note-controls border-b border-slate-200 p-4 print:hidden">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Xem trước Phiếu giao hàng</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                V1 dùng bố cục cố định. Trình chỉnh mẫu in tùy biến đầy đủ có thể làm sau nếu cần.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900"
+              >
+                In phiếu
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {[
+              ["showPhone", "Hiện số điện thoại"],
+              ["showAddress", "Hiện địa chỉ"],
+              ["showWarrantyNote", "Hiện ghi chú bảo hành"],
+              ["showSignature", "Hiện khu vực ký tên"],
+              ["showAdmin", "Hiện người thao tác"]
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={printOptions[key]}
+                  onChange={() => toggleOption(key)}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Ghi chú cuối phiếu</label>
+            <textarea
+              rows={2}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+              value={footerNote}
+              onChange={(event) => setFooterNote(event.target.value)}
+            />
+          </div>
+        </div>
+
+        <article className="delivery-note-page mx-auto bg-white p-8 text-slate-900 print:m-0 print:w-full print:p-0">
+          <header className="border-b border-slate-300 pb-4 text-center">
+            <p className="text-lg font-bold tracking-wide">VI TÍNH PHƯỚC TÀI</p>
+            <h1 className="mt-3 text-2xl font-extrabold tracking-[0.18em]">PHIẾU GIAO HÀNG</h1>
+          </header>
+
+          <section className="mt-6 grid gap-4 text-sm md:grid-cols-2 print:grid-cols-2">
+            <div className="space-y-2">
+              <p>
+                <span className="font-semibold">Ngày giờ xuất:</span> {formatDateTime(deliveryNote.occurred_at)}
+              </p>
+              <p>
+                <span className="font-semibold">Mã giao dịch:</span> {deliveryNote.transaction_id || "-"}
+              </p>
+              {printOptions.showAdmin && (
+                <p>
+                  <span className="font-semibold">Người thao tác/admin:</span> {deliveryNote.admin || "-"}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <p>
+                <span className="font-semibold">Đối tác nhận hàng:</span> {deliveryNote.customer?.name || "-"}
+              </p>
+              {printOptions.showPhone && (
+                <p>
+                  <span className="font-semibold">Số điện thoại:</span> {deliveryNote.customer?.phone || "-"}
+                </p>
+              )}
+              {printOptions.showAddress && (
+                <p>
+                  <span className="font-semibold">Địa chỉ:</span> {deliveryNote.customer?.address || "-"}
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="mt-6 overflow-hidden rounded-lg border border-slate-300 print:rounded-none">
+            <div className="grid grid-cols-[1.5fr_1fr_0.5fr] bg-slate-100 text-sm font-semibold print:bg-white">
+              <div className="border-r border-slate-300 p-3">Sản phẩm</div>
+              <div className="border-r border-slate-300 p-3">SKU</div>
+              <div className="p-3 text-right">SL</div>
+            </div>
+            <div className="grid grid-cols-[1.5fr_1fr_0.5fr] text-sm">
+              <div className="border-r border-t border-slate-300 p-3">{deliveryNote.product?.name || "-"}</div>
+              <div className="border-r border-t border-slate-300 p-3">{deliveryNote.product?.sku || "-"}</div>
+              <div className="border-t border-slate-300 p-3 text-right font-semibold">{deliveryNote.quantity}</div>
+            </div>
+          </section>
+
+          <section className="mt-5 space-y-2 text-sm">
+            {printOptions.showWarrantyNote && (
+              <p>
+                <span className="font-semibold">Warranty note / note:</span> {deliveryNote.warranty_note || "-"}
+              </p>
+            )}
+            <p>
+              <span className="font-semibold">Ghi chú xuất kho:</span> {deliveryNote.note || "-"}
+            </p>
+          </section>
+
+          {footerNote.trim() && <p className="mt-8 text-sm italic text-slate-700">{footerNote}</p>}
+
+          {printOptions.showSignature && (
+            <section className="mt-14 grid grid-cols-2 gap-8 text-center text-sm font-semibold">
+              <div>
+                <p>Người giao</p>
+                <p className="mt-20 text-xs font-normal text-slate-500">(Ký, ghi rõ họ tên)</p>
+              </div>
+              <div>
+                <p>Người nhận</p>
+                <p className="mt-20 text-xs font-normal text-slate-500">(Ký, ghi rõ họ tên)</p>
+              </div>
+            </section>
+          )}
+        </article>
+      </div>
+    </div>
+  );
+}
+
 export function StockOutPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchInput, setSearchInput] = useState("");
+  const searchInputRef = useRef(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -40,6 +206,8 @@ export function StockOutPage() {
   const [warrantyNoteGroups, setWarrantyNoteGroups] = useState([]);
   const [selectedWarrantyNote, setSelectedWarrantyNote] = useState("");
   const [isLoadingWarrantyNotes, setIsLoadingWarrantyNotes] = useState(false);
+  const [printAfterStockOut, setPrintAfterStockOut] = useState(false);
+  const [deliveryNote, setDeliveryNote] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -78,7 +246,7 @@ export function StockOutPage() {
   );
 
   const selectedWarrantyGroup = useMemo(
-    () => warrantyNoteGroups.find((item) => item.note === selectedWarrantyNote) || null,
+    () => warrantyNoteGroups.find((item) => item.value === selectedWarrantyNote) || null,
     [warrantyNoteGroups, selectedWarrantyNote]
   );
 
@@ -117,8 +285,6 @@ export function StockOutPage() {
     const matched = items.find((item) => normalizeText(item.sku) === normalizeText(keepSku));
     if (matched) {
       setSelectedProductId(String(matched.id));
-      setSearchInput(matched.sku);
-      setDebouncedSearch(matched.sku);
     }
   }
 
@@ -134,13 +300,16 @@ export function StockOutPage() {
       const inventory = await getProductInventoryRequest(sku);
       const groups = (inventory?.note_groups || [])
         .map((item) => ({
-          note: item.note,
+          note: item.note || "",
+          label: item.label || item.note || "Không ghi chú",
+          value: item.is_no_note || !item.note ? NO_NOTE_WARRANTY_VALUE : item.note,
+          isNoNote: Boolean(item.is_no_note || !item.note),
           quantity: Number(item.quantity || 0)
         }))
-        .filter((item) => item.note && item.quantity > 0);
+        .filter((item) => item.quantity > 0);
 
       setWarrantyNoteGroups(groups);
-      if (selectedWarrantyNote && !groups.some((item) => item.note === selectedWarrantyNote)) {
+      if (selectedWarrantyNote && !groups.some((item) => item.value === selectedWarrantyNote)) {
         setSelectedWarrantyNote("");
         setNote("");
       }
@@ -148,6 +317,16 @@ export function StockOutPage() {
     } finally {
       setIsLoadingWarrantyNotes(false);
     }
+  }
+
+  function handleClearProductSearch() {
+    setSearchInput("");
+    setDebouncedSearch("");
+    setSelectedProductId("");
+    setWarrantyNoteGroups([]);
+    setSelectedWarrantyNote("");
+    setSuccess("");
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
   }
 
   useEffect(() => {
@@ -164,13 +343,16 @@ export function StockOutPage() {
         if (!active) return;
         const groups = (inventory?.note_groups || [])
           .map((item) => ({
-            note: item.note,
+            note: item.note || "",
+            label: item.label || item.note || "Không ghi chú",
+            value: item.is_no_note || !item.note ? NO_NOTE_WARRANTY_VALUE : item.note,
+            isNoNote: Boolean(item.is_no_note || !item.note),
             quantity: Number(item.quantity || 0)
           }))
-          .filter((item) => item.note && item.quantity > 0);
+          .filter((item) => item.quantity > 0);
 
         setWarrantyNoteGroups(groups);
-        setSelectedWarrantyNote((current) => (current && groups.some((item) => item.note === current) ? current : ""));
+        setSelectedWarrantyNote((current) => (current && groups.some((item) => item.value === current) ? current : ""));
       })
       .catch(() => {
         if (!active) return;
@@ -188,9 +370,9 @@ export function StockOutPage() {
 
   useEffect(() => {
     if (selectedWarrantyNote) {
-      setNote(selectedWarrantyNote);
+      setNote(selectedWarrantyGroup?.isNoNote ? "" : selectedWarrantyGroup?.note || selectedWarrantyNote);
     }
-  }, [selectedWarrantyNote]);
+  }, [selectedWarrantyNote, selectedWarrantyGroup]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -218,7 +400,7 @@ export function StockOutPage() {
       }
       if (numericQuantity > selectedWarrantyGroup.quantity) {
         setError(
-          `Số lượng xuất vượt quá tồn của bảo hành ${selectedWarrantyGroup.note} (${selectedWarrantyGroup.quantity}).`
+          `Số lượng xuất vượt quá tồn của bảo hành ${selectedWarrantyGroup.label} (${selectedWarrantyGroup.quantity}).`
         );
         return;
       }
@@ -226,25 +408,46 @@ export function StockOutPage() {
 
     setIsSubmitting(true);
     try {
-      const outboundNote = selectedWarrantyGroup ? selectedWarrantyGroup.note : note.trim() || undefined;
+      const outboundNote = selectedWarrantyGroup
+        ? selectedWarrantyGroup.isNoNote
+          ? undefined
+          : selectedWarrantyGroup.note
+        : note.trim() || undefined;
       const result = await stockOutRequest({
         sku: selectedProduct.sku,
         quantity: numericQuantity,
         ...(selectedCustomer?.id ? { customer_id: Number(selectedCustomer.id) } : {}),
         note: outboundNote,
-        ...(selectedWarrantyGroup ? { warranty_note: selectedWarrantyGroup.note } : {})
+        ...(selectedWarrantyGroup ? { warranty_note: selectedWarrantyGroup.value } : {})
       });
+      const transaction = result?.transaction || {};
+      const nextDeliveryNote = {
+        transaction_id: transaction.id,
+        occurred_at: transaction.occurred_at || new Date().toISOString(),
+        admin: transaction.created_by_admin_id ? `Admin #${transaction.created_by_admin_id}` : "-",
+        customer: selectedCustomer,
+        product: {
+          name: selectedProduct.name,
+          sku: selectedProduct.sku
+        },
+        quantity: numericQuantity,
+        warranty_note: selectedWarrantyGroup?.label || outboundNote || "",
+        note: note.trim() || outboundNote || ""
+      };
 
       await reloadProducts(selectedProduct.sku);
       await reloadWarrantyNoteGroups(selectedProduct.sku);
       setSuccess(
-        `Xuất kho thành công cho SKU ${selectedProduct.sku}. Tổng tồn mới: ${
+        `Xuất kho thành công: ${selectedProduct.name}. Tổng tồn mới: ${
           result?.inventory_balance?.quantity ?? "N/A"
         }.`
       );
       setQuantity("");
       if (!selectedWarrantyGroup) {
         setNote("");
+      }
+      if (printAfterStockOut) {
+        setDeliveryNote(nextDeliveryNote);
       }
     } catch (err) {
       setError(err?.message || "Xuất kho thất bại.");
@@ -267,16 +470,29 @@ export function StockOutPage() {
             <label className="mt-4 mb-1 block text-sm font-medium text-slate-700">
               Tìm sản phẩm theo tên hoặc SKU
             </label>
-            <input
-              className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="Nhập tên sản phẩm hoặc SKU"
-              value={searchInput}
-              onChange={(event) => {
-                setSearchInput(event.target.value);
-                setSelectedProductId("");
-                setSuccess("");
-              }}
-            />
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="Nhập tên sản phẩm hoặc SKU"
+                value={searchInput}
+                onChange={(event) => {
+                  setSearchInput(event.target.value);
+                  setSelectedProductId("");
+                  setSuccess("");
+                }}
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  aria-label="Xóa tìm kiếm sản phẩm"
+                  onClick={handleClearProductSearch}
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  ×
+                </button>
+              )}
+            </div>
 
             {isLoading && <p className="mt-3 text-sm text-slate-500">Đang tải dữ liệu sản phẩm...</p>}
 
@@ -296,8 +512,6 @@ export function StockOutPage() {
                       type="button"
                       onClick={() => {
                         setSelectedProductId(String(item.id));
-                        setSearchInput(item.sku);
-                        setDebouncedSearch(item.sku);
                         setSuccess("");
                       }}
                       className={cardClassName}
@@ -372,8 +586,8 @@ export function StockOutPage() {
                   >
                     <option value="">-- Chọn bảo hành --</option>
                     {warrantyNoteGroups.map((group) => (
-                      <option key={group.note} value={group.note}>
-                        {group.note} - còn {group.quantity}
+                      <option key={group.value} value={group.value}>
+                        {group.label} - còn {group.quantity}
                       </option>
                     ))}
                   </select>
@@ -412,6 +626,16 @@ export function StockOutPage() {
               />
             </div>
 
+            <label className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={printAfterStockOut}
+                onChange={(event) => setPrintAfterStockOut(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
+              />
+              In phiếu giao hàng sau khi xuất
+            </label>
+
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
             {success && <p className="mt-4 text-sm text-green-700">{success}</p>}
 
@@ -425,6 +649,8 @@ export function StockOutPage() {
           </div>
         </aside>
       </form>
+
+      {deliveryNote && <DeliveryNotePreview deliveryNote={deliveryNote} onClose={() => setDeliveryNote(null)} />}
     </section>
   );
 }

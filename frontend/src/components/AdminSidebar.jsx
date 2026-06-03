@@ -31,11 +31,20 @@ export function AdminSidebar({ isOpen, onClose }) {
         }`}
       >
         <div className="mb-6 px-2">
-          <h2 className="text-xl font-bold text-brand-900">LINHKIENPC</h2>
+          <h2 className="text-xl font-bold text-brand-900">VI TÍNH PHƯỚC TÀI</h2>
           <p className="text-xs text-slate-500">Quản trị hệ thống</p>
         </div>
 
         <nav className="space-y-4">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Tra cứu ↗
+          </a>
+
           <div>
             <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Quản lý kho</p>
             <div className="space-y-1">

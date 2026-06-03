@@ -18,6 +18,17 @@ const createCustomerValidator = validateRequest({
   }
 });
 
+const updateCustomerValidator = validateRequest({
+  params: {
+    id: { required: true, type: 'string', pattern: idPattern }
+  },
+  body: {
+    name: { required: true, type: 'string', minLength: 1, maxLength: 100 },
+    phone: { required: false, type: 'string', maxLength: 30 },
+    address: { required: false, type: 'string', maxLength: 255 }
+  }
+});
+
 const idParamValidator = validateRequest({
   params: {
     id: { required: true, type: 'string', pattern: idPattern }
@@ -37,6 +48,7 @@ const listCustomerTransactionsValidator = validateRequest({
 module.exports = {
   listCustomersValidator,
   createCustomerValidator,
+  updateCustomerValidator,
   idParamValidator,
   listCustomerTransactionsValidator
 };

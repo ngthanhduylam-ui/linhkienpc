@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 export function SearchResultCard({ product, autoExpand = false }) {
   const [expanded, setExpanded] = useState(autoExpand);
+  const [copyFeedback, setCopyFeedback] = useState("");
   const sortedNoteGroups = useMemo(
     () => [...(product.noteGroups || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0)),
     [product.noteGroups]
@@ -12,24 +13,62 @@ export function SearchResultCard({ product, autoExpand = false }) {
     setExpanded(autoExpand);
   }, [autoExpand, product.sku]);
 
+  async function handleCopyName(event) {
+    event.stopPropagation();
+    const text = product.name || "";
+    if (!text) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopyFeedback("✓ Đã copy tên sản phẩm");
+      window.setTimeout(() => setCopyFeedback(""), 1800);
+    } catch {
+      setCopyFeedback("Không thể copy");
+      window.setTimeout(() => setCopyFeedback(""), 1800);
+    }
+  }
+
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <button
-        type="button"
-        onClick={() => setExpanded((prev) => !prev)}
-        className="flex w-full items-start justify-between gap-4 text-left"
-        aria-expanded={expanded}
-      >
-        <div className="min-w-0 flex-1">
+      <div className="flex w-full items-start justify-between gap-4">
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="min-w-0 flex-1 text-left"
+          aria-expanded={expanded}
+        >
           <h3 className="text-lg font-bold leading-snug text-slate-950 sm:text-xl">{product.name}</h3>
           <p className="mt-2 break-all text-sm font-medium text-slate-500">{product.sku}</p>
-        </div>
+        </button>
 
         <div className="shrink-0 text-right">
           <p className="text-3xl font-extrabold leading-none text-brand-800 sm:text-4xl">{product.totalQuantity}</p>
           <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Tổng tồn</p>
         </div>
-      </button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={handleCopyName}
+          className="min-h-10 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          📋 Copy
+        </button>
+        {copyFeedback && <span className="text-sm font-medium text-emerald-700">{copyFeedback}</span>}
+      </div>
 
       <button
         type="button"
@@ -50,7 +89,7 @@ export function SearchResultCard({ product, autoExpand = false }) {
                   key={`${product.sku}-${group.note}`}
                   className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm"
                 >
-                  <span className="break-all font-semibold text-slate-800">{group.note}</span>
+                  <span className="break-all font-semibold text-slate-800">{group.label || group.note}</span>
                   <span className="shrink-0 text-base font-bold text-brand-800">Còn {group.quantity}</span>
                 </li>
               ))}

@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-  getCustomerRequest,
-  listCustomerTransactions,
-  updateCustomerRequest
-} from "../services/inventoryOperations.service";
+import { getCustomerRequest, listCustomerTransactions } from "../services/inventoryOperations.service";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -27,11 +23,7 @@ export function CustomerDetailPage() {
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editCustomer, setEditCustomer] = useState({ name: "", phone: "", address: "" });
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 
@@ -67,50 +59,6 @@ export function CustomerDetailPage() {
     };
   }, [id, page, limit]);
 
-  function openEditModal() {
-    if (!customer) return;
-    setError("");
-    setSuccess("");
-    setEditCustomer({
-      name: customer.name || "",
-      phone: customer.phone || "",
-      address: customer.address || ""
-    });
-    setIsEditModalOpen(true);
-  }
-
-  function closeEditModal() {
-    setIsEditModalOpen(false);
-    setEditCustomer({ name: "", phone: "", address: "" });
-    setError("");
-  }
-
-  async function handleUpdateCustomer() {
-    const name = editCustomer.name.trim();
-    if (!name) {
-      setError("Vui lòng nhập tên khách hàng.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError("");
-    setSuccess("");
-    try {
-      const updated = await updateCustomerRequest(id, {
-        name,
-        phone: editCustomer.phone.trim() || undefined,
-        address: editCustomer.address.trim() || undefined
-      });
-      setCustomer(updated);
-      setSuccess(`Đã cập nhật khách hàng ${updated.name}.`);
-      closeEditModal();
-    } catch (err) {
-      setError(err?.message || "Cập nhật khách hàng thất bại.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   return (
     <section className="space-y-5">
       <div>
@@ -121,24 +69,10 @@ export function CustomerDetailPage() {
       </div>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-      {success && (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {success}
-        </p>
-      )}
 
       {customer && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <h3 className="text-xl font-bold text-slate-900">{customer.name}</h3>
-            <button
-              type="button"
-              onClick={openEditModal}
-              className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Sửa
-            </button>
-          </div>
+          <h3 className="text-xl font-bold text-slate-900">{customer.name}</h3>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Số điện thoại</p>
@@ -219,54 +153,6 @@ export function CustomerDetailPage() {
           </div>
         </div>
       </div>
-
-      {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-base font-semibold text-slate-900">Sửa khách hàng</h3>
-            </div>
-            <div className="space-y-4 px-5 py-4">
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Tên khách hàng *"
-                value={editCustomer.name}
-                onChange={(event) => setEditCustomer((prev) => ({ ...prev, name: event.target.value }))}
-              />
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Số điện thoại"
-                value={editCustomer.phone}
-                onChange={(event) => setEditCustomer((prev) => ({ ...prev, phone: event.target.value }))}
-              />
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Địa chỉ"
-                value={editCustomer.address}
-                onChange={(event) => setEditCustomer((prev) => ({ ...prev, address: event.target.value }))}
-              />
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeEditModal}
-                disabled={isSubmitting}
-                className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleUpdateCustomer}
-                disabled={isSubmitting}
-                className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:opacity-60"
-              >
-                {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

@@ -1,5 +1,4 @@
 const { pool } = require('../../config/database');
-const AppError = require('../../utils/AppError');
 const { escapeLike, parsePagination } = require('../../utils/parsers');
 
 function mapSupplier(row) {
@@ -94,11 +93,7 @@ async function getSupplierById(id) {
     [id]
   );
 
-  if (!rows.length) {
-    throw new AppError('Supplier not found.', 404, 'SUPPLIER_NOT_FOUND');
-  }
-
-  return mapSupplier(rows[0]);
+  return rows.length ? mapSupplier(rows[0]) : null;
 }
 
 async function createSupplier(payload) {
@@ -117,27 +112,7 @@ async function createSupplier(payload) {
   return getSupplierById(result.insertId);
 }
 
-async function updateSupplier(id, payload) {
-  await getSupplierById(id);
-
-  const name = payload.name.trim();
-  const phone = payload.phone && payload.phone.trim() ? payload.phone.trim() : null;
-  const address = payload.address && payload.address.trim() ? payload.address.trim() : null;
-
-  await pool.query(
-    `
-      UPDATE suppliers
-      SET name = ?, phone = ?, address = ?
-      WHERE id = ?
-    `,
-    [name, phone, address, id]
-  );
-
-  return getSupplierById(id);
-}
-
 module.exports = {
   listSuppliers,
-  createSupplier,
-  updateSupplier
+  createSupplier
 };

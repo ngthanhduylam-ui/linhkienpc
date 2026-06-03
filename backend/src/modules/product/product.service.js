@@ -226,13 +226,14 @@ async function buildNoteGroups(productIds) {
             st.product_id,
             st.txn_type,
             st.quantity,
-            TRIM(st.note) AS note,
-            REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(st.note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '') AS note_key
+            NULLIF(TRIM(st.note), '') AS note,
+            CASE
+              WHEN st.note IS NULL OR TRIM(st.note) = '' THEN ''
+              ELSE REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(st.note)), ' ', ''), CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+            END AS note_key
           FROM stock_transactions st
           WHERE st.product_id IN (${placeholders})
             AND st.txn_type IN ('IN', 'OUT')
-            AND st.note IS NOT NULL
-            AND TRIM(st.note) <> ''
         ) normalized
         GROUP BY normalized.product_id, normalized.note_key
       ) grouped
@@ -266,8 +267,10 @@ async function buildNoteGroups(productIds) {
       map.set(row.product_id, []);
     }
     map.get(row.product_id).push({
-      note: row.note,
-      quantity
+      note: row.note || '',
+      label: row.note || 'Không ghi chú',
+      quantity,
+      is_no_note: !row.note
     });
     remainingByProduct.set(row.product_id, remainingProductQuantity - quantity);
   }

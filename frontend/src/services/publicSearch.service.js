@@ -11,6 +11,7 @@ export async function searchPublicProducts(keyword) {
     totalQuantity: Number(product.total_quantity || 0),
     noteGroups: (product.note_groups || []).map((item) => ({
       note: item.note,
+      label: item.label || item.note || "Không ghi chú",
       quantity: Number(item.quantity || 0)
     }))
   }));

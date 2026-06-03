@@ -6,6 +6,5 @@ const router = express.Router();
 
 router.get('/', validators.listSuppliersValidator, controller.listSuppliers);
 router.post('/', validators.createSupplierValidator, controller.createSupplier);
-router.patch('/:id', validators.updateSupplierValidator, controller.updateSupplier);
 
 module.exports = router;
