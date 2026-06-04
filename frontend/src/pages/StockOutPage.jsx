@@ -7,6 +7,7 @@ import {
   listActiveProducts,
   stockOutRequest
 } from "../services/inventoryOperations.service";
+import { formatWarrantyNote } from "../utils/warrantyNote";
 
 function stripDiacritics(value) {
   return (value || "")
@@ -163,7 +164,8 @@ function DeliveryNotePreview({ deliveryNote, onClose }) {
           <section className="mt-5 space-y-2 text-sm">
             {printOptions.showWarrantyNote && (
               <p>
-                <span className="font-semibold">Warranty note / note:</span> {deliveryNote.warranty_note || "-"}
+                <span className="font-semibold">Warranty note / note:</span>{" "}
+                {deliveryNote.warranty_note ? formatWarrantyNote(deliveryNote.warranty_note) : "-"}
               </p>
             )}
             <p>
@@ -400,7 +402,7 @@ export function StockOutPage() {
       }
       if (numericQuantity > selectedWarrantyGroup.quantity) {
         setError(
-          `Số lượng xuất vượt quá tồn của bảo hành ${selectedWarrantyGroup.label} (${selectedWarrantyGroup.quantity}).`
+          `Số lượng xuất vượt quá tồn của bảo hành ${formatWarrantyNote(selectedWarrantyGroup.label)} (${selectedWarrantyGroup.quantity}).`
         );
         return;
       }
@@ -587,7 +589,7 @@ export function StockOutPage() {
                     <option value="">-- Chọn bảo hành --</option>
                     {warrantyNoteGroups.map((group) => (
                       <option key={group.value} value={group.value}>
-                        {group.label} - còn {group.quantity}
+                        {formatWarrantyNote(group.label)} - còn {group.quantity}
                       </option>
                     ))}
                   </select>
@@ -622,6 +624,10 @@ export function StockOutPage() {
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
                 placeholder="Nhập lý do hoặc mô tả xuất kho"
               />
             </div>

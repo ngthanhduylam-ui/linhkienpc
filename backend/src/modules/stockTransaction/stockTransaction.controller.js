@@ -13,6 +13,16 @@ exports.stockIn = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: result, meta: { server_time: new Date().toISOString() } });
 });
 
+exports.bulkStockIn = asyncHandler(async (req, res) => {
+  const result = await stockTxService.bulkStockIn({
+    adminId: req.auth.adminId,
+    supplierId: req.body.supplier_id,
+    items: req.body.items
+  });
+
+  res.status(201).json({ success: true, data: result, meta: { server_time: new Date().toISOString() } });
+});
+
 exports.stockOut = asyncHandler(async (req, res) => {
   const result = await stockTxService.stockOut({
     adminId: req.auth.adminId,
@@ -21,6 +31,16 @@ exports.stockOut = asyncHandler(async (req, res) => {
     customerId: req.body.customer_id,
     note: req.body.note,
     warrantyNote: req.body.warranty_note
+  });
+
+  res.status(201).json({ success: true, data: result, meta: { server_time: new Date().toISOString() } });
+});
+
+exports.bulkStockOut = asyncHandler(async (req, res) => {
+  const result = await stockTxService.bulkStockOut({
+    adminId: req.auth.adminId,
+    customerId: req.body.customer_id,
+    items: req.body.items
   });
 
   res.status(201).json({ success: true, data: result, meta: { server_time: new Date().toISOString() } });

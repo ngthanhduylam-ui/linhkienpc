@@ -4,6 +4,7 @@ import {
   moveInventoryNoteGroup,
   searchInventoryCheckProducts
 } from "../services/inventoryOperations.service";
+import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const NO_NOTE_VALUE = "__NO_NOTE__";
 
@@ -128,7 +129,7 @@ export function InventoryCheckPage() {
     }
 
     if (numericQuantity > Number(selectedFromGroup.quantity || 0)) {
-      setError(`Số lượng chuyển vượt quá tồn của nhóm ${selectedFromGroup.label}.`);
+      setError(`Số lượng chuyển vượt quá tồn của nhóm ${formatWarrantyNote(selectedFromGroup.label)}.`);
       return;
     }
 
@@ -242,7 +243,7 @@ export function InventoryCheckPage() {
                       key={toGroupValue(group)}
                       className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
                     >
-                      <p className="break-all text-sm font-semibold text-slate-800">{group.label}</p>
+                      <p className="break-all text-sm font-semibold text-slate-800">{formatWarrantyNote(group.label)}</p>
                       <p className="shrink-0 text-base font-bold text-brand-800">Còn {group.quantity}</p>
                     </div>
                   ))}
@@ -288,7 +289,7 @@ export function InventoryCheckPage() {
                       <option value="">-- Chọn nhóm cần chuyển --</option>
                       {noteGroups.map((group) => (
                         <option key={toGroupValue(group)} value={toGroupValue(group)}>
-                          {group.label} - còn {group.quantity}
+                          {formatWarrantyNote(group.label)} - còn {group.quantity}
                         </option>
                       ))}
                     </select>
@@ -300,6 +301,10 @@ export function InventoryCheckPage() {
                       className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                       value={toNote}
                       onChange={(event) => setToNote(event.target.value)}
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      spellCheck={false}
                       placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
                     />
                   </div>
@@ -364,8 +369,8 @@ export function InventoryCheckPage() {
                 {detail.recent_adjustments.map((item) => (
                   <tr key={item.id}>
                     <td className="px-3 py-2 text-slate-700">{formatDateTime(item.occurred_at)}</td>
-                    <td className="px-3 py-2 text-slate-700">{item.from_label}</td>
-                    <td className="px-3 py-2 text-slate-700">{item.to_label}</td>
+                    <td className="px-3 py-2 text-slate-700">{formatWarrantyNote(item.from_label)}</td>
+                    <td className="px-3 py-2 text-slate-700">{formatWarrantyNote(item.to_label)}</td>
                     <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                     <td className="px-3 py-2 text-slate-700">{item.reason || "-"}</td>
                     <td className="px-3 py-2 text-slate-700">{item.created_by_admin?.username || "-"}</td>

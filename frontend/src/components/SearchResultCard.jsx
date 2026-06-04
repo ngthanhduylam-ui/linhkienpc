@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatWarrantyNote } from "../utils/warrantyNote";
 
 export function SearchResultCard({ product, autoExpand = false }) {
   const [expanded, setExpanded] = useState(autoExpand);
@@ -89,7 +90,9 @@ export function SearchResultCard({ product, autoExpand = false }) {
                   key={`${product.sku}-${group.note}`}
                   className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm"
                 >
-                  <span className="break-all font-semibold text-slate-800">{group.label || group.note}</span>
+                  <span className="break-all font-semibold text-slate-800">
+                    {formatWarrantyNote(group.label || group.note)}
+                  </span>
                   <span className="shrink-0 text-base font-bold text-brand-800">Còn {group.quantity}</span>
                 </li>
               ))}

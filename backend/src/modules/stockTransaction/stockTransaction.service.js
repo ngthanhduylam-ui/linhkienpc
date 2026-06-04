@@ -55,6 +55,69 @@ async function lockProductBalance(connection, productId) {
   return rows[0] || null;
 }
 
+async function lockProductBalances(connection, productIds) {
+  const uniqueProductIds = [...new Set(productIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))]
+    .sort((a, b) => a - b);
+
+  if (!uniqueProductIds.length) {
+    return new Map();
+  }
+
+  const placeholders = uniqueProductIds.map(() => '?').join(',');
+  const [rows] = await connection.query(
+    `
+      SELECT id, product_id, quantity
+      FROM product_inventory_balances
+      WHERE product_id IN (${placeholders})
+      ORDER BY product_id ASC
+      FOR UPDATE
+    `,
+    uniqueProductIds
+  );
+
+  return new Map(rows.map((row) => [Number(row.product_id), row]));
+}
+
+async function resolveProductsBySku(connection, items) {
+  const skuKeys = [...new Set(items.map((item) => item.sku.trim().toLowerCase()))];
+  if (!skuKeys.length) {
+    return new Map();
+  }
+
+  const placeholders = skuKeys.map(() => '?').join(',');
+  const [rows] = await connection.query(
+    `
+      SELECT id, sku, name, is_active
+      FROM products
+      WHERE LOWER(sku) IN (${placeholders})
+    `,
+    skuKeys
+  );
+
+  const productMap = new Map(rows.map((row) => [String(row.sku).trim().toLowerCase(), row]));
+  const missingOrInactive = [];
+
+  items.forEach((item, index) => {
+    const skuKey = item.sku.trim().toLowerCase();
+    const product = productMap.get(skuKey);
+
+    if (!product) {
+      missingOrInactive.push({ index, sku: item.sku, issue: 'not_found' });
+      return;
+    }
+
+    if (product.is_active !== 1) {
+      missingOrInactive.push({ index, sku: item.sku, issue: 'inactive' });
+    }
+  });
+
+  if (missingOrInactive.length > 0) {
+    throw new AppError('One or more SKUs are invalid.', 404, 'SKU_NOT_FOUND', missingOrInactive);
+  }
+
+  return productMap;
+}
+
 async function resolveCustomerId(connection, customerId) {
   if (customerId === undefined || customerId === null || customerId === '') {
     return null;
@@ -260,8 +323,310 @@ async function stockIn({ adminId, sku, quantity, note, supplierId }) {
   return adjustStock({ adminId, txnType: 'IN', sku, quantity, note, supplierId });
 }
 
+async function bulkStockIn({ adminId, supplierId = null, items = [] }) {
+  if (!Array.isArray(items) || items.length < 1 || items.length > 100) {
+    throw new AppError('items must be a non-empty array with at most 100 items.', 400, 'VALIDATION_ERROR');
+  }
+
+  for (const [index, item] of items.entries()) {
+    validateQuantity(item.quantity);
+    if (!item.sku || typeof item.sku !== 'string' || !item.sku.trim()) {
+      throw new AppError('sku is required.', 400, 'VALIDATION_ERROR', [{ field: `items[${index}].sku`, issue: 'required' }]);
+    }
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const resolvedSupplierId = await resolveSupplierId(connection, supplierId);
+    const productMap = await resolveProductsBySku(connection, items);
+    const resolvedItems = items.map((item) => {
+      const product = productMap.get(item.sku.trim().toLowerCase());
+      return {
+        sku: product.sku,
+        product_id: Number(product.id),
+        product_name: product.name,
+        quantity: Number(item.quantity),
+        note: item.note && item.note.trim() ? item.note.trim() : null
+      };
+    });
+
+    const productIds = [...new Set(resolvedItems.map((item) => item.product_id))].sort((a, b) => a - b);
+    const balanceMap = await lockProductBalances(connection, productIds);
+    const runningQuantityByProduct = new Map();
+    const finalQuantityByProduct = new Map();
+
+    for (const productId of productIds) {
+      const currentQuantity = Number(balanceMap.get(productId)?.quantity || 0);
+      runningQuantityByProduct.set(productId, currentQuantity);
+      finalQuantityByProduct.set(productId, currentQuantity);
+    }
+
+    const responseItems = [];
+    for (const item of resolvedItems) {
+      const nextQuantity = Number(runningQuantityByProduct.get(item.product_id) || 0) + item.quantity;
+      runningQuantityByProduct.set(item.product_id, nextQuantity);
+      finalQuantityByProduct.set(item.product_id, nextQuantity);
+      responseItems.push({
+        sku: item.sku,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        note: item.note,
+        transaction_id: null,
+        new_total_quantity: nextQuantity
+      });
+    }
+
+    for (const productId of productIds) {
+      await connection.query(
+        `
+          INSERT INTO product_inventory_balances (product_id, quantity)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), updated_at = CURRENT_TIMESTAMP
+        `,
+        [productId, Number(finalQuantityByProduct.get(productId) || 0)]
+      );
+    }
+
+    for (const [index, item] of resolvedItems.entries()) {
+      const [txResult] = await connection.query(
+        `
+          INSERT INTO stock_transactions
+            (txn_type, product_id, warranty_batch_id, customer_id, supplier_id, quantity, note, created_by_admin_id)
+          VALUES ('IN', ?, NULL, NULL, ?, ?, ?, ?)
+        `,
+        [item.product_id, resolvedSupplierId, item.quantity, item.note, adminId]
+      );
+
+      responseItems[index].transaction_id = txResult.insertId;
+    }
+
+    await connection.commit();
+
+    return {
+      txn_type: 'IN',
+      supplier_id: resolvedSupplierId,
+      items: responseItems
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function stockOut({ adminId, sku, quantity, note, warrantyNote, customerId }) {
   return adjustStock({ adminId, txnType: 'OUT', sku, quantity, note, warrantyNote, customerId });
+}
+
+function hasWarrantySelection(warrantyNote) {
+  return (
+    warrantyNote !== undefined &&
+    warrantyNote !== null &&
+    (warrantyNote === NO_NOTE_WARRANTY_KEY || String(warrantyNote).trim() !== '')
+  );
+}
+
+function aggregateQuantity(map, key, quantity) {
+  map.set(key, Number(map.get(key) || 0) + Number(quantity || 0));
+}
+
+async function bulkStockOut({ adminId, customerId = null, items = [] }) {
+  if (!Array.isArray(items) || items.length < 1 || items.length > 100) {
+    throw new AppError('items must be a non-empty array with at most 100 items.', 400, 'VALIDATION_ERROR');
+  }
+
+  for (const [index, item] of items.entries()) {
+    validateQuantity(item.quantity);
+    if (!item.sku || typeof item.sku !== 'string' || !item.sku.trim()) {
+      throw new AppError('sku is required.', 400, 'VALIDATION_ERROR', [{ field: `items[${index}].sku`, issue: 'required' }]);
+    }
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const resolvedCustomerId = await resolveCustomerId(connection, customerId);
+    const productMap = await resolveProductsBySku(connection, items);
+    const resolvedItems = items.map((item, index) => {
+      const product = productMap.get(item.sku.trim().toLowerCase());
+      const warrantySelected = hasWarrantySelection(item.warranty_note);
+      const warrantyNoteKey = warrantySelected ? normalizeWarrantyNote(item.warranty_note) : '';
+
+      return {
+        index,
+        sku: product.sku,
+        product_id: Number(product.id),
+        product_name: product.name,
+        quantity: Number(item.quantity),
+        warranty_note: item.warranty_note,
+        warranty_note_key: warrantyNoteKey,
+        has_warranty_selection: warrantySelected,
+        transaction_note: warrantySelected && warrantyNoteKey ? warrantyNoteKey : null
+      };
+    });
+
+    const productIds = [...new Set(resolvedItems.map((item) => item.product_id))].sort((a, b) => a - b);
+    const balanceMap = await lockProductBalances(connection, productIds);
+    const requestedByProduct = new Map();
+    const finalQuantityByProduct = new Map();
+
+    for (const item of resolvedItems) {
+      aggregateQuantity(requestedByProduct, item.product_id, item.quantity);
+    }
+
+    const stockErrors = [];
+    for (const productId of productIds) {
+      const currentQuantity = Number(balanceMap.get(productId)?.quantity || 0);
+      const requestedQuantity = Number(requestedByProduct.get(productId) || 0);
+      if (currentQuantity < requestedQuantity) {
+        const firstItem = resolvedItems.find((item) => item.product_id === productId);
+        stockErrors.push({
+          sku: firstItem?.sku,
+          product_id: productId,
+          requested: requestedQuantity,
+          available: currentQuantity
+        });
+      }
+      finalQuantityByProduct.set(productId, currentQuantity - requestedQuantity);
+    }
+
+    if (stockErrors.length > 0) {
+      throw new AppError('Insufficient stock.', 422, 'INSUFFICIENT_STOCK', stockErrors);
+    }
+
+    const noteGroupsByProduct = new Map();
+    for (const productId of productIds) {
+      noteGroupsByProduct.set(productId, await getAdjustedNoteGroups(productId, connection));
+    }
+
+    const requestedByProductNote = new Map();
+    const warrantyValidationErrors = [];
+
+    for (const item of resolvedItems) {
+      const groups = noteGroupsByProduct.get(item.product_id) || [];
+      if (groups.length > 0 && !item.has_warranty_selection) {
+        warrantyValidationErrors.push({
+          index: item.index,
+          sku: item.sku,
+          field: 'warranty_note',
+          issue: 'required_when_warranty_groups_exist'
+        });
+        continue;
+      }
+
+      if (groups.length === 0 && item.has_warranty_selection && item.warranty_note_key !== '') {
+        warrantyValidationErrors.push({
+          index: item.index,
+          sku: item.sku,
+          field: 'warranty_note',
+          issue: 'not_found',
+          warranty_note: item.warranty_note_key
+        });
+        continue;
+      }
+
+      if (groups.length > 0) {
+        const groupKey = JSON.stringify([item.product_id, item.warranty_note_key]);
+        aggregateQuantity(requestedByProductNote, groupKey, item.quantity);
+      }
+    }
+
+    if (warrantyValidationErrors.length > 0) {
+      throw new AppError('Warranty note validation failed.', 400, 'WARRANTY_NOTE_VALIDATION_FAILED', warrantyValidationErrors);
+    }
+
+    const warrantyStockErrors = [];
+    for (const [groupKey, requestedQuantity] of requestedByProductNote.entries()) {
+      const [productId, noteKey] = JSON.parse(groupKey);
+      const groups = noteGroupsByProduct.get(productId) || [];
+      const selectedGroup = groups.find((group) => group.note_key === noteKey);
+      const firstItem = resolvedItems.find((item) => item.product_id === productId && item.warranty_note_key === noteKey);
+
+      if (!selectedGroup) {
+        warrantyStockErrors.push({
+          index: firstItem?.index,
+          sku: firstItem?.sku,
+          warranty_note: noteKey,
+          requested: requestedQuantity,
+          available: 0
+        });
+        continue;
+      }
+
+      if (Number(selectedGroup.quantity || 0) < Number(requestedQuantity || 0)) {
+        warrantyStockErrors.push({
+          index: firstItem?.index,
+          sku: firstItem?.sku,
+          warranty_note: noteKey,
+          requested: requestedQuantity,
+          available: Number(selectedGroup.quantity || 0)
+        });
+      }
+    }
+
+    if (warrantyStockErrors.length > 0) {
+      throw new AppError('Insufficient warranty note stock.', 422, 'INSUFFICIENT_WARRANTY_NOTE_STOCK', warrantyStockErrors);
+    }
+
+    for (const productId of productIds) {
+      await connection.query(
+        `
+          INSERT INTO product_inventory_balances (product_id, quantity)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), updated_at = CURRENT_TIMESTAMP
+        `,
+        [productId, Number(finalQuantityByProduct.get(productId) || 0)]
+      );
+    }
+
+    const runningQuantityByProduct = new Map();
+    for (const productId of productIds) {
+      runningQuantityByProduct.set(productId, Number(balanceMap.get(productId)?.quantity || 0));
+    }
+
+    const responseItems = [];
+    for (const item of resolvedItems) {
+      const nextQuantity = Number(runningQuantityByProduct.get(item.product_id) || 0) - item.quantity;
+      runningQuantityByProduct.set(item.product_id, nextQuantity);
+
+      const [txResult] = await connection.query(
+        `
+          INSERT INTO stock_transactions
+            (txn_type, product_id, warranty_batch_id, customer_id, supplier_id, quantity, note, created_by_admin_id)
+          VALUES ('OUT', ?, NULL, ?, NULL, ?, ?, ?)
+        `,
+        [item.product_id, resolvedCustomerId, item.quantity, item.transaction_note, adminId]
+      );
+
+      responseItems.push({
+        sku: item.sku,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        warranty_note: item.warranty_note === NO_NOTE_WARRANTY_KEY ? NO_NOTE_WARRANTY_KEY : item.transaction_note,
+        transaction_id: txResult.insertId,
+        new_total_quantity: nextQuantity
+      });
+    }
+
+    await connection.commit();
+
+    return {
+      txn_type: 'OUT',
+      customer_id: resolvedCustomerId,
+      items: responseItems
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function listTransactions(query) {
@@ -409,6 +774,8 @@ async function listTransactions(query) {
 }
 
 module.exports = {
+  bulkStockIn,
+  bulkStockOut,
   stockIn,
   stockOut,
   listTransactions

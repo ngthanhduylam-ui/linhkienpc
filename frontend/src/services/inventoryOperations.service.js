@@ -113,8 +113,18 @@ export async function stockInRequest(payload) {
   return response?.data;
 }
 
+export async function bulkStockInRequest(payload) {
+  const response = await apiPost("/admin/stock-in/bulk", payload);
+  return response?.data;
+}
+
 export async function stockOutRequest(payload) {
   const response = await apiPost("/admin/stock-out", payload);
+  return response?.data;
+}
+
+export async function bulkStockOutRequest(payload) {
+  const response = await apiPost("/admin/stock-out/bulk", payload);
   return response?.data;
 }
 

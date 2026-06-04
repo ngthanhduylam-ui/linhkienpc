@@ -285,6 +285,10 @@ export function StockInPage() {
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
                 placeholder="Ví dụ: BH07.26"
               />
             </div>

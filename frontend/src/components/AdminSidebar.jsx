@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 
 const inventoryItems = [
   { label: "Nhập hàng", to: "/admin/stock-in" },
-  { label: "Xuất hàng", to: "/admin/stock-out" },
+  { label: "Xuất & Giao hàng", to: "/admin/stock-out" },
   { label: "Kiểm hàng", to: "/admin/inventory-check" }
 ];
 

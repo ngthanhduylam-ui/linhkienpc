@@ -7,7 +7,9 @@ import { CustomerListPage } from "./pages/CustomerListPage";
 import { InventoryCheckPage } from "./pages/InventoryCheckPage";
 import { ProductManagementPage } from "./pages/ProductManagementPage";
 import { PublicSearchPage } from "./pages/PublicSearchPage";
+import { StockInBulkPage } from "./pages/StockInBulkPage";
 import { StockInPage } from "./pages/StockInPage";
+import { StockOutBulkPage } from "./pages/StockOutBulkPage";
 import { StockOutPage } from "./pages/StockOutPage";
 import { SupplierListPage } from "./pages/SupplierListPage";
 import { TransactionHistoryPage } from "./pages/TransactionHistoryPage";
@@ -34,8 +36,11 @@ export const appRouter = createBrowserRouter([
           { path: "suppliers", element: <SupplierListPage /> },
           { path: "customers", element: <CustomerListPage /> },
           { path: "customers/:id", element: <CustomerDetailPage /> },
-          { path: "stock-in", element: <StockInPage /> },
-          { path: "stock-out", element: <StockOutPage /> },
+          { path: "stock-in", element: <StockInBulkPage /> },
+          { path: "stock-in-single", element: <StockInPage /> },
+          { path: "stock-out", element: <StockOutBulkPage /> },
+          { path: "stock-out-single", element: <StockOutPage /> },
+          { path: "stock-out-bulk", element: <Navigate to="/admin/stock-out" replace /> },
           { path: "inventory-check", element: <InventoryCheckPage /> },
           { path: "transaction-history", element: <TransactionHistoryPage /> }
         ]
