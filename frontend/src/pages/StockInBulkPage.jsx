@@ -6,6 +6,7 @@ import {
   listActiveCategories,
   listActiveProducts
 } from "../services/inventoryOperations.service";
+import { RECENT_PRODUCTS_KEY, readRecentItems, saveRecentItem } from "../utils/recentItems";
 
 function stripDiacritics(value) {
   return (value || "")
@@ -38,6 +39,8 @@ export function StockInBulkPage() {
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [hasFocusedProductSearch, setHasFocusedProductSearch] = useState(false);
+  const [recentProducts, setRecentProducts] = useState(() => readRecentItems(RECENT_PRODUCTS_KEY));
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -86,10 +89,16 @@ export function StockInBulkPage() {
   }, [products, categories, debouncedSearch]);
 
   const totalRowsQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const displayProducts = useMemo(() => {
+    if (debouncedSearch) return filteredProducts;
+    if (hasFocusedProductSearch) return recentProducts;
+    return [];
+  }, [debouncedSearch, filteredProducts, hasFocusedProductSearch, recentProducts]);
   const showNoResultState = !isLoading && debouncedSearch.length > 0 && filteredProducts.length === 0;
   const showEmptyState = !isLoading && products.length === 0;
 
   function handleAddProduct(product) {
+    setRecentProducts(saveRecentItem(RECENT_PRODUCTS_KEY, product, 20));
     setItems((prev) => [
       ...prev,
       {
@@ -209,6 +218,7 @@ export function StockInBulkPage() {
               className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="Nhập tên sản phẩm hoặc SKU"
               value={searchInput}
+              onFocus={() => setHasFocusedProductSearch(true)}
               onChange={(event) => {
                 setSearchInput(event.target.value);
                 setSuccess("");
@@ -228,9 +238,12 @@ export function StockInBulkPage() {
 
           {isLoading && <p className="mt-2 text-xs text-slate-500">Đang tải dữ liệu sản phẩm...</p>}
 
-          {!isLoading && filteredProducts.length > 0 && (
+          {!isLoading && displayProducts.length > 0 && (
             <div className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-              {filteredProducts.map((product) => (
+              {!debouncedSearch && (
+                <p className="bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-500">Sản phẩm gần đây</p>
+              )}
+              {displayProducts.map((product) => (
                 <button
                   key={product.id}
                   type="button"

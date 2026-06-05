@@ -72,13 +72,21 @@ async function listAdminProducts(query) {
   }
   if (q) {
     const pattern = `%${escapeLike(q)}%`;
-    whereParts.push('(p.sku LIKE ? OR p.name LIKE ?)');
-    params.push(pattern, pattern);
+    whereParts.push('(p.sku LIKE ? OR p.name LIKE ? OR c.name LIKE ?)');
+    params.push(pattern, pattern, pattern);
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
-  const [countRows] = await pool.query(`SELECT COUNT(*) AS total FROM products p ${whereSql}`, params);
+  const [countRows] = await pool.query(
+    `
+      SELECT COUNT(*) AS total
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+      ${whereSql}
+    `,
+    params
+  );
   const [rows] = await pool.query(
     `
       SELECT
@@ -118,7 +126,8 @@ async function listAdminProducts(query) {
     })),
     page,
     limit,
-    total: Number(countRows[0].total || 0)
+    total: Number(countRows[0].total || 0),
+    total_pages: Math.max(1, Math.ceil(Number(countRows[0].total || 0) / limit))
   };
 }
 

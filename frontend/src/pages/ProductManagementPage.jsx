@@ -3,9 +3,11 @@ import {
   createCategoryRequest,
   createProductRequest,
   listActiveCategories,
-  listActiveProducts,
+  listProductsPage,
   updateProductRequest
 } from "../services/inventoryOperations.service";
+
+const PRODUCT_PAGE_SIZE = 20;
 
 function stripDiacritics(value) {
   return (value || "")
@@ -72,7 +74,11 @@ export function ProductManagementPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const searchInputRef = useRef(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
@@ -101,41 +107,60 @@ export function ProductManagementPage() {
     [categories, newProductCategoryId]
   );
 
-  const filteredProducts = useMemo(() => {
-    const keyword = normalizeText(searchInput);
-    if (!keyword) return products;
-
-    return products.filter((product) => {
-      const sku = normalizeText(product.sku);
-      const name = normalizeText(product.name);
-      const categoryName = normalizeText(getCategoryName(product, categories));
-      return sku.includes(keyword) || name.includes(keyword) || categoryName.includes(keyword);
-    });
-  }, [products, categories, searchInput]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setDebouncedSearch(searchInput.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     let active = true;
 
-    async function bootstrap() {
+    async function loadCategories() {
+      try {
+        const categoryItems = await listActiveCategories();
+        if (active) setCategories(categoryItems);
+      } catch (err) {
+        if (active) setError(err?.message || "Không thể tải danh mục.");
+      }
+    }
+
+    loadCategories();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProducts() {
       setIsLoading(true);
       setError("");
       try {
-        const [productItems, categoryItems] = await Promise.all([listActiveProducts(), listActiveCategories()]);
+        const result = await listProductsPage({ keyword: debouncedSearch, page, limit: PRODUCT_PAGE_SIZE });
         if (!active) return;
-        setProducts(productItems);
-        setCategories(categoryItems);
+        setProducts(result.items);
+        setTotal(Number(result.meta?.total || 0));
+        setTotalPages(Math.max(1, Number(result.meta?.total_pages || 1)));
       } catch (err) {
-        if (active) setError(err?.message || "Không thể tải danh sách sản phẩm.");
+        if (!active) return;
+        setError(err?.message || "Không thể tải danh sách sản phẩm.");
+        setProducts([]);
+        setTotal(0);
+        setTotalPages(1);
       } finally {
         if (active) setIsLoading(false);
       }
     }
 
-    bootstrap();
+    loadProducts();
     return () => {
       active = false;
     };
-  }, []);
+  }, [debouncedSearch, page]);
 
   useEffect(() => {
     if (!isModalOpen || !newProductName.trim() || !selectedCreateCategory) return;
@@ -156,10 +181,12 @@ export function ProductManagementPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isModalOpen]);
 
-  async function reloadProducts() {
-    const items = await listActiveProducts();
-    setProducts(items);
-    return items;
+  async function reloadProducts(nextPage = page, nextKeyword = debouncedSearch) {
+    const result = await listProductsPage({ keyword: nextKeyword, page: nextPage, limit: PRODUCT_PAGE_SIZE });
+    setProducts(result.items);
+    setTotal(Number(result.meta?.total || 0));
+    setTotalPages(Math.max(1, Number(result.meta?.total_pages || 1)));
+    return result.items;
   }
 
   async function reloadCategories() {
@@ -212,6 +239,8 @@ export function ProductManagementPage() {
 
   function handleClearSearch() {
     setSearchInput("");
+    setDebouncedSearch("");
+    setPage(1);
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
   }
 
@@ -295,8 +324,10 @@ export function ProductManagementPage() {
         category_id: Number(newProductCategoryId)
       });
 
-      await reloadProducts();
       setSearchInput("");
+      setDebouncedSearch("");
+      setPage(1);
+      await reloadProducts(1, "");
       setSuccess(`Tạo sản phẩm thành công: ${created.name} (${created.sku}).`);
       setIsModalOpen(false);
       resetCreateForm();
@@ -403,9 +434,9 @@ export function ProductManagementPage() {
 
         {isLoading ? (
           <p className="px-4 py-6 text-sm text-slate-500">Đang tải danh sách sản phẩm...</p>
-        ) : filteredProducts.length > 0 ? (
+        ) : products.length > 0 ? (
           <div className="divide-y divide-slate-100">
-            {filteredProducts.map((product) => (
+            {products.map((product) => (
               <div key={product.id} className="grid gap-2 px-4 py-4 md:grid-cols-12 md:items-center">
                 <div className="md:col-span-3">
                   <p className="font-semibold text-slate-900">{product.name}</p>
@@ -434,6 +465,33 @@ export function ProductManagementPage() {
             <p className="mt-1 text-xs text-slate-500">Thử tìm bằng tên, SKU hoặc danh mục khác.</p>
           </div>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-600">
+          Tổng: <span className="font-semibold text-slate-900">{total}</span> sản phẩm
+        </p>
+        <div className="flex items-center justify-between gap-2 sm:justify-end">
+          <button
+            type="button"
+            disabled={page <= 1 || isLoading}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            className="h-9 rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Trước
+          </button>
+          <span className="min-w-28 text-center text-sm text-slate-700">
+            Trang {page} / {totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages || isLoading}
+            onClick={() => setPage((prev) => (prev < totalPages ? prev + 1 : prev))}
+            className="h-9 rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Sau
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

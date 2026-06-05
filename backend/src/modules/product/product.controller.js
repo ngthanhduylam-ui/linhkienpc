@@ -15,6 +15,7 @@ exports.listAdminProducts = asyncHandler(async (req, res) => {
       page: result.page,
       limit: result.limit,
       total: result.total,
+      total_pages: result.total_pages,
       server_time: new Date().toISOString()
     }
   });

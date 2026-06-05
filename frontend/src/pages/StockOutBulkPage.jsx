@@ -8,6 +8,7 @@ import {
   listActiveProducts
 } from "../services/inventoryOperations.service";
 import { formatWarrantyNote } from "../utils/warrantyNote";
+import { RECENT_PRODUCTS_KEY, readRecentItems, saveRecentItem } from "../utils/recentItems";
 
 const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
 
@@ -70,6 +71,8 @@ export function StockOutBulkPage() {
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [hasFocusedProductSearch, setHasFocusedProductSearch] = useState(false);
+  const [recentProducts, setRecentProducts] = useState(() => readRecentItems(RECENT_PRODUCTS_KEY));
   const [inventoryBySku, setInventoryBySku] = useState({});
   const [loadingInventorySku, setLoadingInventorySku] = useState("");
   const [draftQuantities, setDraftQuantities] = useState({});
@@ -120,11 +123,17 @@ export function StockOutBulkPage() {
       .slice(0, 12);
   }, [products, categories, debouncedSearch]);
 
+  const displayProducts = useMemo(() => {
+    if (debouncedSearch) return filteredProducts;
+    if (hasFocusedProductSearch) return recentProducts;
+    return [];
+  }, [debouncedSearch, filteredProducts, hasFocusedProductSearch, recentProducts]);
+
   useEffect(() => {
     let active = true;
 
     async function loadVisibleInventories() {
-      for (const product of filteredProducts) {
+      for (const product of displayProducts) {
         if (!active) return;
         if (inventoryBySku[product.sku]) continue;
 
@@ -155,7 +164,7 @@ export function StockOutBulkPage() {
     return () => {
       active = false;
     };
-  }, [filteredProducts, inventoryBySku]);
+  }, [displayProducts, inventoryBySku]);
 
   const showNoResultState = !isLoading && debouncedSearch.length > 0 && filteredProducts.length === 0;
   const showEmptyState = !isLoading && products.length === 0;
@@ -175,6 +184,7 @@ export function StockOutBulkPage() {
   }
 
   function handleAddToCart(product, group) {
+    setRecentProducts(saveRecentItem(RECENT_PRODUCTS_KEY, product, 20));
     const quantity = getDraftQuantity(product, group);
     if (!Number.isInteger(quantity) || quantity <= 0) {
       setError("Số lượng xuất phải là số nguyên dương.");
@@ -311,6 +321,7 @@ export function StockOutBulkPage() {
               className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="Nhập tên sản phẩm hoặc SKU"
               value={searchInput}
+              onFocus={() => setHasFocusedProductSearch(true)}
               onChange={(event) => {
                 setSearchInput(event.target.value);
                 setSuccess("");
@@ -330,9 +341,12 @@ export function StockOutBulkPage() {
 
           {isLoading && <p className="mt-2 text-xs text-slate-500">Đang tải dữ liệu sản phẩm...</p>}
 
-          {!isLoading && filteredProducts.length > 0 && (
+          {!isLoading && displayProducts.length > 0 && (
             <div className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-              {filteredProducts.map((product) => {
+              {!debouncedSearch && (
+                <p className="bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-500">Sản phẩm gần đây</p>
+              )}
+              {displayProducts.map((product) => {
                 const groups = inventoryBySku[product.sku] || [];
                 const isLoadingGroups = loadingInventorySku === product.sku && !inventoryBySku[product.sku];
 

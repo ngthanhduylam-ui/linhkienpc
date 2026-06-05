@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupplier, listSuppliers } from "../services/inventoryOperations.service";
+import { RECENT_SUPPLIERS_KEY, mergeRecentFirst, readRecentItems, saveRecentItem } from "../utils/recentItems";
 
 export function SupplierSelector({ selectedSupplier, onSelect }) {
   const wrapperRef = useRef(null);
   const [keyword, setKeyword] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [suppliers, setSuppliers] = useState([]);
+  const [recentSuppliers, setRecentSuppliers] = useState(() => readRecentItems(RECENT_SUPPLIERS_KEY));
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -13,6 +15,11 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+
+  const displaySuppliers = useMemo(() => {
+    if (debouncedKeyword) return suppliers;
+    return mergeRecentFirst(recentSuppliers, suppliers);
+  }, [debouncedKeyword, recentSuppliers, suppliers]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedKeyword(keyword.trim()), 300);
@@ -57,6 +64,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
 
   function handleSelect(supplier) {
     onSelect(supplier);
+    setRecentSuppliers(saveRecentItem(RECENT_SUPPLIERS_KEY, supplier, 10));
     setKeyword("");
     setIsOpen(false);
     setShowCreateForm(false);
@@ -97,6 +105,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
       });
 
       onSelect(created);
+      setRecentSuppliers(saveRecentItem(RECENT_SUPPLIERS_KEY, created, 10));
       setSuppliers((prev) => [created, ...prev.filter((item) => Number(item.id) !== Number(created.id))]);
       setKeyword("");
       setNewSupplier({ name: "", phone: "", address: "" });
@@ -148,12 +157,13 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
 
           {isOpen && !showCreateForm && (
             <div className="absolute left-0 right-0 z-20 mt-2 max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-              {isLoading && <p className="px-3 py-3 text-sm text-slate-500">Đang tải nhà cung cấp...</p>}
-              {!isLoading && suppliers.length === 0 && (
+              {isLoading && displaySuppliers.length === 0 && (
+                <p className="px-3 py-3 text-sm text-slate-500">Đang tải nhà cung cấp...</p>
+              )}
+              {!isLoading && displaySuppliers.length === 0 && (
                 <p className="px-3 py-3 text-sm text-slate-500">Không tìm thấy nhà cung cấp</p>
               )}
-              {!isLoading &&
-                suppliers.map((supplier) => (
+              {displaySuppliers.map((supplier) => (
                   <button
                     key={supplier.id}
                     type="button"

@@ -5,6 +5,22 @@ export async function listActiveProducts() {
   return response?.data || [];
 }
 
+export async function listProductsPage({ keyword = "", page = 1, limit = 20 } = {}) {
+  const query = { page, limit };
+  if (keyword.trim()) query.q = keyword.trim();
+
+  const response = await apiGet("/admin/products", query);
+  return {
+    items: response?.data || [],
+    meta: response?.meta || {
+      page,
+      limit,
+      total: 0,
+      total_pages: 1
+    }
+  };
+}
+
 export async function listActiveCategories() {
   const response = await apiGet("/public/categories", { page: 1, limit: 100 });
   return response?.data || [];

@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createCustomer, listCustomers } from "../services/inventoryOperations.service";
+import { RECENT_CUSTOMERS_KEY, mergeRecentFirst, readRecentItems, saveRecentItem } from "../utils/recentItems";
 
 export function CustomerSelector({ selectedCustomer, onSelect }) {
   const wrapperRef = useRef(null);
   const [keyword, setKeyword] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [customers, setCustomers] = useState([]);
+  const [recentCustomers, setRecentCustomers] = useState(() => readRecentItems(RECENT_CUSTOMERS_KEY));
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -13,6 +15,11 @@ export function CustomerSelector({ selectedCustomer, onSelect }) {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+
+  const displayCustomers = useMemo(() => {
+    if (debouncedKeyword) return customers;
+    return mergeRecentFirst(recentCustomers, customers);
+  }, [customers, debouncedKeyword, recentCustomers]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedKeyword(keyword.trim()), 300);
@@ -57,6 +64,7 @@ export function CustomerSelector({ selectedCustomer, onSelect }) {
 
   function handleSelect(customer) {
     onSelect(customer);
+    setRecentCustomers(saveRecentItem(RECENT_CUSTOMERS_KEY, customer, 10));
     setKeyword("");
     setIsOpen(false);
     setShowCreateForm(false);
@@ -100,6 +108,7 @@ export function CustomerSelector({ selectedCustomer, onSelect }) {
       });
 
       onSelect(created);
+      setRecentCustomers(saveRecentItem(RECENT_CUSTOMERS_KEY, created, 10));
       setCustomers((prev) => [created, ...prev.filter((item) => Number(item.id) !== Number(created.id))]);
       setKeyword("");
       setNewCustomer({ name: "", phone: "", address: "" });
@@ -151,14 +160,15 @@ export function CustomerSelector({ selectedCustomer, onSelect }) {
 
           {isOpen && !showCreateForm && (
             <div className="absolute left-0 right-0 z-20 mt-2 max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-              {isLoading && <p className="px-3 py-3 text-sm text-slate-500">Đang tải khách hàng...</p>}
+              {isLoading && displayCustomers.length === 0 && (
+                <p className="px-3 py-3 text-sm text-slate-500">Đang tải khách hàng...</p>
+              )}
 
-              {!isLoading && customers.length === 0 && (
+              {!isLoading && displayCustomers.length === 0 && (
                 <p className="px-3 py-3 text-sm text-slate-500">Không tìm thấy khách hàng</p>
               )}
 
-              {!isLoading &&
-                customers.map((customer) => (
+              {displayCustomers.map((customer) => (
                   <button
                     key={customer.id}
                     type="button"
