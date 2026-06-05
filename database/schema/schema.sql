@@ -9,4 +9,5 @@ SOURCE database/schema/suppliers.sql;
 SOURCE database/schema/stock_vouchers.sql;
 SOURCE database/schema/stock_transactions.sql;
 SOURCE database/schema/inventory_note_adjustments.sql;
+SOURCE database/schema/inventory_quantity_adjustments.sql;
 SOURCE database/schema/admin_refresh_tokens.sql;

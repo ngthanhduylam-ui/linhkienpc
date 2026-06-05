@@ -86,6 +86,21 @@ async function buildAdjustedNoteGroupMap(productIds, db = pool) {
     addQuantity(groupMap, Number(row.product_id), row.note, signedQuantity);
   }
 
+  const [quantityAdjustmentRows] = await db.query(
+    `
+      SELECT product_id, adjustment_type, quantity, note_group
+      FROM inventory_quantity_adjustments
+      WHERE product_id IN (${placeholders})
+        AND adjustment_type IN ('INCREASE', 'DECREASE')
+    `,
+    uniqueProductIds
+  );
+
+  for (const row of quantityAdjustmentRows) {
+    const signedQuantity = row.adjustment_type === 'INCREASE' ? Number(row.quantity || 0) : -Number(row.quantity || 0);
+    addQuantity(groupMap, Number(row.product_id), row.note_group, signedQuantity);
+  }
+
   const [adjustmentRows] = await db.query(
     `
       SELECT product_id, from_note, to_note, quantity
@@ -102,37 +117,73 @@ async function buildAdjustedNoteGroupMap(productIds, db = pool) {
   }
 
   const quantityMap = await getProductQuantities(uniqueProductIds, db);
-  const remainingByProduct = new Map(uniqueProductIds.map((id) => [id, quantityMap.get(id) || 0]));
   const resultMap = new Map();
-  const groups = [...groupMap.values()].sort((a, b) => {
-    if (a.product_id !== b.product_id) {
-      return a.product_id - b.product_id;
-    }
-    if (a.note_key === '') return -1;
-    if (b.note_key === '') return 1;
-    return a.note_key.localeCompare(b.note_key);
-  });
+  const groupsByProduct = new Map();
 
-  for (const group of groups) {
+  for (const group of groupMap.values()) {
     const productId = Number(group.product_id);
-    const remainingProductQuantity = remainingByProduct.get(productId) || 0;
-    const quantity = Math.min(Math.max(Number(group.quantity || 0), 0), remainingProductQuantity);
+    const quantity = Number(group.quantity || 0);
     if (quantity <= 0) {
       continue;
     }
 
-    if (!resultMap.has(productId)) {
-      resultMap.set(productId, []);
+    if (!groupsByProduct.has(productId)) {
+      groupsByProduct.set(productId, []);
     }
 
-    resultMap.get(productId).push({
+    groupsByProduct.get(productId).push({
+      product_id: productId,
       note: group.note || '',
       note_key: group.note_key,
       label: group.note || 'Không ghi chú',
       quantity,
       is_no_note: group.note_key === ''
     });
-    remainingByProduct.set(productId, remainingProductQuantity - quantity);
+  }
+
+  for (const productId of uniqueProductIds) {
+    const productTotal = Number(quantityMap.get(productId) || 0);
+    const productGroups = groupsByProduct.get(productId) || [];
+    const groupTotal = productGroups.reduce((sum, group) => sum + Number(group.quantity || 0), 0);
+
+    if (groupTotal < productTotal) {
+      const missingQuantity = productTotal - groupTotal;
+      let noNoteGroup = productGroups.find((group) => group.note_key === '');
+
+      if (!noNoteGroup) {
+        noNoteGroup = {
+          product_id: productId,
+          note: '',
+          note_key: '',
+          label: 'Không ghi chú',
+          quantity: 0,
+          is_no_note: true
+        };
+        productGroups.push(noNoteGroup);
+      }
+
+      noNoteGroup.quantity += missingQuantity;
+    }
+
+    if (groupTotal > productTotal) {
+      console.warn('[inventoryNoteGroups] NOTE_GROUP_TOTAL_EXCEEDS_BALANCE', {
+        product_id: productId,
+        group_total: groupTotal,
+        total_quantity: productTotal
+      });
+    }
+
+    const sortedGroups = productGroups
+      .filter((group) => Number(group.quantity || 0) > 0)
+      .sort((a, b) => {
+        if (a.note_key === '') return -1;
+        if (b.note_key === '') return 1;
+        return a.note_key.localeCompare(b.note_key);
+      });
+
+    if (sortedGroups.length > 0) {
+      resultMap.set(productId, sortedGroups);
+    }
   }
 
   return resultMap;

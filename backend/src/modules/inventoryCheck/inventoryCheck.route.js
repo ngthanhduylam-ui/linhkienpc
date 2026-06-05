@@ -7,5 +7,6 @@ const router = express.Router();
 router.get('/products', controller.searchProducts);
 router.get('/products/:sku', validators.skuParamValidator, controller.getProduct);
 router.post('/note-move', validators.moveNoteValidator, controller.moveNote);
+router.post('/quantity-adjust', validators.quantityAdjustValidator, controller.quantityAdjust);
 
 module.exports = router;

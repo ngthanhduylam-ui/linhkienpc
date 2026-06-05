@@ -43,6 +43,33 @@ function mapAdjustment(row) {
   };
 }
 
+function mapQuantityAdjustment(row) {
+  const noteGroup = cleanNote(row.note_group);
+  return {
+    id: row.id,
+    product_id: row.product_id,
+    adjustment_type: row.adjustment_type,
+    quantity: Number(row.quantity || 0),
+    note_group: noteGroup || '',
+    note_group_label: noteGroup || 'Không ghi chú',
+    from_quantity: Number(row.from_quantity || 0),
+    to_quantity: Number(row.to_quantity || 0),
+    reason: row.reason,
+    created_by_admin: {
+      id: row.admin_id,
+      username: row.admin_username
+    },
+    occurred_at: row.occurred_at
+  };
+}
+
+function normalizeInputNoteGroup(noteGroup) {
+  if (noteGroup === '__NO_NOTE__') {
+    return '';
+  }
+  return noteGroup === undefined || noteGroup === null ? '' : String(noteGroup).trim();
+}
+
 async function searchProducts(query) {
   const { page, limit, offset } = parsePagination({
     ...query,
@@ -141,6 +168,32 @@ async function resolveProductBySku(sku, db = pool, lockBalance = false) {
   return rows[0];
 }
 
+async function lockProductBalance(connection, productId) {
+  const [rows] = await connection.query(
+    `
+      SELECT id, quantity
+      FROM product_inventory_balances
+      WHERE product_id = ?
+      FOR UPDATE
+    `,
+    [productId]
+  );
+
+  if (rows.length) {
+    return Number(rows[0].quantity || 0);
+  }
+
+  await connection.query(
+    `
+      INSERT INTO product_inventory_balances (product_id, quantity)
+      VALUES (?, 0)
+    `,
+    [productId]
+  );
+
+  return 0;
+}
+
 async function listRecentAdjustments(productId, db = pool, limit = 10) {
   const [rows] = await db.query(
     `
@@ -165,14 +218,44 @@ async function listRecentAdjustments(productId, db = pool, limit = 10) {
   return rows.map(mapAdjustment);
 }
 
+async function listRecentQuantityAdjustments(productId, db = pool, limit = 20) {
+  const [rows] = await db.query(
+    `
+      SELECT
+        iqa.id,
+        iqa.product_id,
+        iqa.adjustment_type,
+        iqa.quantity,
+        iqa.note_group,
+        iqa.from_quantity,
+        iqa.to_quantity,
+        iqa.reason,
+        iqa.occurred_at,
+        a.id AS admin_id,
+        a.username AS admin_username
+      FROM inventory_quantity_adjustments iqa
+      JOIN admins a ON a.id = iqa.created_by_admin_id
+      WHERE iqa.product_id = ?
+      ORDER BY iqa.id DESC
+      LIMIT ?
+    `,
+    [productId, limit]
+  );
+  return rows.map(mapQuantityAdjustment);
+}
+
 async function getProductInventoryCheckBySku(sku) {
   const product = await resolveProductBySku(sku);
-  const [noteGroups, adjustments] = await Promise.all([
+  const [noteGroups, adjustments, quantityAdjustments] = await Promise.all([
     getAdjustedNoteGroups(product.id),
-    listRecentAdjustments(product.id)
+    listRecentAdjustments(product.id),
+    listRecentQuantityAdjustments(product.id)
   ]);
 
-  return mapProduct(product, noteGroups, adjustments);
+  return {
+    ...mapProduct(product, noteGroups, adjustments),
+    recent_quantity_adjustments: quantityAdjustments
+  };
 }
 
 async function moveNote({ adminId, sku, fromNote = '', toNote = '', quantity, reason = null }) {
@@ -233,8 +316,125 @@ async function moveNote({ adminId, sku, fromNote = '', toNote = '', quantity, re
   }
 }
 
+async function quantityAdjust({ adminId, sku, adjustmentType, quantity, noteGroup = '', reason = null }) {
+  const parsedQuantity = Number(quantity);
+  if (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
+    throw new AppError('quantity must be a positive integer.', 400, 'VALIDATION_ERROR');
+  }
+
+  if (!['INCREASE', 'DECREASE'].includes(adjustmentType)) {
+    throw new AppError('adjustment_type must be INCREASE or DECREASE.', 400, 'VALIDATION_ERROR');
+  }
+
+  const normalizedInputNoteGroup = normalizeInputNoteGroup(noteGroup);
+  const noteGroupKey = normalizeNoteKey(normalizedInputNoteGroup);
+  const noteGroupValue = cleanNote(normalizedInputNoteGroup);
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const product = await resolveProductBySku(sku, connection);
+    const currentQuantity = await lockProductBalance(connection, product.id);
+    const noteGroups = await getAdjustedNoteGroups(product.id, connection);
+
+    let nextQuantity = currentQuantity;
+
+    if (adjustmentType === 'INCREASE') {
+      nextQuantity = currentQuantity + parsedQuantity;
+    } else {
+      if (parsedQuantity > currentQuantity) {
+        throw new AppError('Adjustment quantity exceeds current inventory.', 422, 'INSUFFICIENT_STOCK', [
+          {
+            field: 'quantity',
+            issue: 'exceeds_current_inventory',
+            available: currentQuantity
+          }
+        ]);
+      }
+
+      const selectedGroup = noteGroups.find((group) => group.note_key === noteGroupKey);
+      const selectedGroupQuantity = Number(selectedGroup?.quantity || 0);
+
+      if (parsedQuantity > selectedGroupQuantity) {
+        throw new AppError('Adjustment quantity exceeds selected note group stock.', 422, 'INSUFFICIENT_NOTE_GROUP_STOCK', [
+          {
+            field: 'quantity',
+            issue: 'exceeds_note_group_stock',
+            note_group: noteGroupValue || '',
+            available: selectedGroupQuantity
+          }
+        ]);
+      }
+
+      nextQuantity = currentQuantity - parsedQuantity;
+    }
+
+    await connection.query(
+      `
+        INSERT INTO product_inventory_balances (product_id, quantity)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), updated_at = CURRENT_TIMESTAMP
+      `,
+      [product.id, nextQuantity]
+    );
+
+    const [result] = await connection.query(
+      `
+        INSERT INTO inventory_quantity_adjustments
+          (product_id, adjustment_type, quantity, note_group, from_quantity, to_quantity, reason, created_by_admin_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        product.id,
+        adjustmentType,
+        parsedQuantity,
+        noteGroupValue,
+        currentQuantity,
+        nextQuantity,
+        cleanNote(reason),
+        adminId
+      ]
+    );
+
+    await connection.commit();
+
+    const updated = await getProductInventoryCheckBySku(product.sku);
+    const adjustment = updated.recent_quantity_adjustments.find((item) => Number(item.id) === Number(result.insertId)) || null;
+
+    return {
+      adjustment: adjustment
+        ? {
+            id: adjustment.id,
+            product_id: adjustment.product_id,
+            sku: product.sku,
+            product_name: product.name,
+            adjustment_type: adjustment.adjustment_type,
+            quantity: adjustment.quantity,
+            note_group: adjustment.note_group,
+            note_group_label: adjustment.note_group_label,
+            from_quantity: adjustment.from_quantity,
+            to_quantity: adjustment.to_quantity,
+            current_total_quantity: adjustment.to_quantity,
+            reason: adjustment.reason,
+            occurred_at: adjustment.occurred_at
+          }
+        : null,
+      product: updated.product,
+      note_groups: updated.note_groups,
+      recent_quantity_adjustments: updated.recent_quantity_adjustments
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   getProductInventoryCheckBySku,
   moveNote,
+  quantityAdjust,
   searchProducts
 };

@@ -18,7 +18,18 @@ const moveNoteValidator = validateRequest({
   }
 });
 
+const quantityAdjustValidator = validateRequest({
+  body: {
+    sku: { required: true, type: 'string', minLength: 3, maxLength: 120, pattern: skuPattern },
+    adjustment_type: { required: true, type: 'string', enum: ['INCREASE', 'DECREASE'] },
+    quantity: { required: true, type: 'number', integer: true, min: 1 },
+    note_group: { required: false, type: 'string', maxLength: 500 },
+    reason: { required: false, type: 'string', maxLength: 500 }
+  }
+});
+
 module.exports = {
   moveNoteValidator,
+  quantityAdjustValidator,
   skuParamValidator
 };

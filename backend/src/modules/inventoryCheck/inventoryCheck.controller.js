@@ -40,3 +40,20 @@ exports.moveNote = asyncHandler(async (req, res) => {
     meta: { server_time: new Date().toISOString() }
   });
 });
+
+exports.quantityAdjust = asyncHandler(async (req, res) => {
+  const result = await inventoryCheckService.quantityAdjust({
+    adminId: req.auth.adminId,
+    sku: req.body.sku,
+    adjustmentType: req.body.adjustment_type,
+    quantity: req.body.quantity,
+    noteGroup: req.body.note_group,
+    reason: req.body.reason
+  });
+
+  res.status(201).json({
+    success: true,
+    data: result,
+    meta: { server_time: new Date().toISOString() }
+  });
+});

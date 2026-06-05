@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  adjustInventoryQuantity,
   getInventoryCheckProduct,
-  moveInventoryNoteGroup,
   searchInventoryCheckProducts
 } from "../services/inventoryOperations.service";
 import { formatWarrantyNote } from "../utils/warrantyNote";
@@ -19,6 +19,21 @@ function toGroupValue(group) {
   return group?.is_no_note || !group?.note ? NO_NOTE_VALUE : group.note;
 }
 
+function getGroupLabel(group) {
+  if (!group || group.is_no_note || !group.note) return "Không ghi chú";
+  return formatWarrantyNote(group.label || group.note);
+}
+
+function getQuantityAdjustLabel(type) {
+  return type === "DECREASE" ? "Giảm tồn" : "Tăng tồn";
+}
+
+function getQuantityAdjustBadgeClass(type) {
+  return type === "DECREASE"
+    ? "bg-red-50 text-red-700 ring-red-100"
+    : "bg-emerald-50 text-emerald-700 ring-emerald-100";
+}
+
 export function InventoryCheckPage() {
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef(null);
@@ -26,10 +41,12 @@ export function InventoryCheckPage() {
   const [products, setProducts] = useState([]);
   const [selectedSku, setSelectedSku] = useState("");
   const [detail, setDetail] = useState(null);
-  const [fromGroupValue, setFromGroupValue] = useState("");
-  const [toNote, setToNote] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [reason, setReason] = useState("");
+
+  const [adjustmentType, setAdjustmentType] = useState("INCREASE");
+  const [adjustQuantity, setAdjustQuantity] = useState("");
+  const [adjustNoteGroup, setAdjustNoteGroup] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,21 +88,25 @@ export function InventoryCheckPage() {
     };
   }, [debouncedSearch]);
 
-  async function loadProductDetail(sku) {
+  function resetQuantityForm() {
+    setAdjustQuantity("");
+    setAdjustReason("");
+  }
+
+  async function loadProductDetail(sku, options = {}) {
     setIsLoadingDetail(true);
     setError("");
     try {
       const result = await getInventoryCheckProduct(sku);
       setDetail(result);
       setSelectedSku(result?.product?.sku || sku);
-      setFromGroupValue("");
-      setToNote("");
-      setQuantity("");
-      setReason("");
+      if (!options.keepForms) resetQuantityForm();
+      return result;
     } catch (err) {
       setDetail(null);
       setSelectedSku("");
       setError(err?.message || "Không thể tải thông tin kiểm hàng.");
+      return null;
     } finally {
       setIsLoadingDetail(false);
     }
@@ -98,16 +119,17 @@ export function InventoryCheckPage() {
     setSelectedSku("");
     setDetail(null);
     setSuccess("");
+    setError("");
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
   }
 
   const noteGroups = detail?.note_groups || [];
-  const selectedFromGroup = useMemo(
-    () => noteGroups.find((group) => toGroupValue(group) === fromGroupValue) || null,
-    [noteGroups, fromGroupValue]
+  const selectedAdjustGroup = useMemo(
+    () => noteGroups.find((group) => toGroupValue(group) === adjustNoteGroup) || null,
+    [noteGroups, adjustNoteGroup]
   );
 
-  async function handleSubmit(event) {
+  async function handleQuantitySubmit(event) {
     event.preventDefault();
     setError("");
     setSuccess("");
@@ -117,65 +139,83 @@ export function InventoryCheckPage() {
       return;
     }
 
-    if (!selectedFromGroup) {
-      setError("Vui lòng chọn nhóm cần chuyển.");
-      return;
-    }
-
-    const numericQuantity = Number(quantity);
+    const numericQuantity = Number(adjustQuantity);
     if (!Number.isInteger(numericQuantity) || numericQuantity <= 0) {
-      setError("Số lượng chuyển phải là số nguyên dương.");
+      setError("Số lượng điều chỉnh phải là số nguyên dương.");
       return;
     }
 
-    if (numericQuantity > Number(selectedFromGroup.quantity || 0)) {
-      setError(`Số lượng chuyển vượt quá tồn của nhóm ${formatWarrantyNote(selectedFromGroup.label)}.`);
-      return;
+    if (adjustmentType === "DECREASE") {
+      if (!selectedAdjustGroup) {
+        setError("Vui lòng chọn nhóm bảo hành cần giảm.");
+        return;
+      }
+
+      if (numericQuantity > Number(selectedAdjustGroup.quantity || 0)) {
+        setError(`Số lượng giảm vượt quá tồn của nhóm ${getGroupLabel(selectedAdjustGroup)}.`);
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
-      const result = await moveInventoryNoteGroup({
+      const result = await adjustInventoryQuantity({
         sku: detail.product.sku,
-        from_note: selectedFromGroup.is_no_note ? "" : selectedFromGroup.note,
-        to_note: toNote.trim(),
+        adjustment_type: adjustmentType,
         quantity: numericQuantity,
-        reason: reason.trim() || undefined
+        note_group:
+          adjustmentType === "DECREASE"
+            ? selectedAdjustGroup?.is_no_note
+              ? NO_NOTE_VALUE
+              : selectedAdjustGroup?.note || ""
+            : adjustNoteGroup.trim(),
+        reason: adjustReason.trim() || undefined
       });
 
-      setDetail(result);
-      setSelectedSku(result?.product?.sku || detail.product.sku);
-      setFromGroupValue("");
-      setQuantity("");
-      setReason("");
-      setSuccess("Chuyển ghi chú tồn kho thành công.");
+      const refreshed = await loadProductDetail(result?.product?.sku || detail.product.sku, { keepForms: true });
+      setDetail(
+        refreshed || {
+          ...detail,
+          product: result?.product || detail.product,
+          note_groups: result?.note_groups || detail.note_groups,
+          recent_quantity_adjustments:
+            result?.recent_quantity_adjustments || detail.recent_quantity_adjustments
+        }
+      );
+      setAdjustQuantity("");
+      setAdjustReason("");
+      setSuccess(
+        `${getQuantityAdjustLabel(adjustmentType)} thành công. Tồn hiện tại: ${
+          result?.adjustment?.current_total_quantity ?? result?.product?.total_quantity ?? "-"
+        }.`
+      );
     } catch (err) {
-      setError(err?.message || "Chuyển ghi chú thất bại.");
+      setError(err?.message || "Điều chỉnh số lượng thất bại.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  const recentQuantityAdjustments = detail?.recent_quantity_adjustments || [];
+
   return (
-    <section className="space-y-5">
+    <section className="space-y-4">
       <div>
         <h2 className="text-2xl font-semibold text-slate-900">Kiểm hàng</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Kiểm tra và chuyển số lượng giữa các nhóm ghi chú bảo hành hiện tại.
-        </p>
+        <p className="mt-1 text-sm text-slate-600">Kiểm tra tồn kho và điều chỉnh số lượng thực tế.</p>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-12">
-        <section className="space-y-5 lg:col-span-7">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-4 lg:grid-cols-12">
+        <section className="lg:col-span-5">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="text-base font-semibold text-slate-900">Tìm sản phẩm</h3>
-            <label className="mt-4 mb-1 block text-sm font-medium text-slate-700">
+            <label className="mt-3 mb-1 block text-sm font-medium text-slate-700">
               Tìm sản phẩm theo tên hoặc SKU
             </label>
             <div className="relative">
               <input
                 ref={searchInputRef}
-                className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                className="h-10 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                 placeholder="Nhập tên sản phẩm hoặc SKU"
                 value={searchInput}
                 onChange={(event) => {
@@ -188,7 +228,7 @@ export function InventoryCheckPage() {
                   type="button"
                   aria-label="Xóa tìm kiếm sản phẩm"
                   onClick={handleClearSearch}
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 >
                   ×
                 </button>
@@ -198,13 +238,13 @@ export function InventoryCheckPage() {
             {isSearching && <p className="mt-3 text-sm text-slate-500">Đang tìm sản phẩm...</p>}
 
             {!isSearching && debouncedSearch && products.length === 0 && (
-              <p className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
                 Không tìm thấy sản phẩm phù hợp.
               </p>
             )}
 
             {products.length > 0 && (
-              <div className="mt-4 space-y-2">
+              <div className="mt-3 space-y-2">
                 {products.map((product) => {
                   const isSelected = String(product.sku) === String(selectedSku);
                   return (
@@ -212,101 +252,98 @@ export function InventoryCheckPage() {
                       key={product.id}
                       type="button"
                       onClick={() => loadProductDetail(product.sku)}
-                      className={`w-full rounded-lg border p-3 text-left transition ${
+                      className={[
+                        "w-full rounded-md border px-3 py-2 text-left transition",
                         isSelected
                           ? "border-brand-600 bg-brand-50"
                           : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      }`}
+                      ].join(" ")}
                     >
-                      <p className="text-lg font-semibold text-slate-900">{product.name}</p>
-                      <p className="mt-2 text-base font-bold text-brand-800">
-                        {Number(product.total_quantity || 0)}{" "}
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          tồn hiện tại
-                        </span>
-                      </p>
-                      <p className="mt-1 break-all text-xs text-slate-600">SKU: {product.sku}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900">{product.name}</p>
+                          <p className="mt-1 break-all text-xs text-slate-600">SKU: {product.sku}</p>
+                        </div>
+                        <p className="shrink-0 text-sm font-bold text-brand-800">
+                          Tồn: {Number(product.total_quantity || 0)}
+                        </p>
+                      </div>
                     </button>
                   );
                 })}
               </div>
             )}
           </div>
-
-          {detail && (
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-slate-900">Nhóm ghi chú hiện tại</h3>
-              {noteGroups.length > 0 ? (
-                <div className="mt-4 space-y-2">
-                  {noteGroups.map((group) => (
-                    <div
-                      key={toGroupValue(group)}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
-                    >
-                      <p className="break-all text-sm font-semibold text-slate-800">{formatWarrantyNote(group.label)}</p>
-                      <p className="shrink-0 text-base font-bold text-brand-800">Còn {group.quantity}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-                  Sản phẩm chưa có nhóm ghi chú tồn kho.
-                </p>
-              )}
-            </div>
-          )}
         </section>
 
-        <aside className="lg:col-span-5">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-6">
-            <h3 className="text-base font-semibold text-slate-900">Chuyển ghi chú</h3>
-
+        <aside className="lg:col-span-7">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-6">
             {!detail ? (
-              <p className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-600">
-                Chọn sản phẩm bên trái để kiểm hàng.
-              </p>
+              <>
+                <h3 className="text-base font-semibold text-slate-900">Điều chỉnh số lượng</h3>
+                <p className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                  Chọn sản phẩm bên trái để kiểm hàng.
+                </p>
+              </>
             ) : (
               <>
-                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-2xl font-bold text-slate-900">{detail.product.name}</p>
-                  <p className="mt-2 break-all text-xs text-slate-600">SKU: {detail.product.sku}</p>
-                  <div className="mt-4 rounded-md bg-white px-4 py-4 text-center">
-                    <p className="text-5xl font-extrabold leading-none text-brand-800">
-                      {Number(detail.product.total_quantity || 0)}
-                    </p>
-                    <p className="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">TỒN HIỆN TẠI</p>
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold text-slate-900">{detail.product.name}</p>
+                      <p className="mt-1 break-all text-xs text-slate-600">SKU: {detail.product.sku}</p>
+                    </div>
+                    <div className="rounded-md bg-white px-4 py-2 text-center">
+                      <p className="text-3xl font-extrabold leading-none text-brand-800">
+                        {Number(detail.product.total_quantity || 0)}
+                      </p>
+                      <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                        Tồn hiện tại
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Từ nhóm *</label>
-                    <select
-                      className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                      value={fromGroupValue}
-                      onChange={(event) => setFromGroupValue(event.target.value)}
-                    >
-                      <option value="">-- Chọn nhóm cần chuyển --</option>
-                      {noteGroups.map((group) => (
-                        <option key={toGroupValue(group)} value={toGroupValue(group)}>
-                          {formatWarrantyNote(group.label)} - còn {group.quantity}
-                        </option>
-                      ))}
-                    </select>
+                <div className="mt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-base font-semibold text-slate-900">Nhóm ghi chú hiện tại</h3>
+                    {/* TODO: hiển thị cảnh báo lệch tổng nhóm/tồn kho khi backend expose inventory_warning sau. */}
                   </div>
 
+                  {noteGroups.length > 0 ? (
+                    <div className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
+                      {noteGroups.map((group) => (
+                        <div key={toGroupValue(group)} className="flex items-center justify-between gap-3 px-3 py-2">
+                          <p className="break-all text-sm font-semibold text-slate-800">{getGroupLabel(group)}</p>
+                          <p className="shrink-0 text-sm font-bold text-brand-800">còn {group.quantity}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
+                      Sản phẩm chưa có nhóm ghi chú tồn kho.
+                    </p>
+                  )}
+                </div>
+
+                <form className="mt-4 space-y-3 border-t border-slate-100 pt-4" onSubmit={handleQuantitySubmit}>
+                  <h3 className="text-base font-semibold text-slate-900">Điều chỉnh số lượng</h3>
+
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Sang ghi chú</label>
-                    <input
-                      className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                      value={toNote}
-                      onChange={(event) => setToNote(event.target.value)}
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
-                    />
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Loại điều chỉnh *</label>
+                    <select
+                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                      value={adjustmentType}
+                      onChange={(event) => {
+                        setAdjustmentType(event.target.value);
+                        setAdjustNoteGroup("");
+                        setAdjustQuantity("");
+                        setAdjustReason("");
+                      }}
+                    >
+                      <option value="INCREASE">Tăng tồn</option>
+                      <option value="DECREASE">Giảm tồn</option>
+                    </select>
                   </div>
 
                   <div>
@@ -314,22 +351,63 @@ export function InventoryCheckPage() {
                     <input
                       type="number"
                       min={1}
-                      max={selectedFromGroup ? selectedFromGroup.quantity : undefined}
+                      max={
+                        adjustmentType === "DECREASE" && selectedAdjustGroup
+                          ? selectedAdjustGroup.quantity
+                          : undefined
+                      }
                       step={1}
-                      className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                      value={quantity}
-                      onChange={(event) => setQuantity(event.target.value)}
-                      placeholder="Nhập số lượng cần chuyển"
+                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                      value={adjustQuantity}
+                      onChange={(event) => setAdjustQuantity(event.target.value)}
+                      placeholder="Nhập số lượng điều chỉnh"
                     />
                   </div>
+
+                  {adjustmentType === "INCREASE" ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">
+                        Nhóm bảo hành / ghi chú
+                      </label>
+                      <input
+                        className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        value={adjustNoteGroup}
+                        onChange={(event) => setAdjustNoteGroup(event.target.value)}
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">Để trống nếu tăng vào nhóm Không ghi chú.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">
+                        Nhóm bảo hành / ghi chú *
+                      </label>
+                      <select
+                        className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        value={adjustNoteGroup}
+                        onChange={(event) => setAdjustNoteGroup(event.target.value)}
+                      >
+                        <option value="">-- Chọn nhóm cần giảm --</option>
+                        {noteGroups.map((group) => (
+                          <option key={toGroupValue(group)} value={toGroupValue(group)}>
+                            {getGroupLabel(group)} - còn {group.quantity}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">Lý do</label>
                     <input
-                      className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                      value={reason}
-                      onChange={(event) => setReason(event.target.value)}
-                      placeholder="Ví dụ: Bổ sung bảo hành"
+                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                      value={adjustReason}
+                      onChange={(event) => setAdjustReason(event.target.value)}
+                      placeholder="Ví dụ: Tồn đầu kỳ, kiểm kho thiếu"
                     />
                   </div>
 
@@ -338,10 +416,14 @@ export function InventoryCheckPage() {
 
                   <button
                     type="submit"
-                    disabled={isSubmitting || isLoadingDetail || noteGroups.length === 0}
-                    className="h-11 w-full rounded-md bg-brand-700 px-5 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={
+                      isSubmitting ||
+                      isLoadingDetail ||
+                      (adjustmentType === "DECREASE" && noteGroups.length === 0)
+                    }
+                    className="h-10 w-full rounded-md bg-brand-700 px-5 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSubmitting ? "Đang xử lý..." : "Chuyển ghi chú"}
+                    {isSubmitting ? "Đang xử lý..." : "Lưu điều chỉnh"}
                   </button>
                 </form>
               </>
@@ -350,28 +432,40 @@ export function InventoryCheckPage() {
         </aside>
       </div>
 
-      {detail?.recent_adjustments?.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-slate-900">Lịch sử điều chỉnh gần đây</h3>
-          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+      {recentQuantityAdjustments.length > 0 && (
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-900">Lịch sử điều chỉnh số lượng gần đây</h3>
+          <div className="mt-3 overflow-x-auto rounded-md border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-medium">Ngày giờ</th>
-                  <th className="px-3 py-2 font-medium">Từ</th>
-                  <th className="px-3 py-2 font-medium">Sang</th>
+                  <th className="px-3 py-2 font-medium">Loại</th>
+                  <th className="px-3 py-2 font-medium">Nhóm ghi chú</th>
                   <th className="px-3 py-2 font-medium">SL</th>
+                  <th className="px-3 py-2 font-medium">Tồn</th>
                   <th className="px-3 py-2 font-medium">Lý do</th>
                   <th className="px-3 py-2 font-medium">Admin</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {detail.recent_adjustments.map((item) => (
+                {recentQuantityAdjustments.map((item) => (
                   <tr key={item.id}>
                     <td className="px-3 py-2 text-slate-700">{formatDateTime(item.occurred_at)}</td>
-                    <td className="px-3 py-2 text-slate-700">{formatWarrantyNote(item.from_label)}</td>
-                    <td className="px-3 py-2 text-slate-700">{formatWarrantyNote(item.to_label)}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ${getQuantityAdjustBadgeClass(
+                          item.adjustment_type
+                        )}`}
+                      >
+                        {getQuantityAdjustLabel(item.adjustment_type)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-slate-700">{formatWarrantyNote(item.note_group || "")}</td>
                     <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
+                    <td className="px-3 py-2 text-slate-700">
+                      {item.from_quantity} → {item.to_quantity}
+                    </td>
                     <td className="px-3 py-2 text-slate-700">{item.reason || "-"}</td>
                     <td className="px-3 py-2 text-slate-700">{item.created_by_admin?.username || "-"}</td>
                   </tr>

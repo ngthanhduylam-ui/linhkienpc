@@ -165,6 +165,11 @@ export async function moveInventoryNoteGroup(payload) {
   return response?.data;
 }
 
+export async function adjustInventoryQuantity(payload) {
+  const response = await apiPost("/admin/inventory-check/quantity-adjust", payload);
+  return response?.data;
+}
+
 export async function listStockTransactions(params) {
   const query = {
     page: params.page || 1,
