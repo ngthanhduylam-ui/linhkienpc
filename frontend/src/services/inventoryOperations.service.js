@@ -166,3 +166,24 @@ export async function listStockTransactions(params) {
     meta: response?.meta || { page: 1, limit: 10, total: 0 }
   };
 }
+
+export async function listStockVouchers(params = {}) {
+  const query = {
+    page: params.page || 1,
+    limit: params.limit || 10
+  };
+
+  if (params.keyword) query.keyword = params.keyword;
+  if (params.type) query.type = params.type;
+
+  const response = await apiGet("/admin/stock-vouchers", query);
+  return {
+    items: response?.data || [],
+    meta: response?.meta || { page: query.page, limit: query.limit, total: 0 }
+  };
+}
+
+export async function getStockVoucherRequest(id) {
+  const response = await apiGet(`/admin/stock-vouchers/${encodeURIComponent(id)}`);
+  return response?.data;
+}

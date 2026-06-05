@@ -118,6 +118,35 @@ async function resolveProductsBySku(connection, items) {
   return productMap;
 }
 
+async function createStockVoucher(connection, { voucherType, adminId, customerId = null, supplierId = null }) {
+  const [result] = await connection.query(
+    `
+      INSERT INTO stock_vouchers
+        (voucher_type, customer_id, supplier_id, created_by_admin_id)
+      VALUES (?, ?, ?, ?)
+    `,
+    [voucherType, customerId, supplierId, adminId]
+  );
+
+  const voucherId = result.insertId;
+  const voucherCode = `${voucherType}-${String(voucherId).padStart(6, '0')}`;
+
+  await connection.query(
+    `
+      UPDATE stock_vouchers
+      SET voucher_code = ?
+      WHERE id = ?
+    `,
+    [voucherCode, voucherId]
+  );
+
+  return {
+    id: voucherId,
+    voucher_code: voucherCode,
+    voucher_type: voucherType
+  };
+}
+
 async function resolveCustomerId(connection, customerId) {
   if (customerId === undefined || customerId === null || customerId === '') {
     return null;
@@ -351,6 +380,11 @@ async function bulkStockIn({ adminId, supplierId = null, items = [] }) {
         note: item.note && item.note.trim() ? item.note.trim() : null
       };
     });
+    const voucher = await createStockVoucher(connection, {
+      voucherType: 'IN',
+      adminId,
+      supplierId: resolvedSupplierId
+    });
 
     const productIds = [...new Set(resolvedItems.map((item) => item.product_id))].sort((a, b) => a - b);
     const balanceMap = await lockProductBalances(connection, productIds);
@@ -394,10 +428,10 @@ async function bulkStockIn({ adminId, supplierId = null, items = [] }) {
       const [txResult] = await connection.query(
         `
           INSERT INTO stock_transactions
-            (txn_type, product_id, warranty_batch_id, customer_id, supplier_id, quantity, note, created_by_admin_id)
-          VALUES ('IN', ?, NULL, NULL, ?, ?, ?, ?)
+            (voucher_id, txn_type, product_id, warranty_batch_id, customer_id, supplier_id, quantity, note, created_by_admin_id)
+          VALUES (?, 'IN', ?, NULL, NULL, ?, ?, ?, ?)
         `,
-        [item.product_id, resolvedSupplierId, item.quantity, item.note, adminId]
+        [voucher.id, item.product_id, resolvedSupplierId, item.quantity, item.note, adminId]
       );
 
       responseItems[index].transaction_id = txResult.insertId;
@@ -407,6 +441,8 @@ async function bulkStockIn({ adminId, supplierId = null, items = [] }) {
 
     return {
       txn_type: 'IN',
+      voucher_id: voucher.id,
+      voucher_code: voucher.voucher_code,
       supplier_id: resolvedSupplierId,
       items: responseItems
     };
@@ -468,6 +504,11 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         has_warranty_selection: warrantySelected,
         transaction_note: warrantySelected && warrantyNoteKey ? warrantyNoteKey : null
       };
+    });
+    const voucher = await createStockVoucher(connection, {
+      voucherType: 'OUT',
+      adminId,
+      customerId: resolvedCustomerId
     });
 
     const productIds = [...new Set(resolvedItems.map((item) => item.product_id))].sort((a, b) => a - b);
@@ -597,10 +638,10 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
       const [txResult] = await connection.query(
         `
           INSERT INTO stock_transactions
-            (txn_type, product_id, warranty_batch_id, customer_id, supplier_id, quantity, note, created_by_admin_id)
-          VALUES ('OUT', ?, NULL, ?, NULL, ?, ?, ?)
+            (voucher_id, txn_type, product_id, warranty_batch_id, customer_id, supplier_id, quantity, note, created_by_admin_id)
+          VALUES (?, 'OUT', ?, NULL, ?, NULL, ?, ?, ?)
         `,
-        [item.product_id, resolvedCustomerId, item.quantity, item.transaction_note, adminId]
+        [voucher.id, item.product_id, resolvedCustomerId, item.quantity, item.transaction_note, adminId]
       );
 
       responseItems.push({
@@ -618,6 +659,8 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
 
     return {
       txn_type: 'OUT',
+      voucher_id: voucher.id,
+      voucher_code: voucher.voucher_code,
       customer_id: resolvedCustomerId,
       items: responseItems
     };

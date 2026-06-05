@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS stock_transactions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  voucher_id BIGINT UNSIGNED NULL,
   txn_type ENUM('IN','OUT') NOT NULL,
   product_id BIGINT UNSIGNED NOT NULL,
   warranty_batch_id BIGINT UNSIGNED NULL,
@@ -13,6 +14,10 @@ CREATE TABLE IF NOT EXISTS stock_transactions (
   KEY idx_stock_txn_customer_time (customer_id, occurred_at),
   KEY idx_stock_txn_supplier_time (supplier_id, occurred_at),
   KEY idx_stock_txn_admin_time (created_by_admin_id, occurred_at),
+  KEY idx_stock_txn_voucher (voucher_id),
+  CONSTRAINT fk_stock_txn_voucher
+    FOREIGN KEY (voucher_id) REFERENCES stock_vouchers(id)
+    ON UPDATE CASCADE,
   CONSTRAINT fk_stock_txn_product
     FOREIGN KEY (product_id) REFERENCES products(id)
     ON UPDATE CASCADE,
