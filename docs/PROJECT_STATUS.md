@@ -260,5 +260,6 @@ C?c quy?t ??nh UX ?? ch?t trong l?ch s? chat:
 - N?u sau n?y th?m gi?, ph?i l?m c?n th?n ?? kh?ng ph? public lookup v? existing inventory logic.
 - Customer debt/payment l? phase sau, kh?ng chen v?o POS refactor A.
 - Supplier purchasing l? phase C, kh?ng ?p nh?p h?ng th?nh ERP s?m.
+- Backlog tuong lai: giu SKU unique/simple. Sau nay nghien cuu search_tags/aliases/compatibility rieng cho tim kiem san pham, vi du `gen13th` tra ve cac may bo ho tro Gen 13; model ho tro Gen13 co the hieu la ho tro Gen12, nhung model Gen12 chua chac ho tro Gen13. Khong lam database/search_tags trong Phase A.
 - N?n x?a c?c backup file t?m khi chu?n b? production.
 - C?c file PROJECT_DIRECTION.md, PROJECT_STATUS.md, POS_SCREEN_GUIDE.md l? memory source cho chat Codex m?i.

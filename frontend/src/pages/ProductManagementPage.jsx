@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   activateProductRequest,
   createCategoryRequest,
@@ -13,6 +14,10 @@ const PRODUCT_PAGE_SIZE = 20;
 const PRODUCT_STATUS_ACTIVE = "active";
 const PRODUCT_STATUS_INACTIVE = "inactive";
 const PRODUCT_STATUS_ALL = "all";
+const SKU_PATTERN = /^[a-z0-9]+(\.[a-z0-9]+)*$/i;
+const SKU_FORMAT_MESSAGE = "SKU không hợp lệ. Chỉ dùng chữ thường, số và dấu chấm.";
+const SKU_DUPLICATE_MESSAGE = "SKU này đã tồn tại. Vui lòng dùng SKU khác.";
+const SKU_HELPER_TEXT = "SKU chỉ dùng chữ thường, số và dấu chấm. Ví dụ: 2nd.maybo.lenovo.v50t13imb";
 
 function stripDiacritics(value) {
   return (value || "")
@@ -75,6 +80,33 @@ function buildSuggestedSku(productName, category) {
   return `${categoryPrefix}.${toDotToken(normalizedName)}`;
 }
 
+function isValidSkuFormat(value) {
+  return SKU_PATTERN.test(value);
+}
+
+function getProductErrorMessage(error, fallbackMessage) {
+  const code = error?.payload?.error?.code;
+  const details = error?.payload?.error?.details || [];
+  const message = String(error?.message || "");
+  const normalizedMessage = message.toLowerCase();
+  const hasSkuValidationError = details.some(
+    (detail) => String(detail?.field || "").includes("sku") || String(detail?.issue || "").includes("sku")
+  );
+
+  if (code === "SKU_ALREADY_EXISTS" || normalizedMessage.includes("sku already exists")) {
+    return SKU_DUPLICATE_MESSAGE;
+  }
+
+  if (
+    code === "VALIDATION_ERROR" &&
+    (hasSkuValidationError || normalizedMessage.includes("validation failed"))
+  ) {
+    return SKU_FORMAT_MESSAGE;
+  }
+
+  return message || fallbackMessage;
+}
+
 function getStatusQueryValue(statusFilter) {
   if (statusFilter === PRODUCT_STATUS_ACTIVE) return true;
   if (statusFilter === PRODUCT_STATUS_INACTIVE) return false;
@@ -86,6 +118,7 @@ function getProductStatusBadge(product) {
 }
 
 export function ProductManagementPage() {
+  const location = useLocation();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchInput, setSearchInput] = useState("");
@@ -190,6 +223,17 @@ export function ProductManagementPage() {
     const suggestedSku = buildSuggestedSku(newProductName, selectedCreateCategory);
     if (suggestedSku) setNewProductSku(`${newProductCondition}.${suggestedSku}`);
   }, [isModalOpen, newProductName, selectedCreateCategory, newProductCondition, isSkuManuallyEdited, newProductSku]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("create") !== "1") return;
+
+    setError("");
+    setSuccess("");
+    resetCreateForm();
+    setNewProductName(params.get("name") || "");
+    setIsModalOpen(true);
+  }, [location.search]);
 
   useEffect(() => {
     if (!isModalOpen) return undefined;
@@ -342,6 +386,10 @@ export function ProductManagementPage() {
       setError("Vui lòng nhập mã sản phẩm / SKU.");
       return;
     }
+    if (!isValidSkuFormat(sku)) {
+      setError(SKU_FORMAT_MESSAGE);
+      return;
+    }
     if (!newProductCategoryId) {
       setError("Vui lòng chọn danh mục.");
       return;
@@ -363,7 +411,7 @@ export function ProductManagementPage() {
       setIsModalOpen(false);
       resetCreateForm();
     } catch (err) {
-      setError(err?.message || "Tạo sản phẩm mới thất bại.");
+      setError(getProductErrorMessage(err, "Tạo sản phẩm mới thất bại."));
     } finally {
       setIsSubmitting(false);
     }
@@ -387,6 +435,10 @@ export function ProductManagementPage() {
       setError("Vui lòng nhập SKU.");
       return;
     }
+    if (!isValidSkuFormat(sku)) {
+      setError(SKU_FORMAT_MESSAGE);
+      return;
+    }
     if (!categoryId) {
       setError("Vui lòng chọn danh mục.");
       return;
@@ -404,12 +456,7 @@ export function ProductManagementPage() {
       setSuccess(`Đã cập nhật sản phẩm: ${updated.name} (${updated.sku}).`);
       closeEditModal();
     } catch (err) {
-      const code = err?.payload?.error?.code;
-      if (code === "SKU_ALREADY_EXISTS") {
-        setError("SKU đã tồn tại.");
-      } else {
-        setError(err?.message || "Cập nhật sản phẩm thất bại.");
-      }
+      setError(getProductErrorMessage(err, "Cập nhật sản phẩm thất bại."));
     } finally {
       setIsSubmitting(false);
     }
@@ -663,7 +710,7 @@ export function ProductManagementPage() {
                     placeholder="2nd.cpu.intel.12400f"
                   />
                   <p className="mt-1 text-xs text-slate-500">
-                    Cấu trúc đề xuất: [new|2nd].[danh mục].[hãng].[tên ngắn]
+                    {SKU_HELPER_TEXT}
                   </p>
                 </div>
 
@@ -703,6 +750,8 @@ export function ProductManagementPage() {
                   />
                 </div>
               </div>
+
+              {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
               {showCategoryCreateForm && (
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -781,6 +830,7 @@ export function ProductManagementPage() {
                   value={editProductForm.sku}
                   onChange={(event) => setEditProductForm((prev) => ({ ...prev, sku: event.target.value }))}
                 />
+                <p className="mt-1 text-xs text-slate-500">{SKU_HELPER_TEXT}</p>
               </div>
 
               <div>
@@ -807,6 +857,8 @@ export function ProductManagementPage() {
                   onChange={(event) => setEditProductForm((prev) => ({ ...prev, spec_summary: event.target.value }))}
                 />
               </div>
+
+              {error && <p className="md:col-span-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             </div>
 
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">

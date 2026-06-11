@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   adjustInventoryQuantity,
   getInventoryCheckProduct,
@@ -289,9 +290,18 @@ export function InventoryCheckPage() {
             {isSearching && <p className="mt-3 text-sm text-slate-500">Đang tìm sản phẩm...</p>}
 
             {!isSearching && debouncedSearch && products.length === 0 && (
-              <p className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
-                Không tìm thấy sản phẩm phù hợp.
-              </p>
+              <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3">
+                <p className="text-sm font-medium text-slate-700">Không tìm thấy sản phẩm phù hợp.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Nếu đang kiểm hàng thực tế và sản phẩm chưa có trong hệ thống, hãy tạo sản phẩm trước rồi quay lại kiểm hàng.
+                </p>
+                <Link
+                  to={`/admin/products?create=1&name=${encodeURIComponent(debouncedSearch)}`}
+                  className="mt-3 inline-flex h-9 items-center rounded-md border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                >
+                  + Tạo sản phẩm mới
+                </Link>
+              </div>
             )}
 
             {displayProducts.length > 0 && (
