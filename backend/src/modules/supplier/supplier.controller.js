@@ -32,3 +32,21 @@ exports.updateSupplier = asyncHandler(async (req, res) => {
     meta: { server_time: new Date().toISOString() }
   });
 });
+
+exports.deactivateSupplier = asyncHandler(async (req, res) => {
+  const updated = await supplierService.setSupplierActive(Number(req.params.id), false);
+  res.json({
+    success: true,
+    data: updated,
+    meta: { server_time: new Date().toISOString() }
+  });
+});
+
+exports.activateSupplier = asyncHandler(async (req, res) => {
+  const updated = await supplierService.setSupplierActive(Number(req.params.id), true);
+  res.json({
+    success: true,
+    data: updated,
+    meta: { server_time: new Date().toISOString() }
+  });
+});

@@ -46,6 +46,24 @@ exports.updateCustomer = asyncHandler(async (req, res) => {
   });
 });
 
+exports.deactivateCustomer = asyncHandler(async (req, res) => {
+  const updated = await customerService.setCustomerActive(toId(req.params.id), false);
+  res.json({
+    success: true,
+    data: updated,
+    meta: { server_time: new Date().toISOString() }
+  });
+});
+
+exports.activateCustomer = asyncHandler(async (req, res) => {
+  const updated = await customerService.setCustomerActive(toId(req.params.id), true);
+  res.json({
+    success: true,
+    data: updated,
+    meta: { server_time: new Date().toISOString() }
+  });
+});
+
 exports.listCustomerTransactions = asyncHandler(async (req, res) => {
   const result = await customerService.listCustomerTransactions(toId(req.params.id), req.query);
   res.json({

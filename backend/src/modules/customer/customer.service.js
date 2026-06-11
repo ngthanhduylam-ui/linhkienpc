@@ -41,8 +41,17 @@ async function listCustomers(query) {
     limit: query.limit || 20
   });
   const keyword = (query.keyword || '').trim();
-  const whereParts = ['cu.is_active = 1'];
+  const whereParts = [];
   const params = [];
+
+  if (query.is_active !== undefined) {
+    const rawActive = String(query.is_active).trim().toLowerCase();
+    if (!['true', 'false', '1', '0'].includes(rawActive)) {
+      throw new AppError('is_active must be true or false.', 400, 'VALIDATION_ERROR');
+    }
+    whereParts.push('cu.is_active = ?');
+    params.push(['true', '1'].includes(rawActive) ? 1 : 0);
+  }
 
   if (keyword) {
     const pattern = `%${escapeLike(keyword)}%`;
@@ -50,7 +59,7 @@ async function listCustomers(query) {
     params.push(pattern, pattern);
   }
 
-  const whereSql = `WHERE ${whereParts.join(' AND ')}`;
+  const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   const [countRows] = await pool.query(
     `
@@ -155,6 +164,12 @@ async function updateCustomer(id, payload) {
   return getCustomerById(id);
 }
 
+async function setCustomerActive(id, isActive) {
+  await getCustomerById(id);
+  await pool.query('UPDATE customers SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, id]);
+  return getCustomerById(id);
+}
+
 async function listCustomerTransactions(id, query) {
   await getCustomerById(id);
 
@@ -208,5 +223,6 @@ module.exports = {
   getCustomerById,
   createCustomer,
   updateCustomer,
+  setCustomerActive,
   listCustomerTransactions
 };

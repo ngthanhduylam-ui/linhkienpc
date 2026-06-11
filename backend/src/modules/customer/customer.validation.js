@@ -5,6 +5,7 @@ const idPattern = /^\d+$/;
 const listCustomersValidator = validateRequest({
   query: {
     keyword: { required: false, type: 'string', maxLength: 100 },
+    is_active: { required: false, type: 'string', maxLength: 5 },
     page: { required: false, type: 'string', maxLength: 6 },
     limit: { required: false, type: 'string', maxLength: 3 }
   }

@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  activateProductRequest,
   createCategoryRequest,
   createProductRequest,
+  deactivateProductRequest,
   listActiveCategories,
   listProductsPage,
   updateProductRequest
 } from "../services/inventoryOperations.service";
 
 const PRODUCT_PAGE_SIZE = 20;
+const PRODUCT_STATUS_ACTIVE = "active";
+const PRODUCT_STATUS_INACTIVE = "inactive";
+const PRODUCT_STATUS_ALL = "all";
 
 function stripDiacritics(value) {
   return (value || "")
@@ -70,11 +75,22 @@ function buildSuggestedSku(productName, category) {
   return `${categoryPrefix}.${toDotToken(normalizedName)}`;
 }
 
+function getStatusQueryValue(statusFilter) {
+  if (statusFilter === PRODUCT_STATUS_ACTIVE) return true;
+  if (statusFilter === PRODUCT_STATUS_INACTIVE) return false;
+  return undefined;
+}
+
+function getProductStatusBadge(product) {
+  return product?.is_active ? "Đang sử dụng" : "Ngừng sử dụng";
+}
+
 export function ProductManagementPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(PRODUCT_STATUS_ACTIVE);
   const searchInputRef = useRef(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -140,7 +156,12 @@ export function ProductManagementPage() {
       setIsLoading(true);
       setError("");
       try {
-        const result = await listProductsPage({ keyword: debouncedSearch, page, limit: PRODUCT_PAGE_SIZE });
+        const result = await listProductsPage({
+          keyword: debouncedSearch,
+          page,
+          limit: PRODUCT_PAGE_SIZE,
+          is_active: getStatusQueryValue(statusFilter)
+        });
         if (!active) return;
         setProducts(result.items);
         setTotal(Number(result.meta?.total || 0));
@@ -160,7 +181,7 @@ export function ProductManagementPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, page]);
+  }, [debouncedSearch, page, statusFilter]);
 
   useEffect(() => {
     if (!isModalOpen || !newProductName.trim() || !selectedCreateCategory) return;
@@ -181,8 +202,13 @@ export function ProductManagementPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isModalOpen]);
 
-  async function reloadProducts(nextPage = page, nextKeyword = debouncedSearch) {
-    const result = await listProductsPage({ keyword: nextKeyword, page: nextPage, limit: PRODUCT_PAGE_SIZE });
+  async function reloadProducts(nextPage = page, nextKeyword = debouncedSearch, nextStatus = statusFilter) {
+    const result = await listProductsPage({
+      keyword: nextKeyword,
+      page: nextPage,
+      limit: PRODUCT_PAGE_SIZE,
+      is_active: getStatusQueryValue(nextStatus)
+    });
     setProducts(result.items);
     setTotal(Number(result.meta?.total || 0));
     setTotalPages(Math.max(1, Number(result.meta?.total_pages || 1)));
@@ -242,6 +268,11 @@ export function ProductManagementPage() {
     setDebouncedSearch("");
     setPage(1);
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }
+
+  function handleStatusFilterChange(event) {
+    setStatusFilter(event.target.value);
+    setPage(1);
   }
 
   async function handleCreateCategoryInline() {
@@ -384,6 +415,42 @@ export function ProductManagementPage() {
     }
   }
 
+  async function handleDeactivateProduct(product) {
+    const confirmed = window.confirm(`Ngừng sử dụng sản phẩm "${product.name}"?`);
+    if (!confirmed) return;
+
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
+    try {
+      await deactivateProductRequest(product.id);
+      await reloadProducts();
+      setSuccess(`Đã ngừng sử dụng sản phẩm: ${product.name}.`);
+    } catch (err) {
+      setError(err?.message || "Ngừng sử dụng sản phẩm thất bại.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleActivateProduct(product) {
+    const confirmed = window.confirm(`Khôi phục sản phẩm "${product.name}"?`);
+    if (!confirmed) return;
+
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
+    try {
+      await activateProductRequest(product.id);
+      await reloadProducts();
+      setSuccess(`Đã khôi phục sản phẩm: ${product.name}.`);
+    } catch (err) {
+      setError(err?.message || "Khôi phục sản phẩm thất bại.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <section className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -401,34 +468,52 @@ export function ProductManagementPage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <label className="mb-1 block text-sm font-medium text-slate-700">Tìm sản phẩm</label>
-        <div className="relative">
-          <input
-            ref={searchInputRef}
-            className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-            placeholder="Tìm theo tên sản phẩm, SKU hoặc danh mục"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-          {searchInput && (
-            <button
-              type="button"
-              aria-label="Xóa tìm kiếm"
-              onClick={handleClearSearch}
-              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Tìm sản phẩm</label>
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="Tìm theo tên sản phẩm, SKU hoặc danh mục"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  aria-label="Xóa tìm kiếm"
+                  onClick={handleClearSearch}
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái</label>
+            <select
+              className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
             >
-              ×
-            </button>
-          )}
+              <option value={PRODUCT_STATUS_ACTIVE}>Đang sử dụng</option>
+              <option value={PRODUCT_STATUS_INACTIVE}>Ngừng sử dụng</option>
+              <option value={PRODUCT_STATUS_ALL}>Tất cả</option>
+            </select>
+          </div>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="hidden grid-cols-12 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid">
           <span className="col-span-3">Tên sản phẩm</span>
-          <span className="col-span-3">SKU</span>
+          <span className="col-span-2">SKU</span>
           <span className="col-span-2">Danh mục</span>
-          <span className="col-span-2 text-right">Tồn hiện tại</span>
+          <span className="col-span-1 text-right">Tồn</span>
+          <span className="col-span-2 text-center">Trạng thái</span>
           <span className="col-span-2 text-right">Thao tác</span>
         </div>
 
@@ -442,19 +527,50 @@ export function ProductManagementPage() {
                   <p className="font-semibold text-slate-900">{product.name}</p>
                   <p className="mt-1 text-xs text-slate-500 md:hidden">SKU: {product.sku}</p>
                 </div>
-                <p className="text-sm text-slate-700 md:col-span-3">{product.sku}</p>
+                <p className="text-sm text-slate-700 md:col-span-2">{product.sku}</p>
                 <p className="text-sm text-slate-700 md:col-span-2">{getCategoryName(product, categories)}</p>
-                <p className="text-lg font-bold text-brand-800 md:col-span-2 md:text-right">
+                <p className="text-lg font-bold text-brand-800 md:col-span-1 md:text-right">
                   {Number(product.total_quantity || 0)}
                 </p>
-                <div className="md:col-span-2 md:text-right">
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(product)}
-                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                <div className="md:col-span-2 md:text-center">
+                  <span
+                    className={[
+                      "inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1",
+                      product.is_active
+                        ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                        : "bg-slate-100 text-slate-600 ring-slate-200"
+                    ].join(" ")}
                   >
-                    Sửa
-                  </button>
+                    {getProductStatusBadge(product)}
+                  </span>
+                </div>
+                <div className="md:col-span-2 md:text-right">
+                  <div className="flex flex-wrap justify-start gap-2 md:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(product)}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Sửa
+                    </button>
+                    {product.is_active ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeactivateProduct(product)}
+                        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Ngừng sử dụng
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleActivateProduct(product)}
+                        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Khôi phục
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

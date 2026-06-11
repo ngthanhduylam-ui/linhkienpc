@@ -68,7 +68,8 @@ function mapVoucher(row) {
     partner: mapPartner(row),
     item_count: Number(row.item_count || 0),
     total_quantity: Number(row.total_quantity || 0),
-    admin: mapAdmin(row)
+    admin: mapAdmin(row),
+    preview_items: row.preview_items || []
   };
 }
 
@@ -90,7 +91,8 @@ function buildVoucherWhere(query) {
     const pattern = `%${escapeLike(keyword)}%`;
     whereParts.push(`
       (
-        cu.name LIKE ?
+        sv.voucher_code LIKE ?
+        OR cu.name LIKE ?
         OR cu.phone LIKE ?
         OR su.name LIKE ?
         OR su.phone LIKE ?
@@ -103,13 +105,53 @@ function buildVoucherWhere(query) {
         )
       )
     `);
-    params.push(pattern, pattern, pattern, pattern, pattern, pattern);
+    params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern);
   }
 
   return {
     whereSql: `WHERE ${whereParts.join(' AND ')}`,
     params
   };
+}
+
+async function attachPreviewItems(vouchers) {
+  if (!vouchers.length) return vouchers;
+
+  const voucherIds = vouchers.map((voucher) => voucher.id);
+  const [previewRows] = await pool.query(
+    `
+      SELECT
+        st.voucher_id,
+        st.quantity,
+        st.note,
+        p.sku,
+        p.name AS product_name
+      FROM stock_transactions st
+      JOIN products p ON p.id = st.product_id
+      WHERE st.voucher_id IN (?)
+      ORDER BY st.voucher_id DESC, st.id ASC
+    `,
+    [voucherIds]
+  );
+
+  const previewByVoucher = new Map();
+  previewRows.forEach((row) => {
+    const current = previewByVoucher.get(row.voucher_id) || [];
+    if (current.length >= 3) return;
+
+    current.push({
+      product_name: row.product_name,
+      sku: row.sku,
+      quantity: Number(row.quantity || 0),
+      note: row.note
+    });
+    previewByVoucher.set(row.voucher_id, current);
+  });
+
+  return vouchers.map((voucher) => ({
+    ...voucher,
+    preview_items: previewByVoucher.get(voucher.id) || []
+  }));
 }
 
 async function listStockVouchers(query = {}) {
@@ -160,8 +202,10 @@ async function listStockVouchers(query = {}) {
     [...params, limit, offset]
   );
 
+  const vouchers = await attachPreviewItems(rows.map(mapVoucher));
+
   return {
-    items: rows.map(mapVoucher),
+    items: vouchers,
     page,
     limit,
     total: Number(countRows[0].total || 0)

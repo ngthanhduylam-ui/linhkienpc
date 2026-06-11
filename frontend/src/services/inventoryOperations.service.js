@@ -5,9 +5,10 @@ export async function listActiveProducts() {
   return response?.data || [];
 }
 
-export async function listProductsPage({ keyword = "", page = 1, limit = 20 } = {}) {
+export async function listProductsPage({ keyword = "", page = 1, limit = 20, is_active } = {}) {
   const query = { page, limit };
   if (keyword.trim()) query.q = keyword.trim();
+  if (is_active !== undefined && is_active !== null) query.is_active = String(is_active);
 
   const response = await apiGet("/admin/products", query);
   return {
@@ -27,14 +28,17 @@ export async function listActiveCategories() {
 }
 
 export async function listCustomers(keyword = "") {
-  const query = keyword.trim() ? { keyword: keyword.trim(), limit: 20 } : { limit: 20 };
+  const query = keyword.trim()
+    ? { keyword: keyword.trim(), limit: 20, is_active: "true" }
+    : { limit: 20, is_active: "true" };
   const response = await apiGet("/admin/customers", query);
   return response?.data || [];
 }
 
-export async function listCustomersPage({ keyword = "", page = 1, limit = 10 } = {}) {
+export async function listCustomersPage({ keyword = "", page = 1, limit = 10, is_active } = {}) {
   const query = { page, limit };
   if (keyword.trim()) query.keyword = keyword.trim();
+  if (is_active !== undefined && is_active !== null) query.is_active = String(is_active);
 
   const response = await apiGet("/admin/customers", query);
   return {
@@ -66,15 +70,28 @@ export async function updateCustomerRequest(id, payload) {
   return response?.data;
 }
 
+export async function deactivateCustomerRequest(id) {
+  const response = await apiPatch(`/admin/customers/${encodeURIComponent(id)}/deactivate`, {});
+  return response?.data;
+}
+
+export async function activateCustomerRequest(id) {
+  const response = await apiPatch(`/admin/customers/${encodeURIComponent(id)}/activate`, {});
+  return response?.data;
+}
+
 export async function listSuppliers(keyword = "") {
-  const query = keyword.trim() ? { keyword: keyword.trim(), limit: 20 } : { limit: 20 };
+  const query = keyword.trim()
+    ? { keyword: keyword.trim(), limit: 20, is_active: "true" }
+    : { limit: 20, is_active: "true" };
   const response = await apiGet("/admin/suppliers", query);
   return response?.data || [];
 }
 
-export async function listSuppliersPage({ keyword = "", page = 1, limit = 10 } = {}) {
+export async function listSuppliersPage({ keyword = "", page = 1, limit = 10, is_active } = {}) {
   const query = { page, limit };
   if (keyword.trim()) query.keyword = keyword.trim();
+  if (is_active !== undefined && is_active !== null) query.is_active = String(is_active);
 
   const response = await apiGet("/admin/suppliers", query);
   return {
@@ -93,6 +110,16 @@ export async function updateSupplierRequest(id, payload) {
   return response?.data;
 }
 
+export async function deactivateSupplierRequest(id) {
+  const response = await apiPatch(`/admin/suppliers/${encodeURIComponent(id)}/deactivate`, {});
+  return response?.data;
+}
+
+export async function activateSupplierRequest(id) {
+  const response = await apiPatch(`/admin/suppliers/${encodeURIComponent(id)}/activate`, {});
+  return response?.data;
+}
+
 export async function createProductRequest(payload) {
   console.log("[InventoryWorkbench] BEFORE createProductRequest", payload);
   const response = await apiPost("/admin/products", payload);
@@ -102,6 +129,16 @@ export async function createProductRequest(payload) {
 
 export async function updateProductRequest(id, payload) {
   const response = await apiPatch(`/admin/products/${encodeURIComponent(id)}`, payload);
+  return response?.data;
+}
+
+export async function deactivateProductRequest(id) {
+  const response = await apiPatch(`/admin/products/${encodeURIComponent(id)}/deactivate`, {});
+  return response?.data;
+}
+
+export async function activateProductRequest(id) {
+  const response = await apiPatch(`/admin/products/${encodeURIComponent(id)}/activate`, {});
   return response?.data;
 }
 

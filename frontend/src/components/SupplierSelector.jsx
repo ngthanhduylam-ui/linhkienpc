@@ -1,14 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupplier, listSuppliers } from "../services/inventoryOperations.service";
-import { RECENT_SUPPLIERS_KEY, mergeRecentFirst, readRecentItems, saveRecentItem } from "../utils/recentItems";
+import {
+  RECENT_SUPPLIERS_KEY,
+  filterRecentItemsByAvailable,
+  mergeRecentFirst,
+  readRecentItems,
+  saveRecentItem
+} from "../utils/recentItems";
 
 export function SupplierSelector({ selectedSupplier, onSelect }) {
   const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
   const [keyword, setKeyword] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [suppliers, setSuppliers] = useState([]);
   const [recentSuppliers, setRecentSuppliers] = useState(() => readRecentItems(RECENT_SUPPLIERS_KEY));
   const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newSupplier, setNewSupplier] = useState({ name: "", phone: "", address: "" });
@@ -18,11 +26,11 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
 
   const displaySuppliers = useMemo(() => {
     if (debouncedKeyword) return suppliers;
-    return mergeRecentFirst(recentSuppliers, suppliers);
+    return mergeRecentFirst(filterRecentItemsByAvailable(recentSuppliers, suppliers), suppliers);
   }, [debouncedKeyword, recentSuppliers, suppliers]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedKeyword(keyword.trim()), 300);
+    const timer = setTimeout(() => setDebouncedKeyword(keyword.trim()), 250);
     return () => clearTimeout(timer);
   }, [keyword]);
 
@@ -38,6 +46,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
         const items = await listSuppliers(debouncedKeyword);
         if (!active) return;
         setSuppliers(items);
+        setActiveIndex(0);
       } catch (err) {
         if (active) setError(err?.message || "Không thể tải danh sách nhà cung cấp.");
       } finally {
@@ -72,6 +81,32 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
     setError("");
   }
 
+  function handleInputKeyDown(event) {
+    if (!isOpen || showCreateForm) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((prev) => Math.min(prev + 1, Math.max(0, displaySuppliers.length - 1)));
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((prev) => Math.max(0, prev - 1));
+      return;
+    }
+
+    if (event.key === "Enter" && displaySuppliers[activeIndex]) {
+      event.preventDefault();
+      handleSelect(displaySuppliers[activeIndex]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setIsOpen(false);
+    }
+  }
+
   function openCreateForm() {
     setIsOpen(false);
     setShowCreateForm(true);
@@ -84,6 +119,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
     setShowCreateForm(false);
     setNewSupplier({ name: "", phone: "", address: "" });
     setError("");
+    window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   async function handleCreateSupplier() {
@@ -120,7 +156,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
   }
 
   return (
-    <div ref={wrapperRef} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <div ref={wrapperRef} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
       <div>
         <label className="block text-sm font-medium text-slate-700">Nhà cung cấp</label>
         <p className="mt-1 text-xs text-slate-500">Không bắt buộc, dùng để theo dõi nguồn nhập hàng.</p>
@@ -129,7 +165,8 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
       {!selectedSupplier && (
         <div className="relative">
           <input
-            className="mt-3 h-10 w-full rounded-md border border-slate-300 bg-white px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+            ref={inputRef}
+            className="mt-2 h-10 w-full rounded-md border border-slate-300 bg-white px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="Chọn nhà cung cấp"
             value={keyword}
             onFocus={() => {
@@ -142,6 +179,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
               setShowCreateForm(false);
               setInfo("");
             }}
+            onKeyDown={handleInputKeyDown}
           />
           <button
             type="button"
@@ -149,36 +187,49 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
             onClick={() => {
               setIsOpen((current) => !current);
               setShowCreateForm(false);
+              window.setTimeout(() => inputRef.current?.focus(), 0);
             }}
-            className="absolute right-3 top-[1.38rem] text-xs text-slate-400 hover:text-slate-700"
+            className="absolute right-3 top-[1.1rem] text-xs text-slate-400 hover:text-slate-700"
           >
             ▾
           </button>
 
           {isOpen && !showCreateForm && (
-            <div className="absolute left-0 right-0 z-20 mt-2 max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+            <div className="absolute left-0 right-0 z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+              {!debouncedKeyword && displaySuppliers.length > 0 && (
+                <p className="bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500">Gần đây</p>
+              )}
+
               {isLoading && displaySuppliers.length === 0 && (
-                <p className="px-3 py-3 text-sm text-slate-500">Đang tải nhà cung cấp...</p>
+                <p className="px-3 py-2 text-sm text-slate-500">Đang tải nhà cung cấp...</p>
               )}
+
               {!isLoading && displaySuppliers.length === 0 && (
-                <p className="px-3 py-3 text-sm text-slate-500">Không tìm thấy nhà cung cấp</p>
+                <p className="px-3 py-2 text-sm text-slate-500">Không tìm thấy nhà cung cấp</p>
               )}
-              {displaySuppliers.map((supplier) => (
-                  <button
-                    key={supplier.id}
-                    type="button"
-                    onClick={() => handleSelect(supplier)}
-                    className="w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-brand-50"
-                  >
-                    <p className="text-sm font-semibold text-slate-900">{supplier.name}</p>
-                    {supplier.phone && <p className="mt-1 text-xs text-slate-600">{supplier.phone}</p>}
-                    {supplier.address && <p className="mt-1 text-xs text-slate-500">{supplier.address}</p>}
-                  </button>
-                ))}
+
+              {displaySuppliers.map((supplier, index) => (
+                <button
+                  key={supplier.id}
+                  type="button"
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => handleSelect(supplier)}
+                  className={`w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 ${
+                    index === activeIndex ? "bg-brand-50" : "hover:bg-brand-50"
+                  }`}
+                >
+                  <p className="truncate text-sm font-semibold text-slate-900">{supplier.name}</p>
+                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                    {supplier.phone && <span>{supplier.phone}</span>}
+                    {supplier.address && <span className="truncate">{supplier.address}</span>}
+                  </div>
+                </button>
+              ))}
+
               <button
                 type="button"
                 onClick={openCreateForm}
-                className="sticky bottom-0 w-full border-t border-slate-200 bg-slate-50 px-3 py-3 text-left text-sm font-medium text-brand-700 hover:bg-brand-50 hover:text-brand-900"
+                className="sticky bottom-0 w-full border-t border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-brand-700 hover:bg-brand-50 hover:text-brand-900"
               >
                 + Thêm nhà cung cấp mới
               </button>
@@ -188,12 +239,12 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
       )}
 
       {selectedSupplier && (
-        <div className="mt-3 rounded-md border border-brand-200 bg-white px-3 py-3">
+        <div className="mt-3 rounded-md border border-brand-200 bg-white px-3 py-2.5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">{selectedSupplier.name}</p>
-              {selectedSupplier.phone && <p className="mt-1 text-sm text-slate-700">{selectedSupplier.phone}</p>}
-              {selectedSupplier.address && <p className="mt-1 text-xs text-slate-500">{selectedSupplier.address}</p>}
+              {selectedSupplier.phone && <p className="mt-0.5 text-sm text-slate-700">{selectedSupplier.phone}</p>}
+              {selectedSupplier.address && <p className="mt-0.5 text-xs text-slate-500">{selectedSupplier.address}</p>}
             </div>
             <button
               type="button"
@@ -202,6 +253,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
                 setKeyword("");
                 setIsOpen(true);
                 setShowCreateForm(false);
+                window.setTimeout(() => inputRef.current?.focus(), 0);
               }}
               className="text-xs font-medium text-brand-700 hover:text-brand-900"
             >
@@ -212,7 +264,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
       )}
 
       {showCreateForm && (
-        <div className="mt-3 space-y-3 rounded-md border border-slate-200 bg-white p-3">
+        <div className="mt-3 space-y-2 rounded-md border border-slate-200 bg-white p-3">
           <input
             className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="Tên nhà cung cấp *"
@@ -235,7 +287,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
             <button
               type="button"
               onClick={cancelCreateForm}
-              className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="h-9 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
               Hủy
             </button>
@@ -243,7 +295,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
               type="button"
               disabled={isCreating}
               onClick={handleCreateSupplier}
-              className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-9 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isCreating ? "Đang lưu..." : "Lưu nhà cung cấp"}
             </button>

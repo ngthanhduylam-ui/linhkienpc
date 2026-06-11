@@ -27,6 +27,7 @@ export const appRouter = createBrowserRouter([
     path: "/admin",
     element: <ProtectedRoute />,
     children: [
+      { path: "stock-out", element: <StockOutBulkPage /> },
       {
         element: <AdminLayout />,
         children: [
@@ -38,7 +39,6 @@ export const appRouter = createBrowserRouter([
           { path: "customers/:id", element: <CustomerDetailPage /> },
           { path: "stock-in", element: <StockInBulkPage /> },
           { path: "stock-in-single", element: <StockInPage /> },
-          { path: "stock-out", element: <StockOutBulkPage /> },
           { path: "stock-out-single", element: <StockOutPage /> },
           { path: "stock-out-bulk", element: <Navigate to="/admin/stock-out" replace /> },
           { path: "inventory-check", element: <InventoryCheckPage /> },

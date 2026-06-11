@@ -18,6 +18,7 @@ export function readRecentItems(storageKey) {
 
 export function saveRecentItem(storageKey, item, maxItems) {
   if (!item) return [];
+  if (item.is_active === false) return readRecentItems(storageKey);
 
   const itemId = getItemId(item);
   const currentItems = readRecentItems(storageKey);
@@ -41,4 +42,16 @@ export function mergeRecentFirst(recentItems, normalItems) {
     ...recentItems,
     ...normalItems.filter((item) => !recentIds.has(String(getItemId(item))))
   ];
+}
+
+export function filterRecentItemsByAvailable(recentItems, availableItems) {
+  const availableById = new Map(
+    availableItems
+      .filter((item) => item?.is_active !== false)
+      .map((item) => [String(getItemId(item)), item])
+  );
+
+  return recentItems
+    .map((item) => availableById.get(String(getItemId(item))))
+    .filter(Boolean);
 }

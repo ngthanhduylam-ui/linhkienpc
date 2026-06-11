@@ -22,8 +22,17 @@ async function listSuppliers(query) {
     limit: query.limit || 20
   });
   const keyword = (query.keyword || '').trim();
-  const whereParts = ['s.is_active = 1'];
+  const whereParts = [];
   const params = [];
+
+  if (query.is_active !== undefined) {
+    const rawActive = String(query.is_active).trim().toLowerCase();
+    if (!['true', 'false', '1', '0'].includes(rawActive)) {
+      throw new AppError('is_active must be true or false.', 400, 'VALIDATION_ERROR');
+    }
+    whereParts.push('s.is_active = ?');
+    params.push(['true', '1'].includes(rawActive) ? 1 : 0);
+  }
 
   if (keyword) {
     const pattern = `%${escapeLike(keyword)}%`;
@@ -31,7 +40,7 @@ async function listSuppliers(query) {
     params.push(pattern, pattern);
   }
 
-  const whereSql = `WHERE ${whereParts.join(' AND ')}`;
+  const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   const [countRows] = await pool.query(
     `
@@ -136,8 +145,15 @@ async function updateSupplier(id, payload) {
   return getSupplierById(id);
 }
 
+async function setSupplierActive(id, isActive) {
+  await getSupplierById(id);
+  await pool.query('UPDATE suppliers SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, id]);
+  return getSupplierById(id);
+}
+
 module.exports = {
   listSuppliers,
   createSupplier,
-  updateSupplier
+  updateSupplier,
+  setSupplierActive
 };

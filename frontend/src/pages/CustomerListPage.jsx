@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createCustomer, listCustomersPage, updateCustomerRequest } from "../services/inventoryOperations.service";
+import {
+  activateCustomerRequest,
+  createCustomer,
+  deactivateCustomerRequest,
+  listCustomersPage,
+  updateCustomerRequest
+} from "../services/inventoryOperations.service";
+
+const STATUS_OPTIONS = [
+  { value: "active", label: "Đang giao dịch" },
+  { value: "inactive", label: "Ngừng giao dịch" },
+  { value: "all", label: "Tất cả" }
+];
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -9,11 +21,31 @@ function formatDateTime(value) {
   return date.toLocaleString("vi-VN");
 }
 
+function getIsActiveFilter(status) {
+  if (status === "active") return true;
+  if (status === "inactive") return false;
+  return undefined;
+}
+
+function StatusBadge({ isActive }) {
+  return (
+    <span
+      className={
+        isActive
+          ? "inline-flex rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700"
+          : "inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+      }
+    >
+      {isActive ? "Đang giao dịch" : "Ngừng giao dịch"}
+    </span>
+  );
+}
+
 export function CustomerListPage() {
   const navigate = useNavigate();
   const [keywordInput, setKeywordInput] = useState("");
   const keywordInputRef = useRef(null);
-  const [filters, setFilters] = useState({ keyword: "" });
+  const [filters, setFilters] = useState({ keyword: "", status: "active" });
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [items, setItems] = useState([]);
@@ -33,9 +65,14 @@ export function CustomerListPage() {
     setIsLoading(true);
     setError("");
     try {
-      const result = await listCustomersPage({ keyword: filters.keyword, page, limit });
+      const result = await listCustomersPage({
+        keyword: filters.keyword,
+        page,
+        limit,
+        is_active: getIsActiveFilter(filters.status)
+      });
       if (!active) return;
-      setItems(result.items);
+      setItems(result.items || []);
       setTotal(Number(result.meta?.total || 0));
     } catch (err) {
       if (!active) return;
@@ -58,13 +95,18 @@ export function CustomerListPage() {
   function handleSearch(event) {
     event.preventDefault();
     setPage(1);
-    setFilters({ keyword: keywordInput.trim() });
+    setFilters((prev) => ({ ...prev, keyword: keywordInput.trim() }));
+  }
+
+  function handleStatusChange(event) {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, status: event.target.value }));
   }
 
   function handleClearSearch() {
     setKeywordInput("");
     setPage(1);
-    setFilters({ keyword: "" });
+    setFilters((prev) => ({ ...prev, keyword: "" }));
     window.setTimeout(() => keywordInputRef.current?.focus(), 0);
   }
 
@@ -111,7 +153,7 @@ export function CustomerListPage() {
       setIsModalOpen(false);
       setNewCustomer({ name: "", phone: "", address: "" });
       setPage(1);
-      setFilters({ keyword: "" });
+      setFilters({ keyword: "", status: "active" });
       setKeywordInput("");
       await loadCustomers(true);
     } catch (err) {
@@ -149,6 +191,42 @@ export function CustomerListPage() {
     }
   }
 
+  async function handleDeactivateCustomer(customer) {
+    const confirmed = window.confirm(`Ngừng giao dịch với khách hàng "${customer.name}"?`);
+    if (!confirmed) return;
+
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
+    try {
+      await deactivateCustomerRequest(customer.id);
+      setSuccess(`Đã ngừng giao dịch với khách hàng ${customer.name}.`);
+      await loadCustomers(true);
+    } catch (err) {
+      setError(err?.message || "Ngừng giao dịch khách hàng thất bại.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleActivateCustomer(customer) {
+    const confirmed = window.confirm(`Khôi phục giao dịch với khách hàng "${customer.name}"?`);
+    if (!confirmed) return;
+
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
+    try {
+      await activateCustomerRequest(customer.id);
+      setSuccess(`Đã khôi phục khách hàng ${customer.name}.`);
+      await loadCustomers(true);
+    } catch (err) {
+      setError(err?.message || "Khôi phục khách hàng thất bại.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <section className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -170,7 +248,7 @@ export function CustomerListPage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={handleSearch}>
+        <form className="grid gap-3 lg:grid-cols-[1fr_220px_auto]" onSubmit={handleSearch}>
           <div className="relative">
             <input
               ref={keywordInputRef}
@@ -190,6 +268,17 @@ export function CustomerListPage() {
               </button>
             )}
           </div>
+
+          <select
+            className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+            value={filters.status}
+            onChange={handleStatusChange}
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+
           <button
             type="submit"
             className="h-11 rounded-md bg-brand-700 px-5 text-sm font-medium text-white hover:bg-brand-900"
@@ -202,12 +291,13 @@ export function CustomerListPage() {
         {success && <p className="mt-4 text-sm text-green-700">{success}</p>}
 
         <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
-          <div className="hidden grid-cols-[1.2fr_0.9fr_1.3fr_0.7fr_0.9fr_0.7fr] gap-3 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 md:grid">
+          <div className="hidden grid-cols-[1.1fr_0.8fr_1.1fr_0.7fr_0.8fr_0.8fr_0.8fr] gap-3 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 md:grid">
             <span>Tên khách hàng</span>
             <span>Số điện thoại</span>
             <span>Địa chỉ</span>
+            <span>Trạng thái</span>
             <span>Số giao dịch</span>
-            <span>Ngày giao dịch gần nhất</span>
+            <span>Giao dịch gần nhất</span>
             <span className="text-right">Thao tác</span>
           </div>
 
@@ -216,26 +306,27 @@ export function CustomerListPage() {
           {!isLoading && items.length === 0 && (
             <div className="px-3 py-8 text-center">
               <p className="text-sm font-medium text-slate-700">Không có khách hàng phù hợp.</p>
-              <p className="mt-1 text-xs text-slate-500">Thử tìm bằng tên hoặc số điện thoại khác.</p>
+              <p className="mt-1 text-xs text-slate-500">Thử đổi từ khóa hoặc trạng thái.</p>
             </div>
           )}
 
-          {!isLoading &&
-            items.map((customer) => (
-              <div
-                key={customer.id}
-                onClick={() => navigate(`/admin/customers/${customer.id}`)}
-                className="block w-full cursor-pointer border-t border-slate-100 px-3 py-3 text-left hover:bg-slate-50 md:grid md:grid-cols-[1.2fr_0.9fr_1.3fr_0.7fr_0.9fr_0.7fr] md:gap-3"
-              >
-                <div>
-                  <p className="font-semibold text-slate-900">{customer.name}</p>
-                  <p className="mt-1 text-xs text-slate-500 md:hidden">{customer.phone || "-"}</p>
-                </div>
-                <p className="hidden text-sm text-slate-700 md:block">{customer.phone || "-"}</p>
-                <p className="mt-2 text-sm text-slate-600 md:mt-0">{customer.address || "-"}</p>
-                <p className="mt-2 text-sm font-semibold text-brand-800 md:mt-0">{customer.transaction_count || 0}</p>
-                <p className="mt-1 text-sm text-slate-600 md:mt-0">{formatDateTime(customer.last_transaction_at)}</p>
-                <div className="mt-3 md:mt-0 md:text-right">
+          {!isLoading && items.map((customer) => (
+            <div
+              key={customer.id}
+              onClick={() => navigate(`/admin/customers/${customer.id}`)}
+              className="block w-full cursor-pointer border-t border-slate-100 px-3 py-3 text-left hover:bg-slate-50 md:grid md:grid-cols-[1.1fr_0.8fr_1.1fr_0.7fr_0.8fr_0.8fr_0.8fr] md:gap-3"
+            >
+              <div>
+                <p className="font-semibold text-slate-900">{customer.name}</p>
+                <p className="mt-1 text-xs text-slate-500 md:hidden">{customer.phone || "-"}</p>
+              </div>
+              <p className="hidden text-sm text-slate-700 md:block">{customer.phone || "-"}</p>
+              <p className="mt-2 text-sm text-slate-600 md:mt-0">{customer.address || "-"}</p>
+              <div className="mt-2 md:mt-0"><StatusBadge isActive={customer.is_active} /></div>
+              <p className="mt-2 text-sm font-semibold text-brand-800 md:mt-0">{customer.transaction_count || 0}</p>
+              <p className="mt-1 text-sm text-slate-600 md:mt-0">{formatDateTime(customer.last_transaction_at)}</p>
+              <div className="mt-3 md:mt-0 md:text-right">
+                <div className="flex flex-wrap justify-start gap-2 md:justify-end">
                   <button
                     type="button"
                     onClick={(event) => {
@@ -246,15 +337,37 @@ export function CustomerListPage() {
                   >
                     Sửa
                   </button>
+                  {customer.is_active ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDeactivateCustomer(customer);
+                      }}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white"
+                    >
+                      Ngừng giao dịch
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleActivateCustomer(customer);
+                      }}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white"
+                    >
+                      Khôi phục
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
+            </div>
+          ))}
         </div>
 
         <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-slate-600">
-            Tổng: <span className="font-medium">{total}</span>
-          </p>
+          <p className="text-sm text-slate-600">Tổng: <span className="font-medium">{total}</span></p>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -264,9 +377,7 @@ export function CustomerListPage() {
             >
               Trước
             </button>
-            <span className="text-sm text-slate-700">
-              Trang {page} / {totalPages}
-            </span>
+            <span className="text-sm text-slate-700">Trang {page} / {totalPages}</span>
             <button
               type="button"
               onClick={() => setPage((prev) => (prev < totalPages ? prev + 1 : prev))}
@@ -282,46 +393,15 @@ export function CustomerListPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-base font-semibold text-slate-900">Thêm khách hàng</h3>
-            </div>
+            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">Thêm khách hàng</h3></div>
             <div className="space-y-4 px-5 py-4">
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Tên khách hàng *"
-                value={newCustomer.name}
-                onChange={(event) => setNewCustomer((prev) => ({ ...prev, name: event.target.value }))}
-              />
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Số điện thoại"
-                value={newCustomer.phone}
-                onChange={(event) => setNewCustomer((prev) => ({ ...prev, phone: event.target.value }))}
-              />
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Địa chỉ"
-                value={newCustomer.address}
-                onChange={(event) => setNewCustomer((prev) => ({ ...prev, address: event.target.value }))}
-              />
+              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Tên khách hàng *" value={newCustomer.name} onChange={(event) => setNewCustomer((prev) => ({ ...prev, name: event.target.value }))} />
+              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Số điện thoại" value={newCustomer.phone} onChange={(event) => setNewCustomer((prev) => ({ ...prev, phone: event.target.value }))} />
+              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Địa chỉ" value={newCustomer.address} onChange={(event) => setNewCustomer((prev) => ({ ...prev, address: event.target.value }))} />
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeModal}
-                disabled={isSubmitting}
-                className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateCustomer}
-                disabled={isSubmitting}
-                className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:opacity-60"
-              >
-                {isSubmitting ? "Đang lưu..." : "Lưu khách hàng"}
-              </button>
+              <button type="button" onClick={closeModal} disabled={isSubmitting} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Hủy</button>
+              <button type="button" onClick={handleCreateCustomer} disabled={isSubmitting} className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:opacity-60">{isSubmitting ? "Đang lưu..." : "Lưu khách hàng"}</button>
             </div>
           </div>
         </div>
@@ -330,46 +410,15 @@ export function CustomerListPage() {
       {editingCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-base font-semibold text-slate-900">Sửa khách hàng</h3>
-            </div>
+            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">Sửa khách hàng</h3></div>
             <div className="space-y-4 px-5 py-4">
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Tên khách hàng *"
-                value={editCustomer.name}
-                onChange={(event) => setEditCustomer((prev) => ({ ...prev, name: event.target.value }))}
-              />
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Số điện thoại"
-                value={editCustomer.phone}
-                onChange={(event) => setEditCustomer((prev) => ({ ...prev, phone: event.target.value }))}
-              />
-              <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Địa chỉ"
-                value={editCustomer.address}
-                onChange={(event) => setEditCustomer((prev) => ({ ...prev, address: event.target.value }))}
-              />
+              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Tên khách hàng *" value={editCustomer.name} onChange={(event) => setEditCustomer((prev) => ({ ...prev, name: event.target.value }))} />
+              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Số điện thoại" value={editCustomer.phone} onChange={(event) => setEditCustomer((prev) => ({ ...prev, phone: event.target.value }))} />
+              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Địa chỉ" value={editCustomer.address} onChange={(event) => setEditCustomer((prev) => ({ ...prev, address: event.target.value }))} />
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeEditModal}
-                disabled={isSubmitting}
-                className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleUpdateCustomer}
-                disabled={isSubmitting}
-                className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:opacity-60"
-              >
-                {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
-              </button>
+              <button type="button" onClick={closeEditModal} disabled={isSubmitting} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Hủy</button>
+              <button type="button" onClick={handleUpdateCustomer} disabled={isSubmitting} className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:opacity-60">{isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}</button>
             </div>
           </div>
         </div>

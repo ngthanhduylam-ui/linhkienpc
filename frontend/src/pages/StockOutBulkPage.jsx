@@ -7,8 +7,8 @@ import {
   listActiveCategories,
   listActiveProducts
 } from "../services/inventoryOperations.service";
+import { RECENT_PRODUCTS_KEY, filterRecentItemsByAvailable, readRecentItems, saveRecentItem } from "../utils/recentItems";
 import { formatWarrantyNote } from "../utils/warrantyNote";
-import { RECENT_PRODUCTS_KEY, readRecentItems, saveRecentItem } from "../utils/recentItems";
 
 const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
 
@@ -33,6 +33,16 @@ function getCategoryName(product, categories) {
   if (product?.category?.name) return product.category.name;
   const match = categories.find((item) => Number(item.id) === Number(product?.category_id));
   return match?.name || "-";
+}
+
+function sortAvailableProductsFirst(items) {
+  return [...items].sort((left, right) => {
+    const leftQuantity = Number(left.total_quantity || 0);
+    const rightQuantity = Number(right.total_quantity || 0);
+    if (leftQuantity > 0 && rightQuantity <= 0) return -1;
+    if (leftQuantity <= 0 && rightQuantity > 0) return 1;
+    return 0;
+  });
 }
 
 function buildGroupFromApi(item) {
@@ -62,26 +72,51 @@ function getCartKey(sku, group) {
   return `${sku}::${group.normalizedValue}`;
 }
 
+function createEmptyOrder(orderNumber) {
+  return {
+    id: orderNumber,
+    label: `Đơn ${orderNumber}`,
+    cartItems: [],
+    selectedCustomer: null,
+    saleNote: ""
+  };
+}
+
+function hasOrderDraft(order) {
+  return Boolean(order?.cartItems?.length || order?.selectedCustomer || order?.saleNote?.trim());
+}
+
 export function StockOutBulkPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [orders, setOrders] = useState(() => [createEmptyOrder(1)]);
+  const [activeOrderId, setActiveOrderId] = useState(1);
+  const [nextOrderNumber, setNextOrderNumber] = useState(2);
   const [searchInput, setSearchInput] = useState("");
+  const dropdownContainerRef = useRef(null);
+  const orderTabRefs = useRef({});
   const searchInputRef = useRef(null);
+  const suppressDropdownOnFocusRef = useRef(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [hasFocusedProductSearch, setHasFocusedProductSearch] = useState(false);
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [recentProducts, setRecentProducts] = useState(() => readRecentItems(RECENT_PRODUCTS_KEY));
   const [inventoryBySku, setInventoryBySku] = useState({});
   const [loadingInventorySku, setLoadingInventorySku] = useState("");
-  const [draftQuantities, setDraftQuantities] = useState({});
-  const [cartItems, setCartItems] = useState([]);
+  const [activeProductSku, setActiveProductSku] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const activeOrder = useMemo(
+    () => orders.find((order) => order.id === activeOrderId) || orders[0],
+    [activeOrderId, orders]
+  );
+  const cartItems = activeOrder?.cartItems || [];
+  const selectedCustomer = activeOrder?.selectedCustomer || null;
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
+    const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 250);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
@@ -109,25 +144,65 @@ export function StockOutBulkPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!products.length) return;
+    const activeRecentProducts = filterRecentItemsByAvailable(readRecentItems(RECENT_PRODUCTS_KEY), products).slice(0, 20);
+    setRecentProducts(activeRecentProducts);
+    try {
+      window.localStorage.setItem(RECENT_PRODUCTS_KEY, JSON.stringify(activeRecentProducts));
+    } catch {
+      // Recent products chỉ là tăng tốc thao tác, lỗi lưu localStorage không ảnh hưởng nghiệp vụ.
+    }
+  }, [products]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      const target = event.target;
+      const container = dropdownContainerRef.current;
+      const isInsideDropdownContainer = Boolean(container?.contains(target));
+
+      if (!isInsideDropdownContainer) {
+        setIsProductDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const filteredProducts = useMemo(() => {
     const keyword = normalizeText(debouncedSearch);
     if (!keyword) return [];
 
-    return products
+    return sortAvailableProductsFirst(products
       .filter((item) => {
         const sku = normalizeText(item.sku);
         const name = normalizeText(item.name);
         const categoryName = normalizeText(getCategoryName(item, categories));
         return sku.includes(keyword) || name.includes(keyword) || categoryName.includes(keyword);
-      })
+      }))
       .slice(0, 12);
   }, [products, categories, debouncedSearch]);
 
   const displayProducts = useMemo(() => {
+    if (!isProductDropdownOpen) return [];
     if (debouncedSearch) return filteredProducts;
-    if (hasFocusedProductSearch) return recentProducts;
-    return [];
-  }, [debouncedSearch, filteredProducts, hasFocusedProductSearch, recentProducts]);
+    return sortAvailableProductsFirst(filterRecentItemsByAvailable(recentProducts, products)).slice(0, 20);
+  }, [debouncedSearch, filteredProducts, isProductDropdownOpen, products, recentProducts]);
+
+  useEffect(() => {
+    if (!displayProducts.length) {
+      setActiveProductSku("");
+      return;
+    }
+
+    const hasActiveProduct = displayProducts.some((product) => product.sku === activeProductSku);
+    if (!hasActiveProduct) setActiveProductSku(displayProducts[0].sku);
+  }, [activeProductSku, displayProducts]);
+
+  useEffect(() => {
+    orderTabRefs.current[activeOrderId]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeOrderId, orders.length]);
 
   useEffect(() => {
     let active = true;
@@ -142,18 +217,13 @@ export function StockOutBulkPage() {
           const inventory = await getProductInventoryRequest(product.sku);
           if (!active) return;
           const apiGroups = (inventory?.note_groups || []).map(buildGroupFromApi).filter((group) => group.quantity > 0);
-          const groups =
-            apiGroups.length > 0 ? apiGroups : [buildFallbackNoNoteGroup(product)].filter((group) => group.quantity > 0);
-          setInventoryBySku((prev) => ({
-            ...prev,
-            [product.sku]: groups
-          }));
+          const groups = apiGroups.length > 0
+            ? apiGroups
+            : [buildFallbackNoNoteGroup(product)].filter((group) => group.quantity > 0);
+          setInventoryBySku((prev) => ({ ...prev, [product.sku]: groups }));
         } catch {
           if (!active) return;
-          setInventoryBySku((prev) => ({
-            ...prev,
-            [product.sku]: []
-          }));
+          setInventoryBySku((prev) => ({ ...prev, [product.sku]: [] }));
         } finally {
           if (active) setLoadingInventorySku("");
         }
@@ -170,36 +240,121 @@ export function StockOutBulkPage() {
   const showEmptyState = !isLoading && products.length === 0;
   const totalCartQuantity = cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
-  function getDraftQuantity(product, group) {
-    return Number(draftQuantities[getCartKey(product.sku, group)] || 1);
+  function resetSharedSearchState() {
+    setSearchInput("");
+    setDebouncedSearch("");
+    setIsProductDropdownOpen(false);
+    suppressDropdownOnFocusRef.current = false;
   }
 
-  function setDraftQuantity(product, group, quantity) {
-    const maxQuantity = Number(group.quantity || 0);
-    const nextQuantity = Math.max(1, Math.min(Number(quantity || 1), maxQuantity || 1));
-    setDraftQuantities((prev) => ({
-      ...prev,
-      [getCartKey(product.sku, group)]: String(nextQuantity)
+  function updateActiveOrder(updater) {
+    setOrders((prev) => prev.map((order) => (
+      order.id === activeOrderId ? { ...order, ...updater(order) } : order
+    )));
+  }
+
+  function setActiveOrderCartItems(updater) {
+    updateActiveOrder((order) => ({
+      cartItems: typeof updater === "function" ? updater(order.cartItems) : updater
     }));
   }
 
-  function handleAddToCart(product, group) {
-    setRecentProducts(saveRecentItem(RECENT_PRODUCTS_KEY, product, 20));
-    const quantity = getDraftQuantity(product, group);
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      setError("Số lượng xuất phải là số nguyên dương.");
-      return;
+  function setActiveOrderSelectedCustomer(customer) {
+    if (isSubmitting) return;
+    updateActiveOrder(() => ({ selectedCustomer: customer }));
+    setSuccess("");
+  }
+
+  function clearOrder(orderId) {
+    setOrders((prev) => prev.map((order) => (
+      order.id === orderId
+        ? { ...order, cartItems: [], selectedCustomer: null, saleNote: "" }
+        : order
+    )));
+  }
+
+  function handleCreateOrder() {
+    if (isSubmitting) return;
+    const newOrder = createEmptyOrder(nextOrderNumber);
+    setOrders((prev) => [...prev, newOrder]);
+    setActiveOrderId(newOrder.id);
+    setNextOrderNumber((current) => current + 1);
+    resetSharedSearchState();
+    setError("");
+    setSuccess("");
+    focusProductSearch();
+  }
+
+  function handleSwitchOrder(orderId) {
+    if (isSubmitting) return;
+    if (orderId === activeOrderId) return;
+    setActiveOrderId(orderId);
+    resetSharedSearchState();
+    setError("");
+    setSuccess("");
+    focusProductSearch();
+  }
+
+  function handleCloseOrder(orderId) {
+    if (isSubmitting) return;
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
+
+    if (hasOrderDraft(order)) {
+      const shouldClose = window.confirm("Đơn này chưa được lưu. Bạn có chắc muốn đóng đơn?");
+      if (!shouldClose) return;
     }
-    if (quantity > Number(group.quantity || 0)) {
-      setError(`Số lượng xuất vượt quá tồn của nhóm ${formatWarrantyNote(group.label)}.`);
+
+    if (orders.length === 1) {
+      clearOrder(orderId);
+      resetSharedSearchState();
+      setError("");
+      setSuccess("");
+      focusProductSearch();
       return;
     }
 
+    const orderIndex = orders.findIndex((item) => item.id === orderId);
+    const remainingOrders = orders.filter((item) => item.id !== orderId);
+    setOrders(remainingOrders);
+    if (activeOrderId === orderId) {
+      const nextActiveOrder = remainingOrders[Math.max(0, orderIndex - 1)] || remainingOrders[0];
+      setActiveOrderId(nextActiveOrder.id);
+    }
+    resetSharedSearchState();
+    setError("");
+    setSuccess("");
+    focusProductSearch();
+  }
+
+  function focusProductSearch({ showDropdown = false } = {}) {
+    suppressDropdownOnFocusRef.current = !showDropdown;
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    if (showDropdown) setIsProductDropdownOpen(true);
+  }
+
+  function resetProductSearchAfterAdd() {
+    setSearchInput("");
+    setDebouncedSearch("");
+    setIsProductDropdownOpen(false);
+    focusProductSearch();
+  }
+
+  function handleAddToCart(product, group) {
+    if (isSubmitting) return;
+    const maxQuantity = Number(group.quantity || 0);
+    if (maxQuantity <= 0) {
+      setError(`Nhóm ${formatWarrantyNote(group.label)} không còn tồn khả dụng để bán.`);
+      return;
+    }
+
+    setRecentProducts(saveRecentItem(RECENT_PRODUCTS_KEY, product, 20));
     const cartKey = getCartKey(product.sku, group);
-    setCartItems((prev) => {
+    setActiveOrderCartItems((prev) => {
       const existing = prev.find((item) => item.cartKey === cartKey);
       if (existing) {
-        const nextQuantity = Math.min(existing.quantity + quantity, Number(group.quantity || 0));
+        if (Number(existing.quantity || 0) >= maxQuantity) return prev;
+        const nextQuantity = Math.min(Number(existing.quantity || 0) + 1, maxQuantity);
         return prev.map((item) => (item.cartKey === cartKey ? { ...item, quantity: nextQuantity } : item));
       }
 
@@ -211,38 +366,68 @@ export function StockOutBulkPage() {
           sku: product.sku,
           warrantyNote: group.isNoNote ? NO_NOTE_WARRANTY_VALUE : group.note,
           warrantyLabel: group.label,
-          maxQuantity: Number(group.quantity || 0),
-          quantity
+          maxQuantity,
+          quantity: 1
         }
       ];
     });
     setError("");
     setSuccess("");
+    resetProductSearchAfterAdd();
   }
 
   function removeCartItem(cartKey) {
-    setCartItems((prev) => prev.filter((item) => item.cartKey !== cartKey));
+    if (isSubmitting) return;
+    setActiveOrderCartItems((prev) => prev.filter((item) => item.cartKey !== cartKey));
     setSuccess("");
+  }
+
+  function clampCartQuantity(item, quantity) {
+    const maxQuantity = Math.max(1, Number(item.maxQuantity || 1));
+    const parsedQuantity = Number.parseInt(quantity, 10);
+    if (!Number.isFinite(parsedQuantity)) return 1;
+    return Math.max(1, Math.min(parsedQuantity, maxQuantity));
+  }
+
+  function updateCartItemQuantity(cartKey, quantity) {
+    if (isSubmitting) return;
+    setActiveOrderCartItems((prev) => prev.map((item) => (
+      item.cartKey === cartKey ? { ...item, quantity: clampCartQuantity(item, quantity) } : item
+    )));
+    setError("");
+    setSuccess("");
+  }
+
+  function clearCartWithConfirm() {
+    if (isSubmitting) return;
+    if (cartItems.length === 0) return;
+    const shouldClear = window.confirm("Hệ thống sẽ không lưu lại thông tin của đơn bán này. Bạn có chắc chắn muốn xóa toàn bộ sản phẩm không?");
+    if (!shouldClear) return;
+    setActiveOrderCartItems([]);
+    setError("");
+    setSuccess("");
+    focusProductSearch();
   }
 
   function handleClearProductSearch() {
     setSearchInput("");
     setDebouncedSearch("");
+    setIsProductDropdownOpen(true);
     setSuccess("");
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    focusProductSearch({ showDropdown: true });
   }
 
   function validateCart() {
     if (cartItems.length === 0) {
-      return "Vui lòng thêm ít nhất một sản phẩm vào danh sách giao hàng.";
+      return "Vui lòng thêm ít nhất một sản phẩm vào đơn bán tại quầy.";
     }
 
     for (const [index, item] of cartItems.entries()) {
       if (!Number.isInteger(Number(item.quantity)) || Number(item.quantity) <= 0) {
-        return `Dòng ${index + 1}: số lượng xuất phải là số nguyên dương.`;
+        return `Dòng ${index + 1}: số lượng bán phải là số nguyên dương.`;
       }
       if (Number(item.quantity) > Number(item.maxQuantity || 0)) {
-        return `Dòng ${index + 1}: số lượng xuất vượt quá tồn của nhóm ${formatWarrantyNote(item.warrantyLabel)}.`;
+        return `Dòng ${index + 1}: số lượng bán vượt quá tồn của nhóm ${formatWarrantyNote(item.warrantyLabel)}.`;
       }
     }
 
@@ -256,8 +441,11 @@ export function StockOutBulkPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (isSubmitting) return;
+
     setError("");
     setSuccess("");
+    const submittedOrderId = activeOrderId;
 
     const validationError = validateCart();
     if (validationError) {
@@ -277,232 +465,355 @@ export function StockOutBulkPage() {
     setIsSubmitting(true);
     try {
       const result = await bulkStockOutRequest(payload);
-      await reloadProducts();
-      setSelectedCustomer(null);
       setSearchInput("");
       setDebouncedSearch("");
+      setIsProductDropdownOpen(false);
       setInventoryBySku({});
-      setDraftQuantities({});
-      setCartItems([]);
-      setSuccess(`Xuất & giao hàng thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.`);
-      window.setTimeout(() => searchInputRef.current?.focus(), 0);
+      clearOrder(submittedOrderId);
+      const voucherText = result?.voucher_code ? ` Mã phiếu: ${result.voucher_code}.` : "";
+      setSuccess(`Bán tại quầy thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.${voucherText}`);
+      focusProductSearch();
+
+      try {
+        await reloadProducts();
+      } catch {
+        setError("Bán thành công nhưng chưa làm mới tồn kho. Vui lòng tải lại trang.");
+      }
     } catch (err) {
-      setError(err?.message || "Xuất & giao hàng thất bại.");
+      setError(err?.message || "Bán tại quầy thất bại.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900">Xuất & Giao hàng</h2>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Chọn khách hàng, thêm nhiều sản phẩm và chọn đúng nhóm bảo hành cho từng dòng giao hàng.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <section className="rounded-lg border border-slate-200 bg-white p-3">
-          <h3 className="text-sm font-semibold text-slate-800">Thông tin khách hàng</h3>
-          <div className="[&>div]:mt-2 [&>div]:rounded-md [&>div]:p-3">
-            <CustomerSelector selectedCustomer={selectedCustomer} onSelect={setSelectedCustomer} />
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-slate-200 bg-white p-3">
-          <h3 className="text-sm font-semibold text-slate-800">Thông tin sản phẩm</h3>
-          <label className="mt-2 mb-1 block text-xs font-medium text-slate-600">
-            Tìm sản phẩm theo tên hoặc SKU
-          </label>
-          <div className="relative">
-            <input
-              ref={searchInputRef}
-              className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="Nhập tên sản phẩm hoặc SKU"
-              value={searchInput}
-              onFocus={() => setHasFocusedProductSearch(true)}
-              onChange={(event) => {
-                setSearchInput(event.target.value);
-                setSuccess("");
-              }}
-            />
-            {searchInput && (
-              <button
-                type="button"
-                aria-label="Xóa tìm kiếm sản phẩm"
-                onClick={handleClearProductSearch}
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              >
-                ×
-              </button>
-            )}
-          </div>
-
-          {isLoading && <p className="mt-2 text-xs text-slate-500">Đang tải dữ liệu sản phẩm...</p>}
-
-          {!isLoading && displayProducts.length > 0 && (
-            <div className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-              {!debouncedSearch && (
-                <p className="bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-500">Sản phẩm gần đây</p>
+    <div className="flex h-screen min-h-screen flex-col overflow-hidden bg-slate-100 text-slate-900">
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center bg-[#0B74E5] text-white shadow-sm">
+          <div className="relative flex h-full w-full min-w-0 items-center bg-[#0B74E5]">
+            <Link
+              to="/admin"
+              aria-label="Về trang quản trị"
+              className="ml-3 mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/20 text-xl text-white/90 hover:bg-white/10"
+            >
+              🏠
+            </Link>
+            <div ref={dropdownContainerRef} className="relative mr-2 w-[min(520px,48vw)] min-w-[280px]">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-slate-400">⌕</span>
+              <input
+                ref={searchInputRef}
+                className="h-10 w-full rounded-md border border-white/20 bg-white px-9 pr-10 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-white/70 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                placeholder="Thêm sản phẩm vào đơn"
+                value={searchInput}
+                disabled={isSubmitting}
+                onFocus={() => {
+                  if (isSubmitting) return;
+                  if (suppressDropdownOnFocusRef.current) {
+                    suppressDropdownOnFocusRef.current = false;
+                    setIsProductDropdownOpen(false);
+                    return;
+                  }
+                  setIsProductDropdownOpen(true);
+                }}
+                onClick={() => {
+                  if (!isSubmitting) setIsProductDropdownOpen(true);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setIsProductDropdownOpen(false);
+                }}
+                onChange={(event) => {
+                  if (isSubmitting) return;
+                  setSearchInput(event.target.value);
+                  setIsProductDropdownOpen(true);
+                  setSuccess("");
+                }}
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  aria-label="Xóa tìm kiếm sản phẩm"
+                  disabled={isSubmitting}
+                  onClick={handleClearProductSearch}
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ×
+                </button>
               )}
-              {displayProducts.map((product) => {
-                const groups = inventoryBySku[product.sku] || [];
-                const isLoadingGroups = loadingInventorySku === product.sku && !inventoryBySku[product.sku];
+            {isProductDropdownOpen && displayProducts.length > 0 && (
+              <div
+                className="absolute left-0 top-12 z-50 max-h-[55vh] w-[clamp(520px,40vw,760px)] max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-300 bg-white shadow-xl"
+              >
+                {!debouncedSearch && (
+                  <p className="border-b border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase text-slate-500">
+                    Sản phẩm gần đây
+                  </p>
+                )}
+                {displayProducts.map((product) => {
+                  const groups = inventoryBySku[product.sku] || [];
+                  const isLoadingGroups = loadingInventorySku === product.sku && !inventoryBySku[product.sku];
+                  const isActiveProduct = product.sku === activeProductSku;
+                  const hasAvailableInventory = Number(product.total_quantity || 0) > 0;
 
-                return (
-                  <article key={product.id} className="bg-white p-2.5">
-                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold leading-snug text-slate-900">{product.name}</p>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
-                          <span className="break-all">SKU: {product.sku}</span>
-                          <span>Danh mục: {getCategoryName(product, categories)}</span>
+                  return (
+                    <article
+                      key={product.id}
+                      onMouseEnter={() => setActiveProductSku(product.sku)}
+                      onFocus={() => setActiveProductSku(product.sku)}
+                      className={`border-b border-slate-200 last:border-b-0 transition-colors ${
+                        isActiveProduct
+                          ? "border-l-2 border-l-brand-600 bg-blue-100/80 shadow-[inset_0_0_0_1px_rgba(11,116,229,0.08)]"
+                          : hasAvailableInventory
+                            ? "bg-white hover:bg-blue-50"
+                            : "bg-slate-50/80 opacity-70 hover:opacity-90"
+                      }`}
+                    >
+                      <div className="grid grid-cols-[minmax(0,1fr)_84px] items-center gap-3 px-3 py-1.5">
+                        <div className="min-w-0">
+                          <p className={`truncate text-[13px] font-semibold ${hasAvailableInventory ? "text-slate-900" : "text-slate-500"}`}>{product.name}</p>
+                          <p className={`truncate text-[11px] ${hasAvailableInventory ? "text-slate-500" : "text-slate-400"}`}>{product.sku}</p>
+                        </div>
+                        <div className="text-right text-[11px] text-slate-500">
+                          <p className={`font-semibold ${hasAvailableInventory ? "text-slate-800" : "text-slate-400"}`}>Tồn: {Number(product.total_quantity || 0)}</p>
+                          {!hasAvailableInventory && <p className="text-[10.5px] text-slate-400">hết hàng</p>}
                         </div>
                       </div>
-                      <div className="shrink-0 text-sm font-semibold text-brand-800 sm:pt-0.5">
-                        Tồn: {Number(product.total_quantity || 0)}
-                      </div>
-                    </div>
 
-                    <div className="mt-2 space-y-1">
-                      {isLoadingGroups && <p className="text-xs text-slate-500">Đang tải nhóm bảo hành...</p>}
-                      {!isLoadingGroups && groups.length === 0 && (
-                        <p className="rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-xs text-slate-500">
-                          Sản phẩm chưa có tồn khả dụng để xuất.
-                        </p>
-                      )}
-                      {groups.map((group) => {
-                        const quantity = getDraftQuantity(product, group);
-                        const disabled = Number(group.quantity || 0) <= 0;
+                      {isActiveProduct && (
+                        <div className="border-t border-slate-100 px-3 py-1">
+                          {isLoadingGroups && <p className="py-0.5 text-[11px] text-slate-500">Đang tải nhóm bảo hành...</p>}
+                          {!isLoadingGroups && groups.length === 0 && (
+                            <p className="py-0.5 text-[11px] text-slate-400">Không có tồn khả dụng để bán.</p>
+                          )}
+                          <div className="space-y-0.5">
+                            {groups.map((group) => {
+                              const cartKey = getCartKey(product.sku, group);
+                              const existingCartItem = cartItems.find((item) => item.cartKey === cartKey);
+                              const selectedQuantity = Number(existingCartItem?.quantity || 0);
+                              const maxQuantity = Number(group.quantity || 0);
+                              const hasSelected = selectedQuantity > 0;
+                              const isFullySelected = hasSelected && selectedQuantity >= maxQuantity;
+                              const disabled = isSubmitting || maxQuantity <= 0 || isFullySelected;
 
-                        return (
-                          <div
-                            key={group.value}
-                            className="flex flex-col gap-1.5 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 md:flex-row md:items-center"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="break-all text-sm font-medium text-slate-900">
-                                {formatWarrantyNote(group.label)}
-                              </p>
-                            </div>
-                            <p className="shrink-0 text-xs font-medium text-slate-500 md:w-14">còn {group.quantity}</p>
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                disabled={disabled || quantity <= 1}
-                                onClick={() => setDraftQuantity(product, group, quantity - 1)}
-                                className="flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-base font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 md:h-7 md:w-7"
-                              >
-                                -
-                              </button>
-                              <input
-                                type="number"
-                                min={1}
-                                max={group.quantity}
-                                value={quantity}
-                                onChange={(event) => setDraftQuantity(product, group, event.target.value)}
-                                className="h-9 w-14 rounded border border-slate-300 px-1.5 text-center text-sm font-semibold outline-none focus:ring-2 focus:ring-brand-500 md:h-7 md:w-11"
-                              />
-                              <button
-                                type="button"
-                                disabled={disabled || quantity >= Number(group.quantity || 0)}
-                                onClick={() => setDraftQuantity(product, group, quantity + 1)}
-                                className="flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-base font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 md:h-7 md:w-7"
-                              >
-                                +
-                              </button>
-                              <button
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => handleAddToCart(product, group)}
-                                className="h-9 rounded bg-brand-700 px-3 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-50 md:h-7 md:text-xs"
-                              >
-                                Thêm
-                              </button>
-                            </div>
+                              return (
+                                <div
+                                  key={group.value}
+                                  className={`grid grid-cols-[minmax(0,1fr)_124px_64px] items-center gap-1 rounded px-1 py-0.5 text-[11px] leading-5 ${
+                                    isFullySelected ? "bg-slate-100 opacity-75" : hasSelected ? "bg-blue-100/80" : "hover:bg-white"
+                                  }`}
+                                >
+                                  <span className={`truncate font-semibold ${isFullySelected ? "text-slate-600" : "text-slate-900"}`}>{formatWarrantyNote(group.label)}</span>
+                                  <span className={`truncate text-right ${hasSelected ? "font-medium text-brand-700" : "text-slate-500"}`}>
+                                    còn {group.quantity}{hasSelected ? ` · đã chọn ${selectedQuantity}` : ""}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() => handleAddToCart(product, group)}
+                                    title={isFullySelected ? "Đã chọn đủ tồn" : undefined}
+                                    aria-label={isFullySelected ? `Đã chọn đủ tồn ${formatWarrantyNote(group.label)}` : undefined}
+                                    className="h-5 rounded border border-brand-200 bg-brand-50 px-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600"
+                                  >
+                                    {isFullySelected ? "✓ Đã chọn đủ" : hasSelected ? "+1" : "Thêm"}
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </article>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            {isProductDropdownOpen && (showEmptyState || showNoResultState) && (
+              <div
+                className="absolute left-0 top-12 z-50 w-[min(520px,calc(100vw-24px))] rounded-md border border-slate-300 bg-white p-2.5 text-sm shadow-xl"
+              >
+                <p className="text-slate-700">Không tìm thấy sản phẩm. Vui lòng tạo sản phẩm ở mục Sản phẩm trước.</p>
+                <Link to="/admin/products" className="mt-2 inline-flex rounded border border-brand-600 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
+                  Đi tới Sản phẩm
+                </Link>
+              </div>
+            )}
+            </div>
+
+            <div className="flex h-full min-w-0 flex-1 items-end overflow-x-auto border-l border-[#0b67c7] bg-[#0B74E5]">
+              {orders.map((order) => {
+                const isActiveOrder = order.id === activeOrderId;
+                return (
+                  <div
+                    key={order.id}
+                    ref={(element) => {
+                      if (element) orderTabRefs.current[order.id] = element;
+                    }}
+                    className={`group flex h-full min-w-[92px] shrink-0 items-center border-r border-[#0b67c7] transition-colors ${
+                      isActiveOrder ? "bg-white text-slate-900 shadow-sm" : "bg-[#0B74E5] text-white hover:bg-[#0966ca]"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => handleSwitchOrder(order.id)}
+                      className="flex h-full min-w-0 flex-1 items-center px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+                      aria-current={isActiveOrder ? "page" : undefined}
+                    >
+                      {order.label}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleCloseOrder(order.id);
+                      }}
+                      className={`mr-1 flex h-5 w-5 items-center justify-center rounded text-sm leading-none transition-opacity ${
+                        isActiveOrder
+                          ? "text-slate-400 opacity-100 hover:bg-slate-100 hover:text-red-600"
+                          : "text-white/90 opacity-0 hover:bg-white/15 hover:text-white group-hover:opacity-100"
+                      }`}
+                      aria-label={`Đóng ${order.label}`}
+                    >
+                      ×
+                    </button>
+                  </div>
                 );
               })}
-            </div>
-          )}
-
-          {(showEmptyState || showNoResultState) && (
-            <div className="mt-2 rounded-md border border-dashed border-slate-300 bg-slate-50 p-2.5">
-              <p className="text-sm text-slate-700">
-                Không tìm thấy sản phẩm. Vui lòng tạo sản phẩm ở mục Sản phẩm trước.
-              </p>
-              <Link
-                to="/admin/products"
-                className="mt-2 inline-flex rounded border border-brand-600 px-2.5 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50"
-              >
-                Đi tới Sản phẩm
-              </Link>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-lg border border-slate-200 bg-white p-3">
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-800">Danh sách giao hàng</h3>
-              <p className="mt-0.5 text-xs text-slate-500">Mỗi dòng sẽ tạo một giao dịch xuất kho riêng.</p>
-            </div>
-            <div className="rounded bg-slate-50 px-2 py-1 text-sm text-slate-700">
-              <span className="font-semibold">{cartItems.length}</span> dòng ·{" "}
-              <span className="font-semibold">{totalCartQuantity}</span> sản phẩm
+              <button type="button" disabled={isSubmitting} onClick={handleCreateOrder} className="flex h-full w-14 shrink-0 items-center justify-center border-r border-[#0b67c7] bg-[#0B74E5] text-3xl font-light text-white shadow-inner hover:bg-[#0966ca] disabled:cursor-not-allowed disabled:opacity-60" aria-label="Tạo đơn mới">
+                +
+              </button>
             </div>
           </div>
+        </header>
 
-          {cartItems.length === 0 ? (
-            <p className="mt-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-center text-sm text-slate-600">
-              Chưa có sản phẩm nào trong danh sách giao hàng. Tìm sản phẩm và bấm Thêm ở đúng nhóm bảo hành.
-            </p>
-          ) : (
-            <div className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-              {cartItems.map((item) => (
-                <div
-                  key={item.cartKey}
-                  className="grid gap-1.5 bg-white p-2.5 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">{item.product.name}</p>
-                    <p className="mt-0.5 break-all text-xs text-slate-500">SKU: {item.sku}</p>
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <main className="relative min-h-0 overflow-hidden bg-white">
+
+            <div className="h-full overflow-auto">
+              {cartItems.length === 0 ? (
+                <div className="flex min-h-full flex-col items-center justify-center px-4 pb-20 text-center text-slate-500">
+                  <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-300">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 1.9-1.4L20 8H7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20h.01M17 20h.01" />
+                    </svg>
                   </div>
-                  <p className="text-sm text-slate-700">
-                    <span className="font-semibold text-brand-800">{formatWarrantyNote(item.warrantyLabel)}</span>
-                    <span className="mx-2 text-slate-300">|</span>
-                    SL: <span className="font-semibold">{item.quantity}</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => removeCartItem(item.cartKey)}
-                    className="h-8 shrink-0 rounded border border-slate-300 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Xóa
+                  <p className="text-base font-medium text-slate-700">Đơn hàng của bạn chưa có sản phẩm nào</p>
+                  <p className="mt-1 text-sm text-slate-500">Nhấn vào ô tìm kiếm để thêm sản phẩm</p>
+                  <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true })} className="mt-3 rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+                    Thêm sản phẩm ngay
                   </button>
                 </div>
-              ))}
+              ) : (
+                <div className="min-w-[760px] pb-14">
+                  <div className="grid grid-cols-[168px_minmax(260px,1fr)_144px_36px] items-center gap-3 border-b border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span>Mã SKU</span>
+                    <span>Tên sản phẩm</span>
+                    <span className="text-right">Số lượng</span>
+                    <span></span>
+                  </div>
+                  {cartItems.map((item) => (
+                    <div key={item.cartKey} className="border-b border-slate-200 text-sm hover:bg-blue-50/60">
+                      <div className="grid grid-cols-[168px_minmax(260px,1fr)_144px_36px] items-center gap-3 px-3 py-1.5">
+                      <div className="min-w-0 truncate text-[12px] font-medium text-slate-600" title={item.sku}>
+                        {item.sku}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold text-slate-900">{item.product.name}</p>
+                        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4">
+                          <span className="truncate rounded bg-blue-50 px-1.5 py-0.5 font-medium text-brand-800">{formatWarrantyNote(item.warrantyLabel)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button
+                          type="button"
+                          disabled={isSubmitting || Number(item.quantity) <= 1}
+                          onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) - 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={item.quantity}
+                          disabled={isSubmitting}
+                          onChange={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
+                          onBlur={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
+                          className="h-7 w-16 min-w-[4rem] rounded border border-slate-300 bg-white px-1 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:text-slate-950 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                          aria-label={`Số lượng ${item.product.name} ${formatWarrantyNote(item.warrantyLabel)}`}
+                        />
+                        <button
+                          type="button"
+                          disabled={isSubmitting || Number(item.quantity) >= Number(item.maxQuantity || 0)}
+                          onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) + 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button type="button" disabled={isSubmitting} onClick={() => removeCartItem(item.cartKey)} className="flex h-8 w-8 items-center justify-center rounded text-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Xóa sản phẩm">
+                        ×
+                      </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
 
-          {error && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          {success && <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
+            <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 bg-slate-50 px-2.5 py-2">
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true })} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
+                  Thêm sản phẩm
+                </button>
+                <button type="button" onClick={clearCartWithConfirm} disabled={isSubmitting || cartItems.length === 0} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                  Xóa toàn bộ sản phẩm
+                </button>
+              </div>
+            </div>
+          </main>
 
-          <button
-            type="submit"
-            disabled={isSubmitting || isLoading || cartItems.length === 0}
-            className="mt-3 h-10 w-full rounded-md bg-brand-700 px-5 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Đang xử lý..." : "Xác nhận xuất & giao hàng"}
-          </button>
-        </section>
+          <aside className="flex min-h-0 flex-col border-l border-slate-300 bg-white">
+            <div className="border-b border-slate-200 p-3">
+              <CustomerSelector selectedCustomer={selectedCustomer} onSelect={setActiveOrderSelectedCustomer} variant="pos" disabled={isSubmitting} />
+            </div>
+
+            <div className="flex-1 overflow-auto p-3">
+              <label className="flex items-center gap-2 border-b border-slate-200 pb-2 text-sm font-medium text-slate-700">
+                <input type="checkbox" disabled className="h-4 w-4 rounded border-slate-300" />
+                Giao nhận
+              </label>
+
+              <div className="mt-3 divide-y divide-slate-200 border-y border-slate-200 text-sm text-slate-700">
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <span>Số dòng sản phẩm</span>
+                  <span className="font-semibold text-slate-900">{cartItems.length}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <span>Tổng số lượng</span>
+                  <span className="font-semibold text-slate-900">{totalCartQuantity}</span>
+                </div>
+              </div>
+
+              {error && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+              {success && <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
+            </div>
+
+            <div className="sticky bottom-0 shrink-0 border-t border-slate-300 bg-white p-2.5">
+              <button
+                type="submit"
+                disabled={isSubmitting || isLoading || cartItems.length === 0}
+                className="h-11 w-full rounded-md bg-brand-700 px-5 text-base font-bold uppercase tracking-wide text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Đang xử lý..." : "Xác nhận bán"}
+              </button>
+            </div>
+          </aside>
+        </div>
       </form>
-    </section>
+    </div>
   );
 }

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   adjustInventoryQuantity,
   getInventoryCheckProduct,
+  listActiveProducts,
   searchInventoryCheckProducts
 } from "../services/inventoryOperations.service";
+import { RECENT_PRODUCTS_KEY, filterRecentItemsByAvailable, readRecentItems, saveRecentItem } from "../utils/recentItems";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const NO_NOTE_VALUE = "__NO_NOTE__";
@@ -39,6 +41,9 @@ export function InventoryCheckPage() {
   const searchInputRef = useRef(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [products, setProducts] = useState([]);
+  const [activeProducts, setActiveProducts] = useState([]);
+  const [hasFocusedProductSearch, setHasFocusedProductSearch] = useState(false);
+  const [recentProducts, setRecentProducts] = useState(() => readRecentItems(RECENT_PRODUCTS_KEY));
   const [selectedSku, setSelectedSku] = useState("");
   const [detail, setDetail] = useState(null);
 
@@ -57,6 +62,36 @@ export function InventoryCheckPage() {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadActiveProducts() {
+      try {
+        const items = await listActiveProducts();
+        if (!active) return;
+        setActiveProducts(items);
+      } catch {
+        if (active) setActiveProducts([]);
+      }
+    }
+
+    loadActiveProducts();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeProducts.length) return;
+    const activeRecentProducts = filterRecentItemsByAvailable(readRecentItems(RECENT_PRODUCTS_KEY), activeProducts).slice(0, 20);
+    setRecentProducts(activeRecentProducts);
+    try {
+      window.localStorage.setItem(RECENT_PRODUCTS_KEY, JSON.stringify(activeRecentProducts));
+    } catch {
+      // Recent products are optional; ignore storage failures.
+    }
+  }, [activeProducts]);
 
   useEffect(() => {
     let active = true;
@@ -116,12 +151,24 @@ export function InventoryCheckPage() {
     setSearchInput("");
     setDebouncedSearch("");
     setProducts([]);
+    setHasFocusedProductSearch(true);
     setSelectedSku("");
     setDetail(null);
     setSuccess("");
     setError("");
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
   }
+
+  function handleSelectProduct(product) {
+    setRecentProducts(saveRecentItem(RECENT_PRODUCTS_KEY, product, 20));
+    loadProductDetail(product.sku);
+  }
+
+  const displayProducts = useMemo(() => {
+    if (debouncedSearch) return products;
+    if (hasFocusedProductSearch) return filterRecentItemsByAvailable(recentProducts, activeProducts);
+    return [];
+  }, [activeProducts, debouncedSearch, hasFocusedProductSearch, products, recentProducts]);
 
   const noteGroups = detail?.note_groups || [];
   const selectedAdjustGroup = useMemo(
@@ -218,6 +265,10 @@ export function InventoryCheckPage() {
                 className="h-10 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                 placeholder="Nhập tên sản phẩm hoặc SKU"
                 value={searchInput}
+                onFocus={() => setHasFocusedProductSearch(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setHasFocusedProductSearch(false);
+                }}
                 onChange={(event) => {
                   setSearchInput(event.target.value);
                   setSuccess("");
@@ -243,28 +294,31 @@ export function InventoryCheckPage() {
               </p>
             )}
 
-            {products.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {products.map((product) => {
+            {displayProducts.length > 0 && (
+              <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
+                {!debouncedSearch && (
+                  <p className="bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-500">Sản phẩm gần đây</p>
+                )}
+                {displayProducts.map((product) => {
                   const isSelected = String(product.sku) === String(selectedSku);
                   return (
                     <button
                       key={product.id}
                       type="button"
-                      onClick={() => loadProductDetail(product.sku)}
+                      onClick={() => handleSelectProduct(product)}
                       className={[
-                        "w-full rounded-md border px-3 py-2 text-left transition",
+                        "w-full px-3 py-2 text-left transition",
                         isSelected
-                          ? "border-brand-600 bg-brand-50"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                          ? "bg-brand-50"
+                          : "bg-white hover:bg-brand-50"
                       ].join(" ")}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-900">{product.name}</p>
+                          <p className="truncate text-sm font-semibold text-slate-900">{product.name}</p>
                           <p className="mt-1 break-all text-xs text-slate-600">SKU: {product.sku}</p>
                         </div>
-                        <p className="shrink-0 text-sm font-bold text-brand-800">
+                        <p className="shrink-0 text-sm font-semibold text-brand-800">
                           Tồn: {Number(product.total_quantity || 0)}
                         </p>
                       </div>
