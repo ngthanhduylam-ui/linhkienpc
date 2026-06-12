@@ -320,6 +320,10 @@ export function ProductFormPage() {
           </div>
         </div>
 
+        <div className="mx-auto max-w-7xl px-6 pt-5">
+          <h1 className="text-xl font-bold text-slate-900">{isEditMode ? "Sửa sản phẩm" : "Thêm sản phẩm"}</h1>
+        </div>
+
         <div className="mx-auto grid max-w-7xl gap-5 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-4">
             <section className="rounded-md border border-slate-200 bg-white shadow-sm">

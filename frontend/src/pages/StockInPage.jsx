@@ -224,7 +224,7 @@ export function StockInPage() {
             {(showEmptyState || showNoResultState) && (
               <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
                 <p className="text-sm text-slate-700">
-                  Không tìm thấy sản phẩm. Vui lòng tạo sản phẩm ở mục Sản phẩm trước.
+                  Không tìm thấy sản phẩm. Vui lòng thêm sản phẩm ở mục Sản phẩm trước.
                 </p>
                 <Link
                   to="/admin/products"

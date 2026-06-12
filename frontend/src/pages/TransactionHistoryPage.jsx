@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getStockVoucherRequest, listStockVouchers } from "../services/inventoryOperations.service";
-import { formatWarrantyNote } from "../utils/warrantyNote";
+import { Link } from "react-router-dom";
+import { listStockVouchers } from "../services/inventoryOperations.service";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -16,32 +16,36 @@ function formatDateTime(value) {
 }
 
 function getVoucherLabel(type) {
-  if (type === "IN") return "Nhập hàng";
-  if (type === "OUT") return "Xuất & Giao hàng";
+  if (type === "IN") return "Phiếu nhập";
+  if (type === "OUT") return "Phiếu bán";
   return type || "-";
 }
 
 function getPartnerRole(voucher) {
   const partner = voucher?.partner;
-  if (!partner) return "Đối tác";
+  if (!partner) return "Khách hàng / Nhà cung cấp";
   if (partner.type === "SUPPLIER") return "Nhà cung cấp";
   if (partner.type === "CUSTOMER") return "Khách hàng";
-  return "Đối tác";
+  return "Khách hàng / Nhà cung cấp";
 }
 
-function getPartnerText(voucher) {
-  const partner = voucher?.partner;
-  if (!partner) return "-";
-  return `${getPartnerRole(voucher)}: ${partner.name || "-"}`;
+function getPartnerName(voucher) {
+  return voucher?.partner?.name || "-";
 }
 
-function formatNote(note) {
-  if (!note || !String(note).trim()) return "Không ghi chú";
-  return formatWarrantyNote(note);
-}
-
-function getPreviewItems(voucher) {
-  return Array.isArray(voucher?.preview_items) ? voucher.preview_items : [];
+function VoucherTypeBadge({ type }) {
+  const isIn = type === "IN";
+  return (
+    <span
+      className={
+        isIn
+          ? "inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
+          : "inline-flex rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700"
+      }
+    >
+      {getVoucherLabel(type)}
+    </span>
+  );
 }
 
 export function TransactionHistoryPage() {
@@ -55,9 +59,6 @@ export function TransactionHistoryPage() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedVoucher, setSelectedVoucher] = useState(null);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState("");
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 
@@ -113,40 +114,20 @@ export function TransactionHistoryPage() {
     window.setTimeout(() => keywordInputRef.current?.focus(), 0);
   }
 
-  async function handleOpenDetail(voucherId) {
-    setSelectedVoucher(null);
-    setDetailError("");
-    setIsDetailLoading(true);
-    try {
-      const detail = await getStockVoucherRequest(voucherId);
-      setSelectedVoucher(detail);
-    } catch (err) {
-      setDetailError(err?.message || "Không thể tải chi tiết phiếu.");
-    } finally {
-      setIsDetailLoading(false);
-    }
-  }
-
-  function handleCloseDetail() {
-    setSelectedVoucher(null);
-    setDetailError("");
-    setIsDetailLoading(false);
-  }
-
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-slate-900">Lịch sử giao dịch</h2>
-        <p className="mt-0.5 text-xs text-slate-500">Xem lại các phiếu nhập hàng và xuất & giao hàng.</p>
+        <h2 className="text-2xl font-semibold text-slate-900">Lịch sử giao dịch</h2>
+        <p className="mt-1 text-sm text-slate-600">Tra cứu phiếu nhập, phiếu bán và các dòng sản phẩm trong phiếu.</p>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-3">
-        <form className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_120px]" onSubmit={handleSearch}>
+      <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]" onSubmit={handleSearch}>
           <div className="relative">
             <input
               ref={keywordInputRef}
-              className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
-              placeholder="Tìm sản phẩm, SKU, khách hàng, nhà cung cấp, mã phiếu"
+              className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              placeholder="Tìm theo mã phiếu, sản phẩm, khách hàng, nhà cung cấp"
               value={keywordInput}
               onChange={(event) => setKeywordInput(event.target.value)}
             />
@@ -155,7 +136,7 @@ export function TransactionHistoryPage() {
                 type="button"
                 aria-label="Xóa tìm kiếm"
                 onClick={handleClearSearch}
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 ×
               </button>
@@ -163,104 +144,94 @@ export function TransactionHistoryPage() {
           </div>
 
           <select
-            className="h-10 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
+            className="h-10 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             value={typeInput}
             onChange={handleTypeChange}
           >
-            <option value="">Tất cả</option>
+            <option value="">Tất cả loại phiếu</option>
             <option value="IN">Nhập hàng</option>
-            <option value="OUT">Xuất & Giao hàng</option>
+            <option value="OUT">Bán hàng</option>
           </select>
 
           <button
             type="submit"
-            className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900"
+            className="h-10 rounded-md bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-900"
           >
             Tìm kiếm
           </button>
         </form>
 
-        <p className="mt-2 text-[11px] text-slate-400">Giao dịch cũ trước khi có phiếu sẽ được hỗ trợ sau.</p>
+        {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       </section>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
-      <section className="rounded-lg border border-slate-200 bg-white p-3">
-        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Danh sách phiếu</h3>
-          <p className="text-xs text-slate-500">
-            Tổng: <span className="font-semibold text-slate-700">{total}</span> phiếu
+      <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-base font-semibold text-slate-900">Danh sách phiếu</h3>
+          <p className="text-sm text-slate-600">
+            Tổng: <span className="font-semibold text-slate-900">{total}</span> phiếu
           </p>
         </div>
 
-        {isLoading && <p className="mt-3 text-sm text-slate-500">Đang tải dữ liệu...</p>}
-
-        {!isLoading && vouchers.length === 0 && (
-          <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center">
-            <p className="text-sm font-medium text-slate-700">Không tìm thấy phiếu giao dịch phù hợp.</p>
-            <p className="mt-1 text-xs text-slate-500">Thử đổi từ khóa, khách hàng, nhà cung cấp, mã phiếu hoặc loại phiếu.</p>
+        <div className="mt-4 overflow-hidden rounded-md border border-slate-200">
+          <div className="hidden grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_120px] gap-3 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
+            <span>Mã phiếu</span>
+            <span>Loại phiếu</span>
+            <span>Ngày tạo</span>
+            <span>Khách hàng / Nhà cung cấp</span>
+            <span>Tổng số lượng</span>
+            <span>Người tạo</span>
+            <span className="text-right">Thao tác</span>
           </div>
-        )}
 
-        {!isLoading && vouchers.length > 0 && (
-          <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-            {vouchers.map((voucher) => {
-              const previewItems = getPreviewItems(voucher);
-              const hiddenItemCount = Math.max(0, Number(voucher.item_count || 0) - previewItems.length);
+          {isLoading && (
+            <div className="px-4 py-8">
+              <p className="text-sm text-slate-500">Đang tải lịch sử giao dịch...</p>
+            </div>
+          )}
 
-              return (
-                <article key={voucher.id} className="grid gap-3 bg-white p-3 hover:bg-slate-50 md:grid-cols-[160px_minmax(0,1fr)_170px_110px] md:items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{formatDateTime(voucher.occurred_at)}</p>
-                    <p className="mt-0.5 text-xs font-medium text-brand-700">
-                      {voucher.voucher_label || getVoucherLabel(voucher.voucher_type)}
-                      {voucher.voucher_code ? ` · ${voucher.voucher_code}` : ""}
-                    </p>
-                  </div>
+          {!isLoading && vouchers.length === 0 && (
+            <div className="px-4 py-10 text-center">
+              <p className="text-sm font-medium text-slate-700">Không tìm thấy phiếu giao dịch phù hợp.</p>
+              <p className="mt-1 text-xs text-slate-500">Thử đổi từ khóa, mã phiếu hoặc loại phiếu.</p>
+            </div>
+          )}
 
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-800">{getPartnerText(voucher)}</p>
-                    {previewItems.length > 0 ? (
-                      <div className="mt-1 space-y-0.5">
-                        {previewItems.map((item, index) => (
-                          <p key={`${voucher.id}-${item.sku}-${index}`} className="truncate text-xs text-slate-600">
-                            {item.product_name || item.sku || "-"}
-                          </p>
-                        ))}
-                        {hiddenItemCount > 0 && <p className="text-xs font-medium text-slate-500">+{hiddenItemCount} sản phẩm khác</p>}
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-xs text-slate-400">Chưa có dòng sản phẩm để xem nhanh.</p>
-                    )}
-                  </div>
+          {!isLoading && vouchers.map((voucher) => (
+            <div
+              key={voucher.id}
+              className="border-t border-slate-100 px-4 py-3 text-sm hover:bg-blue-50/50 lg:grid lg:grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_120px] lg:items-center lg:gap-3"
+            >
+              <div className="min-w-0">
+                <Link
+                  to={`/admin/transaction-history/${voucher.id}`}
+                  className="truncate font-semibold text-brand-800 hover:text-brand-900 hover:underline"
+                >
+                  {voucher.voucher_code || `#${voucher.id}`}
+                </Link>
+                <p className="mt-1 text-xs text-slate-500 lg:hidden">{formatDateTime(voucher.occurred_at)}</p>
+              </div>
+              <div className="mt-2 lg:mt-0"><VoucherTypeBadge type={voucher.voucher_type} /></div>
+              <p className="mt-2 text-slate-700 lg:mt-0">{formatDateTime(voucher.occurred_at)}</p>
+              <div className="mt-2 min-w-0 lg:mt-0">
+                <p className="truncate font-medium text-slate-900">{getPartnerName(voucher)}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{getPartnerRole(voucher)}</p>
+              </div>
+              <p className="mt-2 font-semibold tabular-nums text-slate-900 lg:mt-0">{Number(voucher.total_quantity || 0)}</p>
+              <p className="mt-2 text-slate-700 lg:mt-0">{voucher.admin?.username || "-"}</p>
+              <div className="mt-3 lg:mt-0 lg:text-right">
+                <Link
+                  to={`/admin/transaction-history/${voucher.id}`}
+                  className="inline-flex h-8 items-center rounded-md border border-brand-600 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                >
+                  Chi tiết
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
 
-                  <div className="text-sm text-slate-700 md:text-right">
-                    <p>
-                      <span className="font-semibold">{Number(voucher.item_count || 0)}</span> sản phẩm
-                    </p>
-                    <p className="mt-0.5">
-                      Tổng SL: <span className="font-semibold">{Number(voucher.total_quantity || 0)}</span>
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">Admin: {voucher.admin?.username || "-"}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenDetail(voucher.id)}
-                    className="h-9 rounded border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
-                  >
-                    Xem chi tiết
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-600">
-            Trang {page} / {totalPages}
-          </p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-600">Trang {page} / {totalPages}</p>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -281,91 +252,6 @@ export function TransactionHistoryPage() {
           </div>
         </div>
       </section>
-
-      {(isDetailLoading || selectedVoucher || detailError) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-3 py-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-xl">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">Chi tiết phiếu</h3>
-                <p className="mt-0.5 text-xs text-slate-500">Xem các dòng sản phẩm trong phiếu giao dịch.</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleCloseDetail}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Đóng chi tiết"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="max-h-[calc(90vh-64px)] overflow-y-auto p-4">
-              {isDetailLoading && <p className="text-sm text-slate-500">Đang tải chi tiết phiếu...</p>}
-              {detailError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{detailError}</p>}
-
-              {selectedVoucher && !isDetailLoading && (
-                <div className="space-y-3">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="grid gap-2 text-sm sm:grid-cols-3">
-                      <div>
-                        <p className="text-xs text-slate-500">Loại phiếu</p>
-                        <p className="font-semibold text-brand-800">
-                          {selectedVoucher.voucher_label || getVoucherLabel(selectedVoucher.voucher_type)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Mã phiếu</p>
-                        <p className="font-semibold text-slate-900">{selectedVoucher.voucher_code || `#${selectedVoucher.id}`}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Ngày giờ</p>
-                        <p className="font-semibold text-slate-900">{formatDateTime(selectedVoucher.occurred_at)}</p>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <p className="text-xs text-slate-500">{getPartnerRole(selectedVoucher)}</p>
-                        <p className="font-semibold text-slate-900">{selectedVoucher.partner?.name || "-"}</p>
-                        {selectedVoucher.partner?.phone && <p className="mt-0.5 text-xs text-slate-500">{selectedVoucher.partner.phone}</p>}
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Admin</p>
-                        <p className="font-semibold text-slate-900">{selectedVoucher.admin?.username || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Số sản phẩm</p>
-                        <p className="font-semibold text-slate-900">{Number(selectedVoucher.item_count || 0)} sản phẩm</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Tổng số lượng</p>
-                        <p className="font-semibold text-slate-900">{Number(selectedVoucher.total_quantity || 0)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
-                    {(selectedVoucher.items || []).map((item) => (
-                      <div key={item.transaction_id} className="grid gap-2 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_150px_80px] sm:items-center">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-900">{item.product?.name || "-"}</p>
-                          {item.product?.sku && <p className="mt-0.5 break-all text-xs text-slate-500">SKU: {item.product.sku}</p>}
-                        </div>
-                        <p className="text-sm font-medium text-brand-800">{formatNote(item.note || item.warranty_note)}</p>
-                        <p className="text-sm text-slate-700 sm:text-right">
-                          SL: <span className="font-semibold">{Number(item.quantity || 0)}</span>
-                        </p>
-                      </div>
-                    ))}
-
-                    {(!selectedVoucher.items || selectedVoucher.items.length === 0) && (
-                      <p className="bg-slate-50 px-3 py-5 text-center text-sm text-slate-500">Phiếu chưa có dòng sản phẩm.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

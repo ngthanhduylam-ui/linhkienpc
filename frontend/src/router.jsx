@@ -14,6 +14,7 @@ import { StockOutBulkPage } from "./pages/StockOutBulkPage";
 import { StockOutPage } from "./pages/StockOutPage";
 import { SupplierListPage } from "./pages/SupplierListPage";
 import { TransactionHistoryPage } from "./pages/TransactionHistoryPage";
+import { TransactionVoucherDetailPage } from "./pages/TransactionVoucherDetailPage";
 
 export const appRouter = createBrowserRouter([
   {
@@ -45,7 +46,8 @@ export const appRouter = createBrowserRouter([
           { path: "stock-out-single", element: <StockOutPage /> },
           { path: "stock-out-bulk", element: <Navigate to="/admin/stock-out" replace /> },
           { path: "inventory-check", element: <InventoryCheckPage /> },
-          { path: "transaction-history", element: <TransactionHistoryPage /> }
+          { path: "transaction-history", element: <TransactionHistoryPage /> },
+          { path: "transaction-history/:voucherId", element: <TransactionVoucherDetailPage /> }
         ]
       }
     ]

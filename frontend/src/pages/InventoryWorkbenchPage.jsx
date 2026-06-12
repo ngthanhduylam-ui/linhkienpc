@@ -75,7 +75,7 @@ return (
 
             {showFirstProductEmptyState && (
               <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
-                <p className="text-sm text-slate-700">Chưa có sản phẩm nào. Vui lòng tạo sản phẩm ở mục Sản phẩm trước.</p>
+                <p className="text-sm text-slate-700">Chưa có sản phẩm nào. Vui lòng thêm sản phẩm ở mục Sản phẩm trước.</p>
                 <Link
                   to="/admin/products"
                   className="mt-3 inline-flex rounded-md border border-brand-600 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
@@ -87,7 +87,7 @@ return (
 
             {showNoResultState && (
               <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
-                <p className="text-sm text-slate-700">Không tìm thấy sản phẩm. Vui lòng tạo sản phẩm ở mục Sản phẩm trước.</p>
+                <p className="text-sm text-slate-700">Không tìm thấy sản phẩm. Vui lòng thêm sản phẩm ở mục Sản phẩm trước.</p>
                 <Link
                   to="/admin/products"
                   className="mt-3 inline-flex rounded-md border border-brand-600 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"

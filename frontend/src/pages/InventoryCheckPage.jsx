@@ -293,7 +293,7 @@ export function InventoryCheckPage() {
               <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3">
                 <p className="text-sm font-medium text-slate-700">Không tìm thấy sản phẩm phù hợp.</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Nếu đang kiểm hàng thực tế và sản phẩm chưa có trong hệ thống, hãy tạo sản phẩm trước rồi quay lại kiểm hàng.
+                  Nếu đang kiểm hàng thực tế và sản phẩm chưa có trong hệ thống, hãy thêm sản phẩm trước rồi quay lại kiểm hàng.
                 </p>
                 <Link
                   to={`/admin/products/new?name=${encodeURIComponent(debouncedSearch)}`}
