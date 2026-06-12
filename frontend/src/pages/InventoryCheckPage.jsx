@@ -296,10 +296,10 @@ export function InventoryCheckPage() {
                   Nếu đang kiểm hàng thực tế và sản phẩm chưa có trong hệ thống, hãy tạo sản phẩm trước rồi quay lại kiểm hàng.
                 </p>
                 <Link
-                  to={`/admin/products?create=1&name=${encodeURIComponent(debouncedSearch)}`}
+                  to={`/admin/products/new?name=${encodeURIComponent(debouncedSearch)}`}
                   className="mt-3 inline-flex h-9 items-center rounded-md border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
                 >
-                  + Tạo sản phẩm mới
+                  + Thêm sản phẩm mới
                 </Link>
               </div>
             )}
@@ -341,24 +341,24 @@ export function InventoryCheckPage() {
         </section>
 
         <aside className="lg:col-span-7">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-6">
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm lg:sticky lg:top-6">
             {!detail ? (
-              <>
+              <div className="p-4">
                 <h3 className="text-base font-semibold text-slate-900">Điều chỉnh số lượng</h3>
                 <p className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-600">
                   Chọn sản phẩm bên trái để kiểm hàng.
                 </p>
-              </>
+              </div>
             ) : (
               <>
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_130px] sm:items-center">
                     <div className="min-w-0">
-                      <p className="text-lg font-bold text-slate-900">{detail.product.name}</p>
-                      <p className="mt-1 break-all text-xs text-slate-600">SKU: {detail.product.sku}</p>
+                      <p className="truncate text-xl font-bold text-slate-900">{detail.product.name}</p>
+                      <p className="mt-1 break-all text-xs font-medium text-slate-500">SKU: {detail.product.sku}</p>
                     </div>
-                    <div className="rounded-md bg-white px-4 py-2 text-center">
-                      <p className="text-3xl font-extrabold leading-none text-brand-800">
+                    <div className="rounded-md border border-blue-100 bg-white px-4 py-3 text-center shadow-sm">
+                      <p className="text-4xl font-extrabold leading-none text-brand-800">
                         {Number(detail.product.total_quantity || 0)}
                       </p>
                       <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -368,18 +368,23 @@ export function InventoryCheckPage() {
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-base font-semibold text-slate-900">Nhóm ghi chú hiện tại</h3>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Nhóm bảo hành / ghi chú</h3>
+                      <p className="mt-0.5 text-xs text-slate-500">Dùng để chọn đúng nhóm khi giảm tồn.</p>
+                    </div>
                     {/* TODO: hiển thị cảnh báo lệch tổng nhóm/tồn kho khi backend expose inventory_warning sau. */}
                   </div>
 
                   {noteGroups.length > 0 ? (
                     <div className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
                       {noteGroups.map((group) => (
-                        <div key={toGroupValue(group)} className="flex items-center justify-between gap-3 px-3 py-2">
-                          <p className="break-all text-sm font-semibold text-slate-800">{getGroupLabel(group)}</p>
-                          <p className="shrink-0 text-sm font-bold text-brand-800">còn {group.quantity}</p>
+                        <div key={toGroupValue(group)} className="grid grid-cols-[minmax(0,1fr)_72px] items-center gap-3 px-3 py-2 hover:bg-slate-50">
+                          <p className="break-all text-sm font-medium text-slate-800">{getGroupLabel(group)}</p>
+                          <p className="rounded bg-blue-50 px-2 py-1 text-right text-sm font-bold tabular-nums text-brand-800">
+                            {group.quantity}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -390,42 +395,47 @@ export function InventoryCheckPage() {
                   )}
                 </div>
 
-                <form className="mt-4 space-y-3 border-t border-slate-100 pt-4" onSubmit={handleQuantitySubmit}>
-                  <h3 className="text-base font-semibold text-slate-900">Điều chỉnh số lượng</h3>
-
+                <form className="space-y-3 border-t border-slate-200 px-4 py-4" onSubmit={handleQuantitySubmit}>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Loại điều chỉnh *</label>
-                    <select
-                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                      value={adjustmentType}
-                      onChange={(event) => {
-                        setAdjustmentType(event.target.value);
-                        setAdjustNoteGroup("");
-                        setAdjustQuantity("");
-                        setAdjustReason("");
-                      }}
-                    >
-                      <option value="INCREASE">Tăng tồn</option>
-                      <option value="DECREASE">Giảm tồn</option>
-                    </select>
+                    <h3 className="text-sm font-semibold text-slate-900">Điều chỉnh số lượng</h3>
+                    <p className="mt-0.5 text-xs text-slate-500">Chọn loại điều chỉnh, nhập số lượng và nhóm bảo hành liên quan.</p>
                   </div>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Số lượng *</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={
-                        adjustmentType === "DECREASE" && selectedAdjustGroup
-                          ? selectedAdjustGroup.quantity
-                          : undefined
-                      }
-                      step={1}
-                      className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                      value={adjustQuantity}
-                      onChange={(event) => setAdjustQuantity(event.target.value)}
-                      placeholder="Nhập số lượng điều chỉnh"
-                    />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Loại điều chỉnh *</label>
+                      <select
+                        className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        value={adjustmentType}
+                        onChange={(event) => {
+                          setAdjustmentType(event.target.value);
+                          setAdjustNoteGroup("");
+                          setAdjustQuantity("");
+                          setAdjustReason("");
+                        }}
+                      >
+                        <option value="INCREASE">Tăng tồn</option>
+                        <option value="DECREASE">Giảm tồn</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Số lượng *</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={
+                          adjustmentType === "DECREASE" && selectedAdjustGroup
+                            ? selectedAdjustGroup.quantity
+                            : undefined
+                        }
+                        step={1}
+                        className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-semibold tabular-nums outline-none focus:ring-2 focus:ring-brand-500"
+                        value={adjustQuantity}
+                        onChange={(event) => setAdjustQuantity(event.target.value)}
+                        placeholder="Nhập số lượng"
+                      />
+                    </div>
                   </div>
 
                   {adjustmentType === "INCREASE" ? (
@@ -475,8 +485,8 @@ export function InventoryCheckPage() {
                     />
                   </div>
 
-                  {error && <p className="text-sm text-red-600">{error}</p>}
-                  {success && <p className="text-sm text-green-700">{success}</p>}
+                  {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+                  {success && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
 
                   <button
                     type="submit"

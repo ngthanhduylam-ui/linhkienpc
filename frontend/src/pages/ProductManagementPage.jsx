@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   activateProductRequest,
   createCategoryRequest,
@@ -119,6 +119,7 @@ function getProductStatusBadge(product) {
 
 export function ProductManagementPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchInput, setSearchInput] = useState("");
@@ -155,6 +156,13 @@ export function ProductManagementPage() {
     () => getCategoryById(categories, newProductCategoryId),
     [categories, newProductCategoryId]
   );
+  const selectedEditCategory = useMemo(
+    () => getCategoryById(categories, editProductForm.category_id),
+    [categories, editProductForm.category_id]
+  );
+  const createPreviewName = newProductName.trim() || "Tên sản phẩm";
+  const createPreviewSku = newProductSku.trim() || "SKU";
+  const createPreviewCategory = selectedCreateCategory?.name || "Chưa chọn loại sản phẩm";
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -172,7 +180,7 @@ export function ProductManagementPage() {
         const categoryItems = await listActiveCategories();
         if (active) setCategories(categoryItems);
       } catch (err) {
-        if (active) setError(err?.message || "Không thể tải danh mục.");
+        if (active) setError(err?.message || "Không thể tải loại sản phẩm.");
       }
     }
 
@@ -228,12 +236,9 @@ export function ProductManagementPage() {
     const params = new URLSearchParams(location.search);
     if (params.get("create") !== "1") return;
 
-    setError("");
-    setSuccess("");
-    resetCreateForm();
-    setNewProductName(params.get("name") || "");
-    setIsModalOpen(true);
-  }, [location.search]);
+    const name = params.get("name") || "";
+    navigate(`/admin/products/new${name ? `?name=${encodeURIComponent(name)}` : ""}`, { replace: true });
+  }, [location.search, navigate]);
 
   useEffect(() => {
     if (!isModalOpen) return undefined;
@@ -325,7 +330,7 @@ export function ProductManagementPage() {
 
     const name = newCategoryName.trim();
     if (!name) {
-      setError("Vui lòng nhập tên danh mục.");
+      setError("Vui lòng nhập tên loại sản phẩm.");
       return;
     }
 
@@ -340,14 +345,14 @@ export function ProductManagementPage() {
         nextCategories.find((item) => normalizeText(item.name) === normalizeText(createdCategoryName));
 
       if (!matched) {
-        setError("Không thể tự động chọn danh mục vừa tạo.");
+        setError("Không thể tự động chọn loại sản phẩm vừa tạo.");
         return;
       }
 
       setNewProductCategoryId(String(matched.id));
       setShowCategoryCreateForm(false);
       setNewCategoryName("");
-      setCategoryInlineInfo(`Đã chọn danh mục ${matched.name}`);
+      setCategoryInlineInfo(`Đã chọn loại sản phẩm ${matched.name}`);
     } catch (err) {
       const errorCode = err?.payload?.error?.code;
       const message = String(err?.message || "").toLowerCase();
@@ -361,12 +366,12 @@ export function ProductManagementPage() {
           setNewProductCategoryId(String(existed.id));
           setShowCategoryCreateForm(false);
           setNewCategoryName("");
-          setCategoryInlineInfo("Danh mục đã tồn tại, đã tự động chọn.");
+          setCategoryInlineInfo("Loại sản phẩm đã tồn tại, đã tự động chọn.");
         } else {
-          setError("Không thể tự động chọn danh mục đã tồn tại.");
+          setError("Không thể tự động chọn loại sản phẩm đã tồn tại.");
         }
       } else {
-        setError(err?.message || "Lưu danh mục thất bại.");
+        setError(err?.message || "Lưu loại sản phẩm thất bại.");
       }
     } finally {
       setIsSavingCategory(false);
@@ -391,7 +396,7 @@ export function ProductManagementPage() {
       return;
     }
     if (!newProductCategoryId) {
-      setError("Vui lòng chọn danh mục.");
+      setError("Vui lòng chọn loại sản phẩm.");
       return;
     }
 
@@ -407,11 +412,11 @@ export function ProductManagementPage() {
       setDebouncedSearch("");
       setPage(1);
       await reloadProducts(1, "");
-      setSuccess(`Tạo sản phẩm thành công: ${created.name} (${created.sku}).`);
+      setSuccess(`Thêm sản phẩm thành công: ${created.name} (${created.sku}).`);
       setIsModalOpen(false);
       resetCreateForm();
     } catch (err) {
-      setError(getProductErrorMessage(err, "Tạo sản phẩm mới thất bại."));
+      setError(getProductErrorMessage(err, "Thêm sản phẩm thất bại."));
     } finally {
       setIsSubmitting(false);
     }
@@ -440,7 +445,7 @@ export function ProductManagementPage() {
       return;
     }
     if (!categoryId) {
-      setError("Vui lòng chọn danh mục.");
+      setError("Vui lòng chọn loại sản phẩm.");
       return;
     }
 
@@ -505,13 +510,12 @@ export function ProductManagementPage() {
           <h2 className="text-2xl font-semibold text-slate-900">Sản phẩm</h2>
           <p className="mt-1 text-sm text-slate-600">Quản lý thông tin sản phẩm và tồn hiện tại.</p>
         </div>
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="h-11 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900"
+        <Link
+          to="/admin/products/new"
+          className="inline-flex h-11 items-center rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900"
         >
-          + Tạo sản phẩm
-        </button>
+          + Thêm sản phẩm
+        </Link>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -522,7 +526,7 @@ export function ProductManagementPage() {
               <input
                 ref={searchInputRef}
                 className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Tìm theo tên sản phẩm, SKU hoặc danh mục"
+                placeholder="Tìm theo tên sản phẩm, SKU hoặc loại sản phẩm"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
               />
@@ -558,7 +562,7 @@ export function ProductManagementPage() {
         <div className="hidden grid-cols-12 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid">
           <span className="col-span-3">Tên sản phẩm</span>
           <span className="col-span-2">SKU</span>
-          <span className="col-span-2">Danh mục</span>
+          <span className="col-span-2">Loại sản phẩm</span>
           <span className="col-span-1 text-right">Tồn</span>
           <span className="col-span-2 text-center">Trạng thái</span>
           <span className="col-span-2 text-right">Thao tác</span>
@@ -593,13 +597,12 @@ export function ProductManagementPage() {
                 </div>
                 <div className="md:col-span-2 md:text-right">
                   <div className="flex flex-wrap justify-start gap-2 md:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(product)}
+                    <Link
+                      to={`/admin/products/${product.id}/edit`}
                       className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
                       Sửa
-                    </button>
+                    </Link>
                     {product.is_active ? (
                       <button
                         type="button"
@@ -625,7 +628,7 @@ export function ProductManagementPage() {
         ) : (
           <div className="px-4 py-8 text-center">
             <p className="text-sm font-medium text-slate-700">Không tìm thấy sản phẩm.</p>
-            <p className="mt-1 text-xs text-slate-500">Thử tìm bằng tên, SKU hoặc danh mục khác.</p>
+            <p className="mt-1 text-xs text-slate-500">Thử tìm bằng tên, SKU hoặc loại sản phẩm khác.</p>
           </div>
         )}
       </div>
@@ -668,18 +671,18 @@ export function ProductManagementPage() {
             aria-modal="true"
             aria-labelledby="product-create-title"
           >
-            <div className="border-b border-slate-200 px-5 py-4">
+            <div className="border-b border-slate-200 px-5 py-3">
               <h3 id="product-create-title" className="text-base font-semibold text-slate-900">
-                Tạo sản phẩm mới
+                Thêm sản phẩm
               </h3>
             </div>
 
             <div className="overflow-y-auto px-5 py-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-slate-700">Tên sản phẩm *</label>
                   <input
-                    className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                     value={newProductName}
                     onChange={(event) => setNewProductName(event.target.value)}
                     placeholder="Ví dụ: CPU Intel Core i5-12400F"
@@ -689,7 +692,7 @@ export function ProductManagementPage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Tình trạng</label>
                   <select
-                    className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                     value={newProductCondition}
                     onChange={(event) => setNewProductCondition(event.target.value)}
                   >
@@ -699,32 +702,16 @@ export function ProductManagementPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Mã sản phẩm / SKU *</label>
-                  <input
-                    className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                    value={newProductSku}
-                    onChange={(event) => {
-                      setNewProductSku(event.target.value);
-                      setIsSkuManuallyEdited(true);
-                    }}
-                    placeholder="2nd.cpu.intel.12400f"
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    {SKU_HELPER_TEXT}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Danh mục *</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Loại sản phẩm *</label>
                   <select
-                    className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                     value={newProductCategoryId}
                     onChange={(event) => {
                       setNewProductCategoryId(event.target.value);
                       setCategoryInlineInfo("");
                     }}
                   >
-                    <option value="">-- Chọn danh mục --</option>
+                    <option value="">Chọn loại sản phẩm</option>
                     {categories.map((category) => (
                       <option key={category.id} value={String(category.id)}>
                         {category.name}
@@ -733,21 +720,48 @@ export function ProductManagementPage() {
                   </select>
                   <button
                     type="button"
-                    className="mt-2 text-sm font-medium text-brand-700 hover:underline"
+                    className="mt-1.5 text-xs font-medium text-brand-700 hover:underline"
                     onClick={() => setShowCategoryCreateForm((prev) => !prev)}
                   >
-                    + Tạo danh mục mới
+                    + Tạo loại sản phẩm mới
                   </button>
                   {categoryInlineInfo && <p className="mt-2 text-xs text-emerald-700">{categoryInlineInfo}</p>}
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Mã sản phẩm / SKU *</label>
+                  <input
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                    value={newProductSku}
+                    onChange={(event) => {
+                      setNewProductSku(event.target.value.toLowerCase());
+                      setIsSkuManuallyEdited(true);
+                      setError("");
+                      setSuccess("");
+                    }}
+                    placeholder="2nd.maybo.lenovo.v50t13imb"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">{SKU_HELPER_TEXT}</p>
+                </div>
+
+                <div className="md:col-span-2 grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
+                  <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Đơn vị tính</label>
                   <input
-                    className="h-11 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm text-slate-700"
+                    className="h-10 w-full rounded-md border border-slate-300 bg-slate-50 px-3 text-sm text-slate-700"
                     value="cái"
                     readOnly
                   />
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Xem trước</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{createPreviewName}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                      <span className="break-all">{createPreviewSku}</span>
+                      <span className="text-slate-300">•</span>
+                      <span>{createPreviewCategory}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -755,9 +769,9 @@ export function ProductManagementPage() {
 
               {showCategoryCreateForm && (
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <h4 className="text-sm font-semibold text-slate-900">Tạo danh mục mới</h4>
+                  <h4 className="text-sm font-semibold text-slate-900">Tạo loại sản phẩm mới</h4>
                   <div className="mt-3">
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Tên danh mục *</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Tên loại sản phẩm *</label>
                     <input
                       className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                       value={newCategoryName}
@@ -771,13 +785,13 @@ export function ProductManagementPage() {
                     onClick={handleCreateCategoryInline}
                     className="mt-3 h-10 rounded-md border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSavingCategory ? "Đang lưu..." : "Lưu danh mục"}
+                    {isSavingCategory ? "Đang lưu..." : "Lưu loại sản phẩm"}
                   </button>
                 </div>
               )}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white px-5 py-3">
               <button
                 type="button"
                 disabled={isSubmitting || isSavingCategory}
@@ -792,7 +806,7 @@ export function ProductManagementPage() {
                 onClick={handleCreateProduct}
                 className="h-11 rounded-md border border-brand-600 px-4 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSubmitting ? "Đang tạo sản phẩm..." : "Tạo sản phẩm"}
+                {isSubmitting ? "Đang lưu..." : "Lưu sản phẩm"}
               </button>
             </div>
           </div>
@@ -807,40 +821,30 @@ export function ProductManagementPage() {
             aria-modal="true"
             aria-labelledby="product-edit-title"
           >
-            <div className="border-b border-slate-200 px-5 py-4">
+            <div className="border-b border-slate-200 px-5 py-3">
               <h3 id="product-edit-title" className="text-base font-semibold text-slate-900">
                 Sửa sản phẩm
               </h3>
             </div>
 
-            <div className="grid gap-4 overflow-y-auto px-5 py-4 md:grid-cols-2">
-              <div>
+            <div className="grid gap-3 overflow-y-auto px-5 py-4 md:grid-cols-2">
+              <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-slate-700">Tên sản phẩm *</label>
                 <input
-                  className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                   value={editProductForm.name}
                   onChange={(event) => setEditProductForm((prev) => ({ ...prev, name: event.target.value }))}
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">SKU *</label>
-                <input
-                  className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                  value={editProductForm.sku}
-                  onChange={(event) => setEditProductForm((prev) => ({ ...prev, sku: event.target.value }))}
-                />
-                <p className="mt-1 text-xs text-slate-500">{SKU_HELPER_TEXT}</p>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Danh mục *</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Loại sản phẩm *</label>
                 <select
-                  className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                   value={editProductForm.category_id}
                   onChange={(event) => setEditProductForm((prev) => ({ ...prev, category_id: event.target.value }))}
                 >
-                  <option value="">-- Chọn danh mục --</option>
+                  <option value="">Chọn loại sản phẩm</option>
                   {categories.map((category) => (
                     <option key={category.id} value={String(category.id)}>
                       {category.name}
@@ -849,10 +853,34 @@ export function ProductManagementPage() {
                 </select>
               </div>
 
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">SKU *</label>
+                <input
+                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                  value={editProductForm.sku}
+                  onChange={(event) => {
+                    setEditProductForm((prev) => ({ ...prev, sku: event.target.value.toLowerCase() }));
+                    setError("");
+                    setSuccess("");
+                  }}
+                />
+                <p className="mt-1 text-xs text-slate-500">{SKU_HELPER_TEXT}</p>
+              </div>
+
+              <div className="md:col-span-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Xem trước</p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-900">{editProductForm.name.trim() || "Tên sản phẩm"}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                  <span className="break-all">{editProductForm.sku.trim() || "SKU"}</span>
+                  <span className="text-slate-300">•</span>
+                  <span>{selectedEditCategory?.name || "Chưa chọn loại sản phẩm"}</span>
+                </div>
+              </div>
+
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-slate-700">Mô tả / spec summary</label>
                 <textarea
-                  className="min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                  className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                   value={editProductForm.spec_summary}
                   onChange={(event) => setEditProductForm((prev) => ({ ...prev, spec_summary: event.target.value }))}
                 />
@@ -861,7 +889,7 @@ export function ProductManagementPage() {
               {error && <p className="md:col-span-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white px-5 py-4">
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white px-5 py-3">
               <button
                 type="button"
                 disabled={isSubmitting}

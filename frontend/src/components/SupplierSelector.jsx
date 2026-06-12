@@ -156,18 +156,13 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
   }
 
   return (
-    <div ref={wrapperRef} className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div>
-        <label className="block text-sm font-medium text-slate-700">Nhà cung cấp</label>
-        <p className="mt-1 text-xs text-slate-500">Không bắt buộc, dùng để theo dõi nguồn nhập hàng.</p>
-      </div>
-
+    <div ref={wrapperRef} className="space-y-3">
       {!selectedSupplier && (
         <div className="relative">
           <input
             ref={inputRef}
-            className="mt-2 h-10 w-full rounded-md border border-slate-300 bg-white px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-            placeholder="Chọn nhà cung cấp"
+            className="h-11 w-full rounded-md border border-slate-300 bg-white px-4 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            placeholder="Tìm theo tên, SĐT nhà cung cấp"
             value={keyword}
             onFocus={() => {
               setIsOpen(true);
@@ -189,13 +184,22 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
               setShowCreateForm(false);
               window.setTimeout(() => inputRef.current?.focus(), 0);
             }}
-            className="absolute right-3 top-[1.1rem] text-xs text-slate-400 hover:text-slate-700"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700"
           >
             ▾
           </button>
 
           {isOpen && !showCreateForm && (
-            <div className="absolute left-0 right-0 z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+            <div className="absolute left-0 right-0 z-30 mt-1 max-h-80 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-xl">
+              <button
+                type="button"
+                onClick={openCreateForm}
+                className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-slate-100 bg-blue-50 px-3 py-2.5 text-left text-sm font-semibold text-brand-700 hover:bg-blue-100"
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-full border border-brand-500 text-base leading-none">+</span>
+                <span>Thêm mới nhà cung cấp</span>
+              </button>
+
               {!debouncedKeyword && displaySuppliers.length > 0 && (
                 <p className="bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-500">Gần đây</p>
               )}
@@ -214,8 +218,8 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
                   type="button"
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => handleSelect(supplier)}
-                  className={`w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 ${
-                    index === activeIndex ? "bg-brand-50" : "hover:bg-brand-50"
+                  className={`w-full border-b border-slate-100 px-3 py-2.5 text-left last:border-b-0 ${
+                    index === activeIndex ? "bg-blue-50" : "hover:bg-blue-50"
                   }`}
                 >
                   <p className="truncate text-sm font-semibold text-slate-900">{supplier.name}</p>
@@ -225,24 +229,16 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
                   </div>
                 </button>
               ))}
-
-              <button
-                type="button"
-                onClick={openCreateForm}
-                className="sticky bottom-0 w-full border-t border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-brand-700 hover:bg-brand-50 hover:text-brand-900"
-              >
-                + Thêm nhà cung cấp mới
-              </button>
             </div>
           )}
         </div>
       )}
 
-      {selectedSupplier && (
-        <div className="mt-3 rounded-md border border-brand-200 bg-white px-3 py-2.5">
+      {selectedSupplier ? (
+        <div className="rounded-md border border-brand-200 bg-blue-50/40 px-4 py-3">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">{selectedSupplier.name}</p>
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-slate-900">{selectedSupplier.name}</p>
               {selectedSupplier.phone && <p className="mt-0.5 text-sm text-slate-700">{selectedSupplier.phone}</p>}
               {selectedSupplier.address && <p className="mt-0.5 text-xs text-slate-500">{selectedSupplier.address}</p>}
             </div>
@@ -255,16 +251,21 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
                 setShowCreateForm(false);
                 window.setTimeout(() => inputRef.current?.focus(), 0);
               }}
-              className="text-xs font-medium text-brand-700 hover:text-brand-900"
+              className="shrink-0 text-xs font-semibold text-brand-700 hover:text-brand-900"
             >
               Đổi
             </button>
           </div>
         </div>
+      ) : (
+        <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+          Chưa có thông tin nhà cung cấp
+        </div>
       )}
 
       {showCreateForm && (
-        <div className="mt-3 space-y-2 rounded-md border border-slate-200 bg-white p-3">
+        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
+          <p className="text-sm font-semibold text-slate-900">Thêm mới nhà cung cấp</p>
           <input
             className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="Tên nhà cung cấp *"
@@ -303,8 +304,8 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
         </div>
       )}
 
-      {info && <p className="mt-3 text-sm text-green-700">{info}</p>}
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {info && <p className="text-sm text-green-700">{info}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

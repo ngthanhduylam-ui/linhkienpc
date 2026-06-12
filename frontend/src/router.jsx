@@ -5,6 +5,7 @@ import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage";
 import { CustomerListPage } from "./pages/CustomerListPage";
 import { InventoryCheckPage } from "./pages/InventoryCheckPage";
+import { ProductFormPage } from "./pages/ProductFormPage";
 import { ProductManagementPage } from "./pages/ProductManagementPage";
 import { PublicSearchPage } from "./pages/PublicSearchPage";
 import { StockInBulkPage } from "./pages/StockInBulkPage";
@@ -34,6 +35,8 @@ export const appRouter = createBrowserRouter([
           { index: true, element: <Navigate to="/admin/stock-in" replace /> },
           { path: "inventory-workbench", element: <Navigate to="/admin/stock-in" replace /> },
           { path: "products", element: <ProductManagementPage /> },
+          { path: "products/new", element: <ProductFormPage /> },
+          { path: "products/:id/edit", element: <ProductFormPage /> },
           { path: "suppliers", element: <SupplierListPage /> },
           { path: "customers", element: <CustomerListPage /> },
           { path: "customers/:id", element: <CustomerDetailPage /> },

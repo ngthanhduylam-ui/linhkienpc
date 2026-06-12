@@ -127,6 +127,11 @@ export async function createProductRequest(payload) {
   return response?.data;
 }
 
+export async function getProductRequest(id) {
+  const response = await apiGet(`/admin/products/${encodeURIComponent(id)}`);
+  return response?.data;
+}
+
 export async function updateProductRequest(id, payload) {
   const response = await apiPatch(`/admin/products/${encodeURIComponent(id)}`, payload);
   return response?.data;
