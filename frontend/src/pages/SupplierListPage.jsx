@@ -13,6 +13,8 @@ const STATUS_OPTIONS = [
   { value: "all", label: "Tất cả" }
 ];
 
+const EMPTY_SUPPLIER = { name: "", phone: "", address: "" };
+
 function formatDateTime(value) {
   if (!value) return "-";
   const date = new Date(value);
@@ -26,17 +28,126 @@ function getIsActiveFilter(status) {
   return undefined;
 }
 
+function getShortText(value, length = 48) {
+  if (!value) return "-";
+  return value.length > length ? `${value.slice(0, length)}...` : value;
+}
+
 function StatusBadge({ isActive }) {
   return (
     <span
       className={
         isActive
-          ? "inline-flex rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700"
-          : "inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+          ? "inline-flex rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
+          : "inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
       }
     >
       {isActive ? "Đang hợp tác" : "Ngừng hợp tác"}
     </span>
+  );
+}
+
+function TextField({ label, value, onChange, placeholder, required = false, textarea = false }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-slate-700">
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </span>
+      {textarea ? (
+        <textarea
+          className="mt-1.5 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
+      ) : (
+        <input
+          className="mt-1.5 h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
+      )}
+    </label>
+  );
+}
+
+function FormCard({ title, children }) {
+  return (
+    <section className="rounded-md border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-5 py-3">
+        <h4 className="text-base font-semibold text-slate-900">{title}</h4>
+      </div>
+      <div className="space-y-4 px-5 py-4">{children}</div>
+    </section>
+  );
+}
+
+function SupplierFormModal({ title, submitLabel, form, setForm, isSubmitting, isActive, showStatus = false, onCancel, onSubmit }) {
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 px-4 py-5">
+      <div className="mx-auto max-w-3xl rounded-md border border-slate-200 bg-slate-100 shadow-xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isSubmitting}
+              className="h-9 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={isSubmitting}
+              className="h-9 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900 disabled:opacity-60"
+            >
+              {isSubmitting ? "Đang lưu..." : submitLabel}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div className="space-y-4">
+            <FormCard title="Thông tin chung">
+              <TextField
+                label="Tên nhà cung cấp"
+                required
+                value={form.name}
+                onChange={(value) => setForm((prev) => ({ ...prev, name: value }))}
+                placeholder="Nhập tên nhà cung cấp"
+              />
+              <div className={showStatus ? "grid gap-4 md:grid-cols-2" : ""}>
+                <TextField
+                  label="Số điện thoại"
+                  value={form.phone}
+                  onChange={(value) => setForm((prev) => ({ ...prev, phone: value }))}
+                  placeholder="Nhập số điện thoại"
+                />
+                {showStatus && (
+                  <div className="rounded-md bg-slate-50 px-3 py-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Trạng thái</p>
+                    <div className="mt-1"><StatusBadge isActive={isActive} /></div>
+                  </div>
+                )}
+              </div>
+            </FormCard>
+
+            <FormCard title="Địa chỉ">
+              <TextField
+                label="Địa chỉ cụ thể"
+                value={form.address}
+                onChange={(value) => setForm((prev) => ({ ...prev, address: value }))}
+                placeholder="Nhập địa chỉ nhà cung cấp"
+              />
+            </FormCard>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -53,9 +164,9 @@ export function SupplierListPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newSupplier, setNewSupplier] = useState({ name: "", phone: "", address: "" });
+  const [newSupplier, setNewSupplier] = useState(EMPTY_SUPPLIER);
   const [editingSupplier, setEditingSupplier] = useState(null);
-  const [editSupplier, setEditSupplier] = useState({ name: "", phone: "", address: "" });
+  const [editSupplier, setEditSupplier] = useState(EMPTY_SUPPLIER);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 
@@ -110,7 +221,7 @@ export function SupplierListPage() {
 
   function closeModal() {
     setIsModalOpen(false);
-    setNewSupplier({ name: "", phone: "", address: "" });
+    setNewSupplier(EMPTY_SUPPLIER);
     setError("");
   }
 
@@ -127,7 +238,7 @@ export function SupplierListPage() {
 
   function closeEditModal() {
     setEditingSupplier(null);
-    setEditSupplier({ name: "", phone: "", address: "" });
+    setEditSupplier(EMPTY_SUPPLIER);
     setError("");
   }
 
@@ -149,7 +260,7 @@ export function SupplierListPage() {
       });
       setSuccess(`Đã tạo nhà cung cấp ${created.name}.`);
       setIsModalOpen(false);
-      setNewSupplier({ name: "", phone: "", address: "" });
+      setNewSupplier(EMPTY_SUPPLIER);
       setPage(1);
       setFilters({ keyword: "", status: "active" });
       setKeywordInput("");
@@ -226,7 +337,7 @@ export function SupplierListPage() {
   }
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-slate-900">Nhà cung cấp</h2>
@@ -239,19 +350,19 @@ export function SupplierListPage() {
             setSuccess("");
             setIsModalOpen(true);
           }}
-          className="h-11 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900"
+          className="h-10 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900"
         >
           + Thêm nhà cung cấp
         </button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <form className="grid gap-3 lg:grid-cols-[1fr_220px_auto]" onSubmit={handleSearch}>
+      <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]" onSubmit={handleSearch}>
           <div className="relative">
             <input
               ref={keywordInputRef}
-              className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="Tìm theo tên hoặc số điện thoại"
+              className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              placeholder="Tìm theo tên, SĐT, mã nhà cung cấp"
               value={keywordInput}
               onChange={(event) => setKeywordInput(event.target.value)}
             />
@@ -260,7 +371,7 @@ export function SupplierListPage() {
                 type="button"
                 aria-label="Xóa tìm kiếm"
                 onClick={handleClearSearch}
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 ×
               </button>
@@ -268,7 +379,7 @@ export function SupplierListPage() {
           </div>
 
           <select
-            className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+            className="h-10 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             value={filters.status}
             onChange={handleStatusChange}
           >
@@ -279,30 +390,28 @@ export function SupplierListPage() {
 
           <button
             type="submit"
-            className="h-11 rounded-md bg-brand-700 px-5 text-sm font-medium text-white hover:bg-brand-900"
+            className="h-10 rounded-md bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-900"
           >
             Tìm kiếm
           </button>
         </form>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-        {success && <p className="mt-4 text-sm text-green-700">{success}</p>}
+        {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {success && <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
 
-        <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
-          <div className="hidden grid-cols-[1.1fr_0.8fr_1.1fr_0.7fr_0.8fr_0.8fr_0.8fr] gap-3 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 md:grid">
+        <div className="mt-4 overflow-hidden rounded-md border border-slate-200">
+          <div className="hidden grid-cols-[minmax(240px,1.3fr)_150px_minmax(260px,1fr)_140px_190px] gap-3 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid">
             <span>Tên nhà cung cấp</span>
-            <span>Số điện thoại</span>
+            <span>SĐT</span>
             <span>Địa chỉ</span>
             <span>Trạng thái</span>
-            <span>Số giao dịch</span>
-            <span>Giao dịch gần nhất</span>
             <span className="text-right">Thao tác</span>
           </div>
 
-          {isLoading && <p className="px-3 py-4 text-sm text-slate-500">Đang tải dữ liệu...</p>}
+          {isLoading && <p className="px-4 py-5 text-sm text-slate-500">Đang tải dữ liệu...</p>}
 
           {!isLoading && items.length === 0 && (
-            <div className="px-3 py-8 text-center">
+            <div className="px-4 py-10 text-center">
               <p className="text-sm font-medium text-slate-700">Không có nhà cung cấp phù hợp.</p>
               <p className="mt-1 text-xs text-slate-500">Thử đổi từ khóa hoặc trạng thái.</p>
             </div>
@@ -311,23 +420,21 @@ export function SupplierListPage() {
           {!isLoading && items.map((supplier) => (
             <div
               key={supplier.id}
-              className="border-t border-slate-100 px-3 py-3 md:grid md:grid-cols-[1.1fr_0.8fr_1.1fr_0.7fr_0.8fr_0.8fr_0.8fr] md:gap-3"
+              className="border-t border-slate-100 px-4 py-3 text-sm hover:bg-blue-50/50 md:grid md:grid-cols-[minmax(240px,1.3fr)_150px_minmax(260px,1fr)_140px_190px] md:items-center md:gap-3"
             >
-              <div>
-                <p className="font-semibold text-slate-900">{supplier.name}</p>
-                <p className="mt-1 text-xs text-slate-500 md:hidden">{supplier.phone || "-"}</p>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-900">{supplier.name}</p>
+                <p className="mt-0.5 text-xs text-slate-500 md:hidden">{supplier.phone || "-"}</p>
               </div>
-              <p className="hidden text-sm text-slate-700 md:block">{supplier.phone || "-"}</p>
-              <p className="mt-2 text-sm text-slate-600 md:mt-0">{supplier.address || "-"}</p>
+              <p className="hidden text-slate-700 md:block">{supplier.phone || "-"}</p>
+              <p className="mt-1 truncate text-slate-600 md:mt-0" title={supplier.address || ""}>{getShortText(supplier.address)}</p>
               <div className="mt-2 md:mt-0"><StatusBadge isActive={supplier.is_active} /></div>
-              <p className="mt-2 text-sm font-semibold text-brand-800 md:mt-0">{supplier.transaction_count || 0}</p>
-              <p className="mt-1 text-sm text-slate-600 md:mt-0">{formatDateTime(supplier.last_transaction_at)}</p>
               <div className="mt-3 md:mt-0 md:text-right">
                 <div className="flex flex-wrap justify-start gap-2 md:justify-end">
                   <button
                     type="button"
                     onClick={() => openEditModal(supplier)}
-                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Sửa
                   </button>
@@ -335,15 +442,15 @@ export function SupplierListPage() {
                     <button
                       type="button"
                       onClick={() => handleDeactivateSupplier(supplier)}
-                      className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
                     >
-                      Ngừng hợp tác
+                      Ngừng
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => handleActivateSupplier(supplier)}
-                      className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
                     >
                       Khôi phục
                     </button>
@@ -354,7 +461,7 @@ export function SupplierListPage() {
           ))}
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-600">Tổng: <span className="font-medium">{total}</span></p>
           <div className="flex items-center gap-2">
             <button
@@ -379,37 +486,31 @@ export function SupplierListPage() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">Thêm nhà cung cấp</h3></div>
-            <div className="space-y-4 px-5 py-4">
-              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Tên nhà cung cấp *" value={newSupplier.name} onChange={(event) => setNewSupplier((prev) => ({ ...prev, name: event.target.value }))} />
-              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Số điện thoại" value={newSupplier.phone} onChange={(event) => setNewSupplier((prev) => ({ ...prev, phone: event.target.value }))} />
-              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Địa chỉ" value={newSupplier.address} onChange={(event) => setNewSupplier((prev) => ({ ...prev, address: event.target.value }))} />
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
-              <button type="button" onClick={closeModal} disabled={isSubmitting} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Hủy</button>
-              <button type="button" onClick={handleCreateSupplier} disabled={isSubmitting} className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:opacity-60">{isSubmitting ? "Đang lưu..." : "Lưu nhà cung cấp"}</button>
-            </div>
-          </div>
-        </div>
+        <SupplierFormModal
+          title="Thêm nhà cung cấp"
+          submitLabel="Lưu"
+          form={newSupplier}
+          setForm={setNewSupplier}
+          isSubmitting={isSubmitting}
+          isActive
+          showStatus={false}
+          onCancel={closeModal}
+          onSubmit={handleCreateSupplier}
+        />
       )}
 
       {editingSupplier && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="border-b border-slate-200 px-5 py-4"><h3 className="text-base font-semibold text-slate-900">Sửa nhà cung cấp</h3></div>
-            <div className="space-y-4 px-5 py-4">
-              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Tên nhà cung cấp *" value={editSupplier.name} onChange={(event) => setEditSupplier((prev) => ({ ...prev, name: event.target.value }))} />
-              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Số điện thoại" value={editSupplier.phone} onChange={(event) => setEditSupplier((prev) => ({ ...prev, phone: event.target.value }))} />
-              <input className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Địa chỉ" value={editSupplier.address} onChange={(event) => setEditSupplier((prev) => ({ ...prev, address: event.target.value }))} />
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
-              <button type="button" onClick={closeEditModal} disabled={isSubmitting} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Hủy</button>
-              <button type="button" onClick={handleUpdateSupplier} disabled={isSubmitting} className="h-10 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:opacity-60">{isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}</button>
-            </div>
-          </div>
-        </div>
+        <SupplierFormModal
+          title="Sửa nhà cung cấp"
+          submitLabel="Lưu thay đổi"
+          form={editSupplier}
+          setForm={setEditSupplier}
+          isSubmitting={isSubmitting}
+          isActive={editingSupplier.is_active}
+          showStatus
+          onCancel={closeEditModal}
+          onSubmit={handleUpdateSupplier}
+        />
       )}
     </section>
   );
