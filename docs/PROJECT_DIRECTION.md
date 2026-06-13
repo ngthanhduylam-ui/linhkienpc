@@ -1,175 +1,251 @@
-# PROJECT_DIRECTION.md
+﻿# PROJECT_DIRECTION.md
 
-# Project Identity
+# VI TÍNH PHƯỚC TÀI POS - Định hướng chính thức
 
-VI T?NH PH??C T?I POS
+Tài liệu này là nguồn nhớ dài hạn cho các phiên Codex mới. Nếu có mâu thuẫn với ghi chú cũ, ưu tiên tài liệu này và kiểm tra lại code hiện tại trước khi sửa.
+
+## 1. Project Identity
+
+Tên dự án: **VI TÍNH PHƯỚC TÀI POS**
+
+Định hướng chính thức:
 
 - POS First
 - Offline First
-- Self Hosted
+- Self-hosted
 - Sapo Inspired
+- Fast operation
+- Minimal clicks
+- Not an ERP
+- Stability before advanced finance features
 
-D? ?n n?y l? h? th?ng POS offline t? host cho c?a h?ng m?y t?nh, linh ki?n v? s?a ch?a VI T?NH PH??C T?I.
+Dự án phục vụ cửa hàng linh kiện PC và sửa chữa máy tính VI TÍNH PHƯỚC TÀI. Ứng dụng chạy nội bộ, tự host, ưu tiên thao tác bán tại quầy và tra cứu tồn kho nhanh.
 
-# Core Philosophy
+## 2. Business Context
 
-Th? t? ?u ti?n s?n ph?m:
+Bối cảnh kinh doanh hiện tại:
 
-1. Counter Sales
-2. Customer Management
-3. Warranty Tracking
-4. Debt Tracking
-5. Inventory Support
-6. Reporting
+- Cửa hàng máy tính, linh kiện PC và dịch vụ sửa chữa.
+- Bán linh kiện và số lượng theo lô cho khách reseller/cửa hàng khác là luồng quan trọng.
+- Khách lẻ tại quầy vẫn có, nhưng không phải lý do để biến hệ thống thành ERP/phần mềm bán lẻ phức tạp.
+- Tra cứu tồn kho nhanh, chọn đúng nhóm bảo hành / ghi chú và bán tại quầy ổn định quan trọng hơn quản trị kho nhiều bước.
 
-Inventory exists to support sales.
+## 3. POS-first Philosophy
 
-Sales workflow always has higher priority than warehouse workflow.
+Inventory tồn tại để hỗ trợ bán hàng.
 
-M?i m?n h?nh m?i ph?i t? h?i tr??c: n?u ??y l? Sapo POS, h? s? l?m th? n?o ?? b?n t?i qu?y nhanh h?n?
+Mỗi thay đổi UI/UX cần tự hỏi:
 
-# Non Goals
+> Nếu đây là Sapo POS, thao tác này sẽ được làm thế nào để người bán xử lý nhanh hơn, ít click hơn, ít nhầm hơn?
 
-Kh?ng thi?t k? nh?:
+Ưu tiên:
+
+1. Tốc độ bán tại quầy.
+2. Màn hình rõ, gọn, dễ scan.
+3. Ít thao tác phụ.
+4. Dữ liệu tồn kho đúng và có lịch sử giao dịch.
+5. Không đưa tính năng tài chính nâng cao vào khi workflow POS chưa đủ ổn định.
+
+## 4. Official Priorities
+
+Thứ tự ưu tiên sản phẩm:
+
+1. **Bán tại quầy / POS**
+2. **Quản lý khách hàng**
+3. **Theo dõi bảo hành / nhóm ghi chú**
+4. **Theo dõi công nợ** trong phase tương lai, chưa phải hiện tại
+5. **Inventory support for sales**
+6. **Reports** trong phase tương lai
+
+## 5. Non-goals / Current Forbidden Scope
+
+Không thiết kế dự án thành:
 
 - ERP
-- Warehouse First
-- Enterprise Inventory Software
-- H? th?ng kho ph?c t?p nhi?u b??c
-- H? th?ng k? to?n ??y ??
-- Website th??ng m?i ?i?n t?
+- Warehouse-first software
+- Enterprise inventory system
+- Hệ thống kế toán
+- Website thương mại điện tử
+- Phần mềm tài chính nhiều quy trình
 
-Kh?ng ?u ti?n bi?u m?u kho d?i, quy tr?nh ERP, hay thao t?c qu?n tr? n?ng.
+Không mô tả các mục sau là tính năng active nếu code chưa triển khai:
 
-# Public Lookup
+- Giá bán
+- Giá nhập
+- Thanh toán
+- Chiết khấu
+- Công nợ khách hàng
+- Công nợ nhà cung cấp
+- Kế toán
+- Hóa đơn
+- Báo cáo tài chính
+- Workflow ERP phức tạp
 
-Public Lookup ph?i lu?n ???c gi? l?i.
+Các tính năng trên chỉ là **future phase**, sau khi hệ thống chạy ổn định đủ lâu với dữ liệu thật.
 
-Kh?ng y?u c?u ??ng nh?p.
+## 6. UX Principles
 
-Public Lookup h? tr?:
+Phong cách UI:
 
-- Product search
-- SKU search
-- Inventory quantity
-- Warranty groups
+- Sapo-inspired, không copy branding.
+- Dày thông tin nhưng không rối.
+- Bố cục rõ thứ bậc: search -> chọn -> thêm -> xác nhận.
+- Form admin phải gọn, tránh cảm giác form hành chính dài.
+- Màn POS phải full-screen, nhanh, ưu tiên bàn phím/focus và thao tác lặp lại.
+- Không hiển thị keyboard shortcut kiểu F1/F3/F10 nếu chưa thực sự hỗ trợ.
+- Không hiển thị field giả hoặc disabled placeholder như “chưa cấu hình” nếu backend chưa lưu.
 
-V? d? public lookup c?n ti?p t?c hi?n th? ???c:
+Từ ngữ UI chính thức:
 
-- Intel Core i5 12400F
-- BH 12.28: 2
-- BH 09.28: 1
-- Kh?ng ghi ch?: 1
-- T?ng t?n: 4
+- Bán tại quầy
+- Nhập hàng
+- Kiểm hàng
+- Sản phẩm
+- Loại sản phẩm
+- Khách hàng
+- Nhà cung cấp
+- Lịch sử giao dịch
+- Phiếu nhập
+- Phiếu bán
+- Nhóm bảo hành / ghi chú
 
-Ki?n tr?c c? ? c?a d? ?n l?:
+Tên cũ như “Xuất & Giao hàng”, “Inventory Workbench”, “Inventory First” chỉ được nhắc trong phần lịch sử migration, không dùng làm ngôn ngữ chính.
 
-POS Offline
-+
-Public Lookup
+## 7. Core Inventory Rules
 
-Public Lookup l? ?i?m m?nh c?a d? ?n, kh?ng ???c lo?i b? khi refactor sang POS.
+Quy tắc tồn kho:
 
-# UI Philosophy
+- Không sửa trực tiếp số dư tồn kho từ UI thông thường.
+- Mọi thay đổi tồn kho phải đi qua Nhập hàng, Bán tại quầy/stock-out hoặc Kiểm hàng/điều chỉnh được duyệt.
+- Mọi thay đổi tồn kho phải có stock transaction.
+- Bulk stock-in và bulk stock-out tạo stock voucher.
+- Stock voucher là phiếu kho/phiếu bán nội bộ, **không phải hóa đơn**.
+- Stock operation dựa trên SKU + nhóm bảo hành / ghi chú.
+- Product inactive không nên xuất hiện trong selector/search mặc định.
 
-Inspired by Sapo POS.
+## 8. SKU Strategy
 
-Copy t? Sapo:
+SKU phải duy nhất.
 
-- workflow
-- density
-- layout hierarchy
-- search behavior
-- dropdown behavior
-- user flow
-- t?c ?? thao t?c
-- c?ch gi?m s? click
+Quy tắc SKU hiện tại:
 
-Kh?ng copy t? Sapo:
+- Chỉ dùng chữ thường, số và dấu chấm.
+- Không dùng dấu cách, dấu gạch ngang hoặc ký tự đặc biệt.
+- Ví dụ: `2nd.maybo.lenovo.v50t13imb`
+- Model thật có dấu gạch ngang thì bỏ dấu gạch ngang khi tạo SKU.
+- Ví dụ: `V50t-13IMB` -> `v50t13imb`
 
-- branding
-- pricing workflows ? giai ?o?n hi?n t?i
-- loyalty
-- marketplace integrations
-- e-commerce integrations
-- multi-channel complexity
-- keyboard shortcut branding nh? F1/F3/F6/F8/F10
+Chiến lược tương lai:
 
-UI n?n g?n, d?y th?ng tin, nhanh, ?t card l?n, ?t kho?ng tr?ng, ?t hi?u ?ng n?ng.
+- SKU vẫn unique và đơn giản.
+- Search nâng cao sẽ nghiên cứu riêng bằng tags/aliases/compatibility.
+- Ví dụ backlog: tìm `gen13th` trả về máy bộ hỗ trợ Intel Gen 13.
+- Compatibility rule backlog: model hỗ trợ Gen13 có thể hỗ trợ Gen12; model chỉ hỗ trợ Gen12 không tự động hỗ trợ Gen13.
+- Không implement `search_tags`, aliases hoặc compatibility database trong phase hiện tại.
 
-# Current Main Screen
+## 9. Warranty / Note Group Strategy
 
-/admin/stock-out
+Nhóm tồn kho hiện dựa trên transaction note/warranty note.
 
-? ngh?a hi?n t?i:
+Ví dụ nhóm:
 
-B?n t?i qu?y
+- `BH 8.27`
+- `BH 12.28`
+- `hbh`
+- `Không ghi chú`
 
-Kh?ng g?i l?:
+Quy tắc:
 
-Xu?t kho
+- Bán/nhập/kiểm hàng phải tôn trọng SKU + nhóm bảo hành / ghi chú.
+- UI hiện tại không phụ thuộc warranty-batch-first workflow.
+- Bảng warranty batch cũ có thể còn tồn tại trong code/database, nhưng không phải hướng UI chính.
 
-M?n n?y l? POS screen ch?nh, kh?ng ph?i trang kho.
+## 10. Public Lookup Role
 
-# Mandatory Search Workflow
+Public Lookup là phần quan trọng của dự án.
 
-Lu?ng t?m v? th?m s?n ph?m b?t bu?c:
+Route: `/`
 
-Focus search
-? recent products
-? search products
-? select warranty group
-? add product
-? clear search
-? close dropdown
-? focus search again
+Quy tắc:
 
-Sau khi th?m s?n ph?m, dropdown kh?ng ???c t? m? l?i recent products. Recent products ch? hi?n khi ng??i d?ng ch? ??ng focus/click v?o search ho?c b?t ??u g?.
+- Không yêu cầu login.
+- Không hiển thị toàn bộ sản phẩm khi ô tìm kiếm rỗng.
+- Hỗ trợ tìm theo tên sản phẩm, SKU và ghi chú bảo hành nếu backend hỗ trợ.
+- Hiển thị tổng tồn và nhóm bảo hành / ghi chú.
+- Mobile-friendly.
+- Không hiển thị giá, khách hàng, nhà cung cấp, lịch sử giao dịch hoặc action admin.
+- Có link đăng nhập quản trị.
 
-# Things Currently Forbidden
+Public Lookup phải luôn được bảo vệ khi refactor POS/admin.
 
-Hi?n t?i kh?ng ???c th?m:
+## 11. Deployment Philosophy
 
-- pricing
-- payment
-- invoices
-- discounts
-- ERP workflows
-- Sapo keyboard shortcuts
-- forcing login for public lookup
-- e-commerce cart/checkout/customer account public
-- revenue/profit/accounting screens n?u ch?a ???c duy?t
+Hướng triển khai:
 
-Kh?ng ??i backend/API ch? ?? ??i wording POS.
+- Tự host tại cửa hàng.
+- Ưu tiên offline/local-first trong mạng nội bộ.
+- Không phụ thuộc dịch vụ cloud bên ngoài cho workflow chính.
+- Luôn backup database trước deploy server.
+- Frontend-only change không restart backend nếu không cần.
+- Backend/database change cần cẩn trọng hơn vì đã có dữ liệu thật.
 
-# Official Roadmap
+Thông tin server hiện tại theo project memory:
 
-## Phase A
+- Ubuntu Server
+- Hostname: `linhkienpc`
+- User: `vitinhphuoctai`
+- IP nội bộ tĩnh: `192.168.1.50`
+- Project path: `/opt/linhkienpc/linhkienpc`
+- Backend: PM2
+- Frontend: Nginx
+- Database: MySQL
+- Branch deploy/dev: `codex-dev`
 
-POS Refactor
+## 12. Phased Roadmap
 
-M?c ti?u: bi?n /admin/stock-out th?nh m?n B?n t?i qu?y th?t s?, full-screen, nhanh, gi?ng workflow Sapo POS.
+### Phase A - POS core and real-world workflow stabilization
 
-## Phase B
+Trọng tâm:
 
-Customer Refactor
+- Bán tại quầy full-screen.
+- Product search/dropdown nhanh.
+- Nhóm bảo hành / ghi chú rõ ràng.
+- Cart gọn, chỉnh số lượng trực tiếp.
+- Customer selector gọn.
+- Multi-order local state.
+- Submit an toàn, chống double submit.
+- Public Lookup không bị ảnh hưởng.
 
-M?c ti?u: qu?n l? kh?ch h?ng t?t h?n, chu?n b? ??a ch? giao nh?n, c?ng n? v? l?ch s? mua/b?o h?nh.
+### Phase B - Customer/Supplier/Product UX stabilization and voucher history
 
-## Phase C
+Trọng tâm:
 
-Supplier & Purchasing
+- Product add/edit Sapo-like.
+- Customer/Supplier form tối giản theo field backend đang lưu.
+- Nhập hàng gọn theo workflow thực tế.
+- Lịch sử giao dịch voucher-first.
+- Chuẩn bị nghiên cứu in phiếu, nhưng chưa thêm invoice.
 
-M?c ti?u: nh? cung c?p, nh?p h?ng, phi?u mua, gi? nh?p v? c?ng n? nh? cung c?p trong t??ng lai.
+### Phase C - Long-term real-world stability testing on Ubuntu Server
 
-## Phase D
+Trọng tâm:
 
-Financial
+- Chạy với dữ liệu thật đủ lâu.
+- Theo dõi lỗi thao tác thực tế.
+- Backup/restore ổn định.
+- Giảm rủi ro deploy.
+- Chỉ sửa lỗi workflow hoặc UX gây nhầm.
 
-M?c ti?u: c?ng n?, s? qu?, thu chi. Kh?ng l?m qu? s?m khi POS ch?a ?n.
+### Future phase only
 
-## Phase E
+Chỉ mở khi hệ thống POS/inventory đã ổn định:
 
-Analytics
+- Giá nhập / giá bán
+- Thanh toán
+- Công nợ khách hàng / nhà cung cấp
+- Kế toán
+- Báo cáo tài chính
+- In phiếu nâng cao
+- Search tags / aliases / compatibility
 
-M?c ti?u: b?o c?o doanh thu, l?i nhu?n, t?n kho, export. ??y l? giai ?o?n sau, kh?ng chen v?o workflow POS hi?n t?i.
+Không biến dự án thành ERP-style software.

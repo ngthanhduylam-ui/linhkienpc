@@ -1,198 +1,337 @@
-# CHANGELOG_POS.md
+﻿# CHANGELOG_POS.md
 
-# VI TÍNH PHƯỚC TÀI POS - POS Changelog
+# VI TÍNH PHƯỚC TÀI POS - Changelog theo milestone
 
-File này ghi lại các mốc thay đổi quan trọng của màn POS và định hướng POS-first. Dùng để chat Codex mới hiểu nhanh lịch sử refactor mà không cần đọc lại toàn bộ hội thoại cũ.
+Tài liệu này ghi lại các mốc thay đổi lớn của hướng POS-first. Không invent ngày nếu không có trong repo/history; các mục được tổ chức theo milestone.
 
-## 2026-06-06 - Direction Reset: POS First
+## 1. Direction Reset: Inventory First -> POS First
 
-Dự án đổi hướng từ inventory management sang:
+Dự án đổi hướng từ quản lý kho là trung tâm sang **POS First / Offline First / Self-hosted / Sapo Inspired**.
 
-VI TÍNH PHƯỚC TÀI POS
+Quyết định chính:
 
-Các nguyên tắc được chốt:
+- Inventory hỗ trợ bán hàng, không dẫn dắt workflow.
+- `/admin/stock-out` trở thành **Bán tại quầy**.
+- Public Lookup vẫn là tính năng cốt lõi, không login.
+- Không thêm price/payment/debt/invoice trong giai đoạn ổn định POS.
+- Không biến dự án thành ERP.
 
-- POS First
-- Offline First
-- Self Hosted
-- Sapo Inspired
-- Inventory chỉ hỗ trợ bán hàng
-- Sales workflow ưu tiên cao hơn warehouse workflow
-- Public Lookup vẫn giữ công khai, không login
+## 2. Admin Authentication and Public Lookup
 
-Các thứ bị cấm trong phase hiện tại:
+Đã có:
 
-- pricing
-- payment
-- invoices
-- discounts
-- ERP workflows
-- keyboard shortcut UI kiểu F1/F3/F6/F8/F10
+- `/admin/login` với JWT + refresh token.
+- Protected admin routes.
+- Public route `/` không cần login.
+- Public Lookup search theo tên sản phẩm/SKU/ghi chú bảo hành nếu backend hỗ trợ.
+- Empty search không show all products.
+- Result card hiển thị tổng tồn và nhóm bảo hành / ghi chú.
+- Copy product name.
+- Link `Đăng nhập quản trị` từ public page.
 
-## Phase A - POS Refactor
+Quyết định UX:
 
-Mục tiêu Phase A: biến `/admin/stock-out` thành màn bán tại quầy thật sự.
+- Public Lookup chỉ để tra cứu tồn, không có admin action.
+- Không hiển thị giá, khách hàng, nhà cung cấp, transaction history.
 
-### A.1 - Rename Stock Out UX to POS
-
-- `Xuất & Giao hàng` đổi hướng thành `Bán tại quầy`.
-- Sidebar label đổi sang `Bán tại quầy`.
-- Vẫn giữ backend/API stock-out cũ.
-- Không đổi business logic.
-
-### A.2 - Full-screen POS Screen
+## 3. POS Full-screen Refactor
 
 `/admin/stock-out` được tách khỏi AdminLayout.
 
-Kết quả:
+Thay đổi chính:
 
-- Ẩn AdminSidebar.
-- Ẩn AdminHeader.
+- Ẩn AdminSidebar/AdminHeader.
 - Thêm top POS bar.
-- Thêm product search trên top bar.
-- Thêm visual order tab `Đơn 1`.
-- Thêm visual `+` button cho multi-order tương lai.
 - Thêm Home button về `/admin`.
-- Bỏ thông tin chi nhánh khỏi header.
+- Product search đưa lên top bar.
+- Layout chia main cart + right panel.
+- Wording chuyển sang `Bán tại quầy`.
 
-Màn POS hiện có layout:
+Business decision:
 
-- Left/main: search sản phẩm + cart table/list.
-- Right panel: customer + giao nhận placeholder + total quantity + note + confirm button.
+- Backend/API vẫn dùng stock-out/bulk để trừ tồn.
+- Không đổi inventory validation chỉ vì đổi wording UI.
 
-### A.3 - Product Dropdown Behavior
+## 4. Product Search Dropdown Improvements
 
-Đã chốt workflow bắt buộc:
+Các đợt polish đã làm dropdown giống POS autocomplete hơn:
 
-Focus search
-→ recent products
-→ search products
-→ select warranty group
-→ add product
-→ clear search
-→ close dropdown
-→ focus search again
+- Recent products khi focus search rỗng.
+- Typing hiển thị results.
+- Dropdown floating, không đẩy layout.
+- Product row compact.
+- SKU muted.
+- Tổng tồn rõ.
+- Hết hàng muted hơn.
+- Dropdown width/responsive tốt hơn cho 1920×1080 và 2560×1440.
+- Sau add: clear search, clear debounced search, close dropdown, focus search.
+- Dropdown không tự reopen ngay sau add.
 
-Sau khi add product:
+Quyết định quan trọng:
 
-- search input phải clear
-- debounced search phải clear
-- dropdown phải đóng
-- visible suggestions reset
-- focus quay lại search input
-- dropdown không được tự mở lại recent products
+- Không thêm keyboard shortcut UI kiểu Sapo nếu chưa support thật.
+- Không hiện price/payment trong dropdown.
 
-Dropdown chỉ mở lại khi:
+## 5. Warranty / Note Group Workflow
 
-- user click/focus search input
-- hoặc user bắt đầu gõ
+Workflow hiện tại:
 
-### A.4 - Click Outside Dropdown Fix
+Product -> nhóm bảo hành / ghi chú -> Thêm 1 item -> chỉnh quantity trong cart.
 
-Vấn đề cũ:
+Thay đổi chính:
 
-- Search input nằm trong header.
-- Dropdown render trong main.
-- Hai ref riêng khiến click-outside không ổn định.
+- Bỏ quantity stepper khỏi dropdown warranty row.
+- Dropdown warranty row chỉ còn label, quantity còn lại và button thêm.
+- Nếu SKU + note group đã có trong cart, dropdown hiện `+1` hoặc trạng thái đã chọn.
+- Nếu đã chọn đủ tồn, button disabled và text rõ.
+- Warranty label/quantity contrast được fix để đọc được trên active row.
 
-Cách sửa đúng:
+Quyết định:
 
-- Dùng một `dropdownContainerRef` duy nhất.
-- Bọc cả search input và dropdown trong cùng container.
-- Document mousedown chỉ cần kiểm tra `dropdownContainerRef.current.contains(event.target)`.
+- Nhóm bảo hành / ghi chú vẫn chọn trước khi add trong version hiện tại.
+- Chuyển warranty selection vào cart là backlog, chưa implement.
 
-Kết quả cần giữ:
+## 6. Cart and Quantity Improvements
 
-- Click search input: dropdown mở.
-- Click trong dropdown: dropdown giữ mở.
-- Click +/- trong dropdown: dropdown giữ mở.
-- Click Add: add product, dropdown đóng.
-- Click vùng trắng/right panel/textarea: dropdown đóng.
-- Escape: dropdown đóng.
+Cart được refactor từ cảm giác admin table sang POS order list.
 
-### A.5 - Compact Sapo-style Density
+Thay đổi chính:
 
-Đã polish UI để bớt admin-form:
+- Bỏ STT/image dư thừa ở các lần polish trước.
+- Bố cục product-centric.
+- SKU có cột riêng/compact.
+- Nhóm bảo hành / ghi chú hiển thị rõ.
+- Quantity editable trực tiếp: `[-] [input] [+]`.
+- Clamp quantity min/max theo tồn nhóm.
+- Add same SKU + same note group merge/increase quantity.
+- Delete row luôn dễ thấy.
+- Cart table compact, không overflow ngang trên desktop bình thường.
 
-- Dropdown product width gọn hơn.
-- Product row thấp hơn.
-- SKU/category nhỏ và muted.
-- Tồn kho nằm bên phải.
-- Warranty group row nhỏ hơn.
-- Stepper nhỏ hơn.
-- Cart row gọn hơn.
-- Right panel ít whitespace hơn.
-- Button chính đổi thành `Xác nhận bán`.
+Quyết định:
 
-Vẫn chưa thêm:
+- Quantity chỉnh trong cart, không chỉnh trong dropdown.
+- Line note/serial UI bị ẩn trước deploy vì backend chưa persist.
 
-- giá
-- thanh toán
-- hóa đơn
-- chiết khấu
-- công nợ
+## 7. Customer Selector
 
-## Current POS State
+Customer selector trong POS được polish:
 
-Route chính:
+- Recent customers.
+- Search khách hàng.
+- Customer row compact: name + phone.
+- Selected customer card gọn: name, phone, nút đổi.
+- Inactive customers không hiển thị.
+- Quick create giữ theo flow hiện có.
 
-`/admin/stock-out`
+Không thêm:
 
-Ý nghĩa:
+- Công nợ
+- Thanh toán
+- Địa chỉ nâng cao
+- Customer group/tags giả
 
-`Bán tại quầy`
+## 8. Multiple Order Tabs
 
-Đang hoạt động:
+Đã thêm foundation cho multi-order frontend state:
 
-- Full-screen POS.
-- Home button về `/admin`.
-- Product search.
-- Recent products.
-- Product dropdown.
-- Warranty group selection.
-- Add to cart.
-- Cart table/list.
-- Customer selector.
-- Note.
-- Total quantity.
-- Confirm sale.
-- Backend stock-out voucher creation giữ nguyên.
+- Tạo nhiều order tabs: `Đơn 1`, `Đơn 2`, ...
+- `+` tạo đơn mới và nằm ngay sau tab cuối.
+- Mỗi order giữ riêng cart, customer và note state nếu có.
+- Switch order không clear order khác.
+- Close order có confirm nếu đơn chưa lưu.
+- Nếu chỉ còn một order, close sẽ clear order đó.
+- Khi submitting, khóa create/switch/close để tránh state leakage.
 
-## Known Remaining POS Work
+Chưa có:
 
-Các việc nên làm tiếp, theo thứ tự:
+- Draft persistence localStorage/session.
 
-1. Tiếp tục làm dropdown giống Sapo hơn nữa.
-2. Giảm nested layout trong warranty group.
-3. Chuẩn bị flow tương lai: add product trước, chọn warranty trong cart.
-4. Thêm multi-order thật sự cho `Đơn 1` và nút `+`.
-5. Thêm confirm đóng đơn nếu cart có sản phẩm.
-6. Làm CustomerSelector gọn hơn theo POS style.
-7. Sau khi POS ổn mới tính pricing/payment/debt.
+## 9. Submit Safety Fixes
 
-## Regression Checklist
+Đã harden submit POS:
 
-Sau mỗi lần sửa POS, phải test:
+- Guard double submit ở đầu `handleSubmit`.
+- Disable các action nguy hiểm khi `isSubmitting`.
+- Sale success được tách khỏi reload inventory.
+- Nếu bulk stock-out thành công nhưng reloadProducts fail, UI báo warning chứ không báo sale failed.
+- Active order được clear sau success.
+- Other order tabs giữ nguyên.
 
-1. Mở `/admin/stock-out`.
-2. Admin sidebar/header bị ẩn.
-3. Home button về `/admin`.
-4. Focus search hiển thị recent products.
-5. Typing filter products.
-6. Click outside đóng dropdown.
-7. Escape đóng dropdown.
-8. Click +/- trong dropdown không đóng dropdown.
-9. Click `Thêm` add product.
-10. Sau add, search input clear.
-11. Sau add, dropdown đóng.
-12. Sau add, focus quay lại search input.
-13. Dropdown không tự mở lại.
-14. Typing tiếp mở dropdown lại.
-15. Cart row hiển thị product name, SKU, warranty, quantity.
-16. Remove product hoạt động.
-17. Clear all hỏi confirmation.
-18. Customer selection hoạt động.
-19. Note nhập được.
-20. `Xác nhận bán` vẫn tạo stock-out voucher.
-21. Inventory validation vẫn hoạt động.
-22. Public Lookup không bị ảnh hưởng.
+Quyết định:
+
+- Backend vẫn là nguồn validate tồn cuối cùng.
+- Không auto xóa/submit các order khác nếu chứa SKU vừa bán.
+
+## 10. Product UI Refactor
+
+Product Management được polish theo Sapo-like layout:
+
+- Product list giữ table/list hiện tại.
+- Button chính: `+ Thêm sản phẩm`.
+- Add/edit product dùng route riêng:
+  - `/admin/products/new`
+  - `/admin/products/:id/edit`
+- Layout hai cột: thông tin chung + preview/quy tắc SKU.
+- Wording `Loại sản phẩm` thay cho `Danh mục` ở UI.
+- Vẫn giữ `category` / `category_id` nội bộ.
+- SKU helper ngắn.
+- Uppercase SKU auto lowercase.
+- Invalid SKU và duplicate SKU báo rõ.
+- Inline create product type: `+ Tạo loại sản phẩm mới`.
+
+Không thêm:
+
+- Price
+- Barcode
+- Tax
+- Brand
+- Tags
+- Warranty config
+
+## 11. Inventory Check UI Refactor
+
+Kiểm hàng được polish cho workflow kiểm tồn thực tế:
+
+- Search/select product.
+- Detail product rõ hơn: name, SKU, total quantity.
+- Nhóm bảo hành / ghi chú compact.
+- Adjustment form rõ: loại điều chỉnh, số lượng, nhóm, lý do.
+- Missing product action: `+ Thêm sản phẩm mới`.
+- Điều chỉnh vẫn dùng API hiện có.
+
+Giới hạn hiện tại:
+
+- Đây là direct quantity adjustment.
+- Chưa phải hệ thống phiếu kiểm kê/draft/cân bằng hoàn chỉnh.
+
+## 12. Stock In UI Refactor
+
+Nhập hàng chuyển sang layout Sapo-inspired, inventory-only:
+
+- Page title/action: `Nhập hàng`.
+- Supplier section ở trên.
+- Product section full width, dễ nhập nhanh.
+- Product dropdown có `+ Thêm mới sản phẩm`, product name, SKU, tồn hiện tại.
+- Table gồm sản phẩm, SKU, nhóm bảo hành / ghi chú, số lượng, xóa.
+- Summary chỉ có tổng số dòng và tổng số lượng.
+- Submit dùng bulk stock-in hiện có.
+
+Không thêm:
+
+- Giá nhập
+- Chiết khấu
+- Thuế
+- Thanh toán
+- Công nợ nhà cung cấp
+- Tổng tiền
+
+## 13. Customer/Supplier UI Refactor
+
+Customer/Supplier module được polish và sau đó đơn giản hóa:
+
+- List pages gọn hơn.
+- Add/edit modal/form chỉ giữ field backend đang lưu:
+  - name
+  - phone
+  - address
+- Hide status card trong create form.
+- Edit vẫn giữ behavior activate/deactivate/restore theo list actions.
+- Loại bỏ field giả/unsupported:
+  - tags
+  - customer group
+  - email/tax/website nếu backend không lưu
+  - province/ward separation
+  - debt
+  - responsible staff placeholder
+
+Quyết định:
+
+- Không show disabled fake fields như “Chưa cấu hình”.
+- Địa chỉ nâng cao là future research.
+
+## 14. Transaction History Detail-page Refactor
+
+Transaction History chuyển từ modal detail sang full detail page.
+
+Thay đổi chính:
+
+- List route: `/admin/transaction-history`.
+- Detail route: `/admin/transaction-history/:voucherId`.
+- Voucher code và `Chi tiết` navigate sang detail page.
+- Back link: `← Quay lại danh sách phiếu`.
+- Detail page gồm:
+  - Thông tin đối tác
+  - Thông tin sản phẩm
+  - Thông tin phiếu
+- Product detail table bỏ cột `Loại giao dịch` để tránh overflow.
+
+Quyết định:
+
+- Stock voucher không phải hóa đơn.
+- Không hiển thị price/payment/debt.
+
+## 15. Public Lookup Polish
+
+Public Lookup được polish cho người xem ngoài admin:
+
+- Header brand `VI TÍNH PHƯỚC TÀI`.
+- Subtitle `Tra cứu tồn kho linh kiện PC`.
+- Button `Đăng nhập quản trị`.
+- Search hero lớn, mobile-friendly.
+- Helper text không nhắc tags/compatibility chưa implement.
+- Empty search không show all products.
+- Result card rõ: name, SKU, total quantity, stock status, nhóm bảo hành / ghi chú.
+- Copy product name giữ lại.
+
+Không hiển thị:
+
+- Admin actions
+- Giá/cost
+- Customer/supplier info
+- Internal transaction history
+
+## 16. Ubuntu Server Deployment
+
+Dự án đã được đưa lên Ubuntu Server để test với dữ liệu thật.
+
+Thông tin theo project memory:
+
+- Hostname: `linhkienpc`
+- User: `vitinhphuoctai`
+- IP: `192.168.1.50`
+- Project path: `/opt/linhkienpc/linhkienpc`
+- Backend: PM2
+- Frontend: Nginx
+- Database: MySQL
+- Branch: `codex-dev`
+
+Deploy cần cẩn trọng vì database đã có dữ liệu thật.
+
+## 17. Automatic Database Backup
+
+Đã có backup database tự động:
+
+- Script: `/home/vitinhphuoctai/backup_linhkienpc.sh`
+- Lịch: mỗi ngày 23:00
+- Thư mục: `/home/vitinhphuoctai/backups`
+- Retention: 14 ngày
+
+Trước khi deploy thay đổi lớn, vẫn nên backup thủ công.
+
+## 18. Current Deferred Items
+
+Deferred/backlog, không xem là completed:
+
+- Giá nhập / giá bán
+- Thanh toán
+- Công nợ khách hàng / nhà cung cấp
+- Hóa đơn / invoice
+- Kế toán
+- Báo cáo tài chính
+- Search tags / aliases / compatibility
+- Draft persistence cho multi-order
+- Warranty selection/editing trực tiếp trong cart
+- Inventory check voucher/draft workflow đầy đủ
+- In phiếu nâng cao
+
+Nguyên tắc hiện tại: ổn định POS và dữ liệu thật trước, tính năng tài chính sau.

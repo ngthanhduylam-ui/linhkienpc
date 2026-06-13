@@ -1,265 +1,300 @@
-# PROJECT_STATUS.md
+﻿# PROJECT_STATUS.md
 
-# Technology
+# VI TÍNH PHƯỚC TÀI POS - Trạng thái hiện tại
 
-## Frontend
+Tài liệu này mô tả trạng thái thực tế của dự án ở thời điểm hiện tại. Dùng để khôi phục context cho Codex, kiểm tra deploy và tránh nhầm giữa tính năng đã có với backlog.
+
+## 1. Technology
+
+Frontend:
 
 - React 18
 - Vite
 - React Router
 - TailwindCSS
-- API client c? refresh token flow
-- LocalStorage d?ng cho token v? recent items
+- API client có refresh token flow
+- localStorage dùng cho token và recent items
 
-## Backend
+Backend:
 
 - Node.js
 - Express
 - MySQL
-- JWT Authentication
-- Refresh token table
+- JWT authentication
+- Refresh token
 - bcrypt
 - dotenv
-- cors
-- helmet
-- morgan
+- cors / helmet / morgan
 
-## Database
+Database:
 
 - MySQL
-- Migration scripts trong database/migrations
-- Schema SQL trong database/schema
-- D? li?u admin seed b?ng backend/scripts/seed.js
+- Migration scripts trong `database/migrations`
+- Schema trong `database/schema/schema.sql`
+- Seed admin/category qua `backend/scripts/seed.js`
 
-## Deployment
+## 2. Deployment Status
 
-- Self-hosted offline/local-first
-- C?u h?nh b?ng .env
-- Frontend Vite, backend Express, database MySQL
-- Public lookup v?n ch?y kh?ng c?n ??ng nh?p
+Trạng thái theo project memory:
 
-# Completed Modules
+- Hệ thống đã chạy trên Ubuntu Server với dữ liệu thật.
+- Server dùng cho production/test nội bộ tại cửa hàng.
+- Frontend phục vụ bằng Nginx.
+- Backend chạy bằng PM2.
+- Database là MySQL.
+- Branch deploy/dev chính: `codex-dev`.
 
-## Products
+Thông tin server:
 
-?? c? qu?n l? s?n ph?m:
+- Hostname: `linhkienpc`
+- User: `vitinhphuoctai`
+- IP nội bộ tĩnh: `192.168.1.50`
+- Project path: `/opt/linhkienpc/linhkienpc`
 
-- danh s?ch s?n ph?m
-- t?m ki?m
-- ph?n trang
-- t?o s?n ph?m
-- s?a s?n ph?m
-- soft delete / ng?ng s? d?ng
-- kh?i ph?c
-- l?c tr?ng th?i
-- SKU th? c?ng, c? h? tr? g?i ? ? m?t s? flow tr??c ??
+Backup database:
 
-## Customers
+- Script: `/home/vitinhphuoctai/backup_linhkienpc.sh`
+- Backup tự động hằng ngày lúc 23:00
+- Thư mục backup: `/home/vitinhphuoctai/backups`
+- Retention hiện tại: 14 ngày
 
-?? c? kh?ch h?ng:
+Local development:
 
-- danh s?ch kh?ch h?ng
-- t?o kh?ch h?ng
-- s?a kh?ch h?ng
-- soft delete / ng?ng giao d?ch
-- kh?i ph?c
-- l?c tr?ng th?i
-- selector trong POS/stock-out
-- recent customers b?ng localStorage
-- kh?ch h?ng g?n ???c v?o stock transaction/voucher
+- Windows path: `C:\Users\Admin\Documents\Codex\linhkienpc`
+- Frontend dev: `http://localhost:5173`
+- Local dev nên dùng local backend/database trừ khi cố ý trỏ về server thật.
 
-## Suppliers
+## 3. Current Working Routes
 
-?? c? nh? cung c?p:
+Public:
 
-- danh s?ch nh? cung c?p
-- t?o nh? cung c?p
-- s?a nh? cung c?p
-- soft delete / ng?ng h?p t?c
-- kh?i ph?c
-- l?c tr?ng th?i
-- selector trong stock-in
-- recent suppliers b?ng localStorage
+- `/` - Public Lookup, không cần login
 
-## Stock In
+Admin:
 
-?? c? nh?p h?ng nhi?u s?n ph?m:
+- `/admin/login` - đăng nhập quản trị
+- `/admin` - redirect về `/admin/stock-in`
+- `/admin/products` - danh sách sản phẩm
+- `/admin/products/new` - thêm sản phẩm
+- `/admin/products/:id/edit` - sửa sản phẩm
+- `/admin/stock-in` - nhập hàng bulk
+- `/admin/stock-out` - Bán tại quầy / POS full-screen
+- `/admin/inventory-check` - kiểm hàng / điều chỉnh tồn thực tế
+- `/admin/customers` - khách hàng
+- `/admin/customers/:id` - chi tiết khách hàng
+- `/admin/suppliers` - nhà cung cấp
+- `/admin/transaction-history` - danh sách phiếu
+- `/admin/transaction-history/:voucherId` - chi tiết phiếu
 
-- /admin/stock-in d?ng StockInBulkPage
-- ch?n nh? cung c?p m?t l?n
-- th?m nhi?u s?n ph?m
-- m?i d?ng c? quantity v? note b?o h?nh/ghi ch? nh?p
-- submit bulk t?o nhi?u stock_transactions trong m?t l?n
-- backend c? POST /admin/stock-in/bulk
+Legacy/redirect:
 
-## Stock Out / POS
+- `/admin/inventory-workbench` redirect về `/admin/stock-in`
+- `/admin/stock-out-bulk` redirect về `/admin/stock-out`
+- `/admin/stock-in-single` và `/admin/stock-out-single` vẫn còn page cũ, không phải hướng UI chính.
 
-/admin/stock-out hi?n l? m?n POS ch?nh, d?ng StockOutBulkPage.
+## 4. Completed / Working Modules
 
-- full-screen POS layout
-- ?n admin sidebar/header
-- top POS bar
-- Home button v? /admin
-- product search
-- recent products
-- compact product dropdown
-- warranty group selection
-- add to cart
-- cart table/list
-- customer selector
-- note
-- total quantity
-- confirm sale button
-- backend v?n d?ng bulk stock-out v? voucher creation
+### Public Lookup - Working and polished
 
-## Stock Voucher
+- Route `/`
+- Không yêu cầu login
+- Search theo tên sản phẩm, SKU và ghi chú bảo hành nếu backend hỗ trợ
+- Empty search không show toàn bộ sản phẩm
+- Có search history localStorage
+- Result card hiển thị total quantity
+- Nhóm bảo hành / ghi chú expandable
+- Single result auto-expand
+- Copy product name
+- Mobile-friendly
+- Không có giá/payment/debt/admin actions
 
-?? c? stock voucher backend:
+### Admin Authentication - Working
 
-- stock_vouchers table
-- voucher_id trong stock_transactions
-- bulk stock-in/out t?o voucher
-- GET /admin/stock-vouchers
-- GET /admin/stock-vouchers/:id
-- TransactionHistoryPage hi?n th? voucher-first
+- Route `/admin/login`
+- Protected admin routes
+- JWT access token + refresh token
+- Token lưu trong localStorage
+- Sai mật khẩu có thông báo rõ
 
-## Inventory Check
+### Products - Working and polished
 
-?? c? Inventory Check:
+- Danh sách sản phẩm
+- Search/filter/pagination
+- Add product page
+- Edit product page
+- Activate/deactivate/restore
+- SKU validation
+- Duplicate SKU error handling
+- UI Sapo-inspired full page
+- Wording visible: `Thêm sản phẩm`, `Sửa sản phẩm`, `Loại sản phẩm`
+- API/database nội bộ vẫn dùng `category` / `category_id`
+- SKU helper ngắn, auto lowercase khi nhập
 
-- search/select product
-- xem total quantity
-- xem warranty/note groups
-- ?i?u ch?nh s? l??ng t?ng/gi?m
-- quantity adjustments table
-- note group calculation ?? t?nh stock_transactions, note adjustments v? quantity adjustments
-- Inventory Check hi?n t?p trung v?o ch?nh s? l??ng th?c t?, kh?ng ph?i warehouse audit ph?c t?p
+### Stock In / Nhập hàng - Working and polished
 
-## Public Lookup
+- Route `/admin/stock-in`
+- Bulk stock-in
+- Chọn nhà cung cấp
+- Search/add nhiều sản phẩm
+- Mỗi dòng có số lượng và nhóm bảo hành / ghi chú
+- Product dropdown có `+ Thêm mới sản phẩm`
+- Submit gọi backend bulk stock-in hiện có
+- Tạo stock voucher theo logic backend
+- Không có giá nhập, thanh toán, công nợ, tổng tiền
 
-?? c? public lookup:
+### Stock Out / POS / Bán tại quầy - Working and under real-world testing
 
-- route /
-- kh?ng login
-- mobile-first
-- search theo product name, SKU, warranty note
-- kh?ng show to?n b? products khi input r?ng
-- search history localStorage
-- result card c? total quantity
-- warranty/note groups expandable
-- single result auto-expand
-- copy product name
-
-# POS Progress
-
-## Current POS status
-
-Phase A ?ang ti?n h?nh.
-
-/admin/stock-out ?? ???c chuy?n t? "Xu?t & Giao h?ng" sang "B?n t?i qu?y" theo h??ng POS.
-
-## What already works
-
-- Full-screen POS, kh?ng c?n AdminLayout tr?n /admin/stock-out
-- Home button v? /admin
-- Product search tr?n top bar
-- Recent products khi focus search
+- Route `/admin/stock-out`
+- Full-screen POS, không dùng AdminLayout
+- Home button về `/admin`
+- Product search trên top bar
+- Recent products
 - Product dropdown compact
-- Warranty group ch?n tr??c khi th?m
-- Add product to cart
-- Sau khi add: clear search, clear debounce, close dropdown, focus search l?i
-- Click outside dropdown ??ng dropdown
-- Escape ??ng dropdown
-- Cart d?ng table/list
-- Customer selector ? right panel
-- Note ? right panel
-- Total quantity ? right panel
-- Confirm sale g?i bulk stock-out nh? c?
-- Voucher creation v?n do backend x? l?
+- Chọn nhóm bảo hành / ghi chú trước khi thêm
+- Add vào cart với quantity mặc định 1
+- Same SKU + same note group merge/increase quantity
+- Cart table compact
+- Chỉnh quantity trực tiếp trong cart
+- Customer selector bên phải
+- Multi-order local state
+- Close order có confirm nếu đơn chưa lưu
+- Submit gọi bulk stock-out hiện có
+- Backend tạo voucher
+- Có double-submit guard
+- Nếu sale thành công nhưng reload tồn kho lỗi, UI không báo “bán thất bại” sai
+- Không có giá/payment/debt/invoice
 
-## What still needs improvement
+### Inventory Check / Kiểm hàng - Working
 
-- Dropdown v?n c?n ti?p t?c ???c l?m gi?ng Sapo h?n: ?t nested layout, nhi?u row visible h?n
-- Workflow t??ng lai n?n chuy?n d?n sang: ch?n product tr??c, warranty/quantity ch?nh trong cart
-- POS ch?a c? multi-order th?t s?, n?t + hi?n ch? visual
-- Ch?a c? close order tab v?i confirm ??ng ngh?a
-- Ch?a c? draft order/session persistence
-- Ch?a c? pricing/payment/debt/invoice theo ch? ??ch hi?n t?i
-- Customer selector c?n phong c?ch admin h?n Sapo, c?n refactor ? Phase B
-- Right panel ch?a c? money/payment v? ?ang b? c?m trong phase hi?n t?i
+- Route `/admin/inventory-check`
+- Search/select product
+- Xem total stock
+- Xem nhóm bảo hành / ghi chú
+- Tăng/giảm số lượng theo nhóm
+- Lý do điều chỉnh
+- Quantity adjustment history
+- Missing product action: `+ Thêm sản phẩm mới`
+- Đây là direct inventory adjustment hiện tại, chưa phải hệ thống phiếu kiểm kê/draft/cân bằng đầy đủ.
 
-# Current Phase
+### Customers / Khách hàng - Working and simplified
 
-Phase A: POS Refactor
+- Customer list
+- Search
+- Add/edit
+- Activate/deactivate/restore
+- Fields đang dùng/lưu: name, phone, address
+- POS customer selector
+- Recent customers
+- Inactive customers không nên xuất hiện trong selector/recent
+- Không document fake fields như nhóm khách hàng, tags, công nợ, province/ward, tax nếu chưa implement.
 
-??c l??ng ho?n th?nh: 60-70%
+### Suppliers / Nhà cung cấp - Working and simplified
 
-L? do: core POS full-screen v? add-to-cart ?? c?, nh?ng density/dropdown/cart/customer panel v?n c?n c?n polish th?m tr??c khi coi l? POS mature.
+- Supplier list
+- Search
+- Add/edit
+- Activate/deactivate/restore
+- Fields đang dùng/lưu: name, phone, address
+- Stock In supplier selector
+- Recent suppliers
+- Inactive suppliers không nên xuất hiện trong selector/recent
+- Không document fake fields.
 
-# Current Priorities
+### Transaction History / Stock Vouchers - Working and polished
 
-Top 10 task hi?n t?i:
+- Route `/admin/transaction-history`
+- Voucher-first list
+- Search theo mã phiếu, sản phẩm, khách hàng, nhà cung cấp
+- Filter theo loại phiếu: tất cả / nhập hàng / bán hàng
+- Detail route riêng: `/admin/transaction-history/:voucherId`
+- Detail page không còn modal
+- Back link: `← Quay lại danh sách phiếu`
+- Hiển thị voucher code, loại phiếu, ngày tạo, người tạo, đối tác, tổng số lượng, số dòng, ghi chú và dòng sản phẩm
+- Không có price/payment/debt fields
+- Stock voucher không phải invoice
 
-1. Ti?p t?c polish product dropdown gi?ng Sapo POS h?n.
-2. ??m b?o search ? add ? clear ? close dropdown ? focus l?i lu?n ?n ??nh.
-3. L?m cart table d?y h?n, d? scan nhi?u d?ng h?n.
-4. T?i ?u CustomerSelector cho POS, ?t admin-form h?n.
-5. Chu?n b? workflow ch?n warranty group trong cart ? t??ng lai.
-6. Th?m multi-order visual th?t s? sau khi POS core ?n ??nh.
-7. Th?m confirm close order/tab n?u cart c? s?n ph?m.
-8. Refactor Customer module Phase B v?i ??a ch? t?ch t?nh/huy?n/x?/??a ch? chi ti?t.
-9. Gi? Public Lookup nhanh, mobile-first, kh?ng login.
-10. Ch? sau khi POS ?n m?i m? pricing/payment/debt.
+## 5. Current UI Status
 
-# Known UX Decisions
+Đã polish theo hướng Sapo-inspired:
 
-C?c quy?t ??nh UX ?? ch?t trong l?ch s? chat:
+- Product list/add/edit
+- Stock In
+- POS / Stock Out
+- Inventory Check
+- Customer/Supplier list/forms
+- Transaction History list/detail
+- Public Lookup
 
-- POS First, kh?ng c?n Inventory First.
-- /admin/stock-out ngh?a l? B?n t?i qu?y, kh?ng ph?i Xu?t kho.
-- POS screen ?n admin sidebar v? admin header.
-- POS c? Home button v? /admin.
-- Kh?ng hi?n th? chi nh?nh trong POS header v? ??y l? single-store offline workflow.
-- Kh?ng hi?n th? keyboard shortcut UI nh? F1/F3/F6/F8/F10.
-- Product search n?m tr?n top POS bar.
-- Focus search r?ng hi?n th? recent products.
-- Typing search hi?n th? matching products.
-- Add product xong ph?i clear input, clear debounced search, close dropdown, focus l?i input.
-- Dropdown kh?ng ???c t? m? l?i ngay sau khi add.
-- Recent products ch? hi?n khi user ch? ??ng click/focus search ho?c g?.
-- Click outside dropdown ??ng dropdown.
-- Click trong dropdown kh?ng ??ng dropdown.
-- Escape ??ng dropdown.
-- Warranty group v?n ph?i ch?n tr??c khi add trong hi?n t?i.
-- Same SKU + same warranty group c? th? merge trong cart ?? cart s?ch.
-- Cart n?n l? table/list compact, kh?ng ph?i card l?n.
-- Empty state POS d?ng gi? h?ng v? text h??ng d?n b?n h?ng, kh?ng d?ng admin card.
-- Right summary panel ph?i d?y, ?t whitespace, button confirm sticky bottom.
-- Customer selector hi?n th? recent customers.
-- Supplier selector hi?n th? recent suppliers.
-- Product recent list d?ng localStorage, inactive products kh?ng ???c hi?n.
-- Customer/supplier inactive kh?ng ???c hi?n trong selector/recent.
-- Soft delete l? inactive, kh?ng hard delete.
-- Product creation thu?c Product Management, kh?ng n?m trong POS/Inventory Workbench.
-- Public Lookup kh?ng ???c y?u c?u login.
-- Public Lookup kh?ng show all products khi search r?ng.
-- Public Lookup c? copy product name.
-- Public Lookup warranty groups d?a tr?n remaining note groups.
-- Warranty batches table c? c? th? t?n t?i nh?ng UI kh?ng d?ng warranty batch workflow.
-- Warranty info hi?n d?a v?o stock transaction notes v? adjustments.
-- Inventory Check d?ng ?? ch?nh t?n th?c t?, kh?ng quay l?i warehouse-first mindset.
-- Kh?ng th?m price/payment/debt/invoice khi ch?a ???c duy?t.
+Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-style.
 
-# Future Architecture Notes
+## 6. Current Business Rules
 
-- D? ?n ?ang chuy?n t? inventory management sang POS offline. T?n folder/code c? c? th? c?n stock-out/stock-transaction, nh?ng UI ph?i n?i ng?n ng? POS.
-- Backend/API hi?n v?n d?ng stock-out ?? tr? t?n. Kh?ng ??i API ch? v? ??i wording UI.
-- V? l?u d?i c? th? c?n sales/order/voucher abstraction ri?ng, nh?ng ch?a l?m n?u ch?a c? pricing/payment.
-- Stock vouchers hi?n l? l?ch s? phi?u nh?p/b?n, kh?ng ph?i invoice.
-- Warranty note groups hi?n l? display/logic group t? notes + adjustments, kh?ng ph?i batch th?t.
-- N?u sau n?y th?m gi?, ph?i l?m c?n th?n ?? kh?ng ph? public lookup v? existing inventory logic.
-- Customer debt/payment l? phase sau, kh?ng chen v?o POS refactor A.
-- Supplier purchasing l? phase C, kh?ng ?p nh?p h?ng th?nh ERP s?m.
-- Backlog tuong lai: giu SKU unique/simple. Sau nay nghien cuu search_tags/aliases/compatibility rieng cho tim kiem san pham, vi du `gen13th` tra ve cac may bo ho tro Gen 13; model ho tro Gen13 co the hieu la ho tro Gen12, nhung model Gen12 chua chac ho tro Gen13. Khong lam database/search_tags trong Phase A.
-- N?n x?a c?c backup file t?m khi chu?n b? production.
-- C?c file PROJECT_DIRECTION.md, PROJECT_STATUS.md, POS_SCREEN_GUIDE.md l? memory source cho chat Codex m?i.
+- SKU phải unique.
+- SKU nên dùng chữ thường, số và dấu chấm.
+- Không cho duplicate SKU.
+- Product inactive không xuất hiện trong selector mặc định.
+- Customer/Supplier inactive không xuất hiện trong selector/recent.
+- Không sửa tồn kho trực tiếp ngoài flow stock-in, stock-out hoặc inventory-check adjustment.
+- Stock operation dựa trên SKU + nhóm bảo hành / ghi chú.
+- Public Lookup không login.
+- Public Lookup không show all products khi input rỗng.
+- POS là `Bán tại quầy`, không gọi là `Xuất & Giao hàng`.
+- Không thêm price/payment/debt/invoice khi chưa được duyệt.
+
+## 7. Current Limitations
+
+- Chưa có giá bán/giá nhập.
+- Chưa có thanh toán.
+- Chưa có công nợ khách hàng/nhà cung cấp.
+- Chưa có invoice/hóa đơn.
+- Chưa có báo cáo tài chính.
+- Chưa có tags/aliases/compatibility search.
+- Inventory Check chưa phải hệ thống phiếu kiểm kê đầy đủ.
+- In phiếu bán/phiếu nhập mới ở mức nghiên cứu/chuẩn bị, chưa phải invoice.
+- POS warranty group vẫn chọn trước khi thêm vào cart; chuyển warranty selection vào cart là future work.
+- Không có draft persistence/localStorage cho multi-order.
+
+## 8. Known Backlog
+
+Backlog sau khi chạy ổn định:
+
+- In phiếu bán/phiếu nhập đơn giản bằng dữ liệu voucher hiện có.
+- Nghiên cứu địa chỉ khách hàng kiểu Province/District/Ward/Detailed address.
+- Customer warranty tracking/history view tốt hơn.
+- Search tags / aliases / compatibility.
+- Draft persistence cho multi-order nếu thực tế cần.
+- Báo cáo tồn kho cơ bản.
+
+Backlog tài chính chỉ làm sau:
+
+- Giá nhập / giá bán
+- Thanh toán
+- Công nợ
+- Sổ quỹ/kế toán
+- Báo cáo doanh thu/lợi nhuận
+
+## 9. Production/Test Workflow
+
+Quy trình deploy an toàn:
+
+1. Develop và test trên Windows.
+2. Commit và push branch `codex-dev`.
+3. Backup database server.
+4. SSH vào Ubuntu server.
+5. Kiểm tra `git status`.
+6. `git pull`.
+7. Build frontend.
+8. Restart Nginx.
+9. Restart PM2 chỉ khi backend thay đổi.
+10. Test các route quan trọng: `/`, `/admin/login`, `/admin/stock-in`, `/admin/stock-out`, `/admin/products`, `/admin/inventory-check`, `/admin/transaction-history`.
+
+## 10. Next Practical Priorities
+
+Ưu tiên gần nhất:
+
+1. Deploy frontend polish lên Ubuntu sau khi backup.
+2. Test POS với dữ liệu thật tại cửa hàng.
+3. Theo dõi lỗi thao tác nhanh: search, add, quantity, customer, submit.
+4. Xác nhận Stock In và Public Lookup không bị ảnh hưởng.
+5. Nghiên cứu in phiếu dựa trên stock voucher hiện có.
+6. Chỉ sửa UI/UX hoặc bug thật trước khi mở thêm feature lớn.

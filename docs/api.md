@@ -1,12 +1,18 @@
-﻿# API
+# API.md
 
-Base URL backend:
+Tài liệu này tóm tắt API hiện tại của **VI TÍNH PHƯỚC TÀI POS**. Base URL:
 
 ```text
 /api/v1
 ```
 
-## Response chuẩn
+Admin endpoints, trừ auth, cần header:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+## 1. Response format
 
 Success:
 
@@ -15,12 +21,12 @@ Success:
   "success": true,
   "data": {},
   "meta": {
-    "server_time": "2026-06-02T10:00:00.000Z"
+    "server_time": "2026-06-13T00:00:00.000Z"
   }
 }
 ```
 
-List response:
+List:
 
 ```json
 {
@@ -30,7 +36,7 @@ List response:
     "page": 1,
     "limit": 20,
     "total": 0,
-    "server_time": "2026-06-02T10:00:00.000Z"
+    "server_time": "2026-06-13T00:00:00.000Z"
   }
 }
 ```
@@ -42,690 +48,231 @@ Error:
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Request validation failed.",
-    "details": [
-      {
-        "field": "body.quantity",
-        "issue": "body.quantity must be >= 1"
-      }
-    ]
+    "message": "Request validation failed."
   },
   "meta": {
     "request_id": null,
-    "server_time": "2026-06-02T10:00:00.000Z"
+    "server_time": "2026-06-13T00:00:00.000Z"
   }
 }
 ```
 
-Admin endpoints cần header:
+## 2. Public endpoints
 
-```http
-Authorization: Bearer <access_token>
+```text
+GET /health
+GET /public/products
+GET /public/products/:sku/inventory
+GET /public/categories
 ```
 
-Trừ các endpoint `/admin/auth/login`, `/admin/auth/refresh`, `/admin/auth/logout`.
+Public lookup không yêu cầu login và không trả price/payment/debt/admin actions.
 
-## Health
+## 3. Auth admin
 
-### GET /health
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "service": "linhkienpc-backend",
-    "status": "ok"
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+```text
+POST /admin/auth/login
+POST /admin/auth/refresh
+POST /admin/auth/logout
+GET  /admin/auth/me
 ```
 
-## Public Products
+Ghi chú:
 
-### GET /public/products?q=12400f&page=1&limit=20
+- Login bằng username/password.
+- Refresh token được rotate.
+- Logout revoke refresh token.
+- `/admin/auth/me` cần access token.
 
-Tìm public theo SKU, tên sản phẩm hoặc ghi chú nhập kho.
+## 4. Loại sản phẩm / categories
 
-Response:
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "sku": "cpu.intel.12400f",
-      "name": "Intel Core i5-12400F",
-      "total_quantity": 4,
-      "note_groups": [
-        {
-          "note": "BH04.28",
-          "quantity": 3
-        },
-        {
-          "note": "BH2027",
-          "quantity": 1
-        }
-      ]
-    }
-  ],
-  "meta": {
-    "q": "12400f",
-    "search_mode": "fuzzy_contains",
-    "page": 1,
-    "limit": 20,
-    "total": 1,
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+```text
+GET   /admin/categories
+POST  /admin/categories
+GET   /admin/categories/:id
+PATCH /admin/categories/:id
+PATCH /admin/categories/:id/deactivate
+PATCH /admin/categories/:id/activate
 ```
 
-### GET /public/products/:sku/inventory
+UI gọi là “Loại sản phẩm”, backend/database vẫn dùng `category`.
 
-Ví dụ:
+## 5. Products
 
-```http
-GET /api/v1/public/products/cpu.intel.12400f/inventory
+```text
+GET   /admin/products
+POST  /admin/products
+GET   /admin/products/:id
+PATCH /admin/products/:id
+PATCH /admin/products/:id/deactivate
+PATCH /admin/products/:id/activate
 ```
 
-Response:
+Quy tắc SKU:
 
-```json
-{
-  "success": true,
-  "data": {
-    "product": {
-      "id": 1,
-      "sku": "cpu.intel.12400f",
-      "name": "Intel Core i5-12400F",
-      "total_quantity": 4,
-      "is_active": true
-    },
-    "note_groups": [
-      {
-        "note": "BH04.28",
-        "quantity": 3
-      }
-    ]
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+- Unique.
+- Chữ thường, số, dấu chấm.
+- Không dùng dấu cách, dấu gạch ngang hoặc ký tự đặc biệt.
+
+Lỗi duplicate SKU cần hiển thị rõ ở UI:
+
+```text
+SKU này đã tồn tại. Vui lòng dùng SKU khác.
 ```
 
-## Public Categories
+## 6. Customers
 
-### GET /public/categories?page=1&limit=100
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "code": "cpu",
-      "name": "CPU",
-      "description": null,
-      "is_active": true,
-      "created_at": "2026-06-02 10:00:00",
-      "updated_at": "2026-06-02 10:00:00"
-    }
-  ],
-  "meta": {
-    "page": 1,
-    "limit": 100,
-    "total": 1,
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+```text
+GET   /admin/customers
+POST  /admin/customers
+GET   /admin/customers/:id
+PATCH /admin/customers/:id
+PATCH /admin/customers/:id/deactivate
+PATCH /admin/customers/:id/activate
+GET   /admin/customers/:id/transactions
 ```
 
-## Admin Auth
+Trường UI đang dùng thực tế:
 
-### POST /admin/auth/login
+- `name`
+- `phone`
+- `address`
+- `is_active`
 
-Request:
+Không giả định customer group, debt, tax, tags hoặc địa chỉ tách tỉnh/huyện/xã đã tồn tại.
 
-```json
-{
-  "username": "admin",
-  "password": "Admin@123456"
-}
+## 7. Suppliers
+
+```text
+GET   /admin/suppliers
+POST  /admin/suppliers
+PATCH /admin/suppliers/:id
+PATCH /admin/suppliers/:id/deactivate
+PATCH /admin/suppliers/:id/activate
 ```
 
-Response:
+Trường UI đang dùng thực tế:
 
-```json
-{
-  "success": true,
-  "data": {
-    "access_token": "jwt-access-token",
-    "refresh_token": "jwt-refresh-token",
-    "token_type": "Bearer",
-    "admin": {
-      "id": 1,
-      "username": "admin",
-      "display_name": "System Admin",
-      "is_active": true,
-      "created_at": "2026-06-02 10:00:00",
-      "updated_at": "2026-06-02 10:00:00"
-    }
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+- `name`
+- `phone`
+- `address`
+- `is_active`
+
+Không có route detail supplier riêng trong router hiện tại.
+
+## 8. Stock-in
+
+Primary bulk endpoint:
+
+```text
+POST /admin/stock-in/bulk
 ```
 
-### POST /admin/auth/refresh
+Legacy/single endpoint:
 
-Request:
-
-```json
-{
-  "refresh_token": "jwt-refresh-token"
-}
+```text
+POST /admin/stock-in
 ```
 
-Response:
+Ý nghĩa:
 
-```json
-{
-  "success": true,
-  "data": {
-    "access_token": "new-jwt-access-token",
-    "refresh_token": "new-jwt-refresh-token",
-    "token_type": "Bearer"
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+- Nhập hàng cộng tồn.
+- Có thể gắn `supplier_id`.
+- Mỗi dòng có SKU/product, quantity và note/nhóm bảo hành.
+- Tạo stock transactions và stock voucher.
+- Không gửi price/payment/debt fields.
+
+## 9. Stock-out / POS
+
+Primary bulk endpoint:
+
+```text
+POST /admin/stock-out/bulk
 ```
 
-### POST /admin/auth/logout
+Legacy/single endpoint:
 
-Request:
-
-```json
-{
-  "refresh_token": "jwt-refresh-token"
-}
+```text
+POST /admin/stock-out
 ```
 
-Response:
+Ý nghĩa:
 
-```json
-{
-  "success": true,
-  "data": {
-    "logged_out": true,
-    "revoked": true
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+- Bán tại quầy / xuất kho trừ tồn.
+- Có thể gắn `customer_id`.
+- Validate tổng tồn và tồn theo nhóm note/warranty.
+- Tạo stock transactions và stock voucher.
+- Không gửi price/payment/debt/invoice fields.
+
+## 10. Stock transactions
+
+```text
+GET /admin/stock-transactions
 ```
 
-### GET /admin/auth/me
+Dùng cho lịch sử giao dịch dòng-level nếu cần. UI hiện ưu tiên voucher-level qua stock vouchers.
 
-Response:
+## 11. Stock vouchers
 
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "username": "admin",
-    "display_name": "System Admin",
-    "is_active": true,
-    "created_at": "2026-06-02 10:00:00",
-    "updated_at": "2026-06-02 10:00:00"
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:00:00.000Z"
-  }
-}
+```text
+GET /admin/stock-vouchers
+GET /admin/stock-vouchers/:id
 ```
 
-## Admin Categories
+UI routes:
 
-### GET /admin/categories?page=1&limit=20&q=cpu&is_active=true
-
-Response `data[]` item:
-
-```json
-{
-  "id": 1,
-  "code": "cpu",
-  "name": "CPU",
-  "description": null,
-  "is_active": true,
-  "created_at": "2026-06-02 10:00:00",
-  "updated_at": "2026-06-02 10:00:00"
-}
+```text
+/admin/transaction-history
+/admin/transaction-history/:voucherId
 ```
 
-### POST /admin/categories
+Voucher dùng để xem:
 
-Request:
+- mã phiếu,
+- loại phiếu,
+- ngày tạo,
+- người tạo,
+- khách hàng/nhà cung cấp nếu có,
+- tổng số lượng,
+- danh sách sản phẩm.
 
-```json
-{
-  "code": "cpu",
-  "name": "CPU",
-  "description": "Bộ xử lý"
-}
+Voucher không phải invoice.
+
+## 12. Inventory check
+
+```text
+GET  /admin/inventory-check/products
+GET  /admin/inventory-check/products/:sku
+POST /admin/inventory-check/note-move
+POST /admin/inventory-check/quantity-adjust
 ```
 
-Response: category object.
+Dùng để:
 
-### GET /admin/categories/:id
+- tìm sản phẩm khi kiểm hàng,
+- xem tồn và nhóm ghi chú,
+- chuyển tồn giữa nhóm ghi chú,
+- tăng/giảm tồn có lý do.
 
-Response: category object.
+## 13. Inventory overview
 
-### PATCH /admin/categories/:id
+Mounted under:
 
-Request:
-
-```json
-{
-  "name": "CPU",
-  "description": "Bộ xử lý"
-}
+```text
+/admin/inventory/*
 ```
 
-Response: category object.
+Xem tồn kho admin. Không phải nguồn chỉnh tồn trực tiếp.
 
-### PATCH /admin/categories/:id/deactivate
+## 14. Warranty batch legacy
 
-Soft deactivate category. Không cascade deactivate product.
+Module `warrantyBatch` vẫn được mount dưới `/admin` để tương thích.
 
-### PATCH /admin/categories/:id/activate
+Không dùng các route batch làm workflow chính cho POS/stock-in hiện tại. Workflow hiện tại lấy nhóm bảo hành/ghi chú từ transaction notes và adjustment records.
 
-Activate category.
+## 15. Nguyên tắc thay đổi API
 
-## Admin Products
-
-### GET /admin/products?page=1&limit=20&q=12400&category_id=1&is_active=true
-
-Response `data[]` item:
-
-```json
-{
-  "id": 1,
-  "sku": "cpu.intel.12400f",
-  "name": "Intel Core i5-12400F",
-  "category_id": 1,
-  "category": {
-    "id": 1,
-    "code": "cpu",
-    "name": "CPU",
-    "is_active": true
-  },
-  "category_is_active": true,
-  "spec_summary": null,
-  "total_quantity": 4,
-  "note_groups": [
-    {
-      "note": "BH04.28",
-      "quantity": 3
-    }
-  ],
-  "is_active": true,
-  "created_at": "2026-06-02 10:00:00",
-  "updated_at": "2026-06-02 10:00:00"
-}
-```
-
-### POST /admin/products
-
-Request:
-
-```json
-{
-  "sku": "cpu.intel.12400f",
-  "name": "Intel Core i5-12400F",
-  "category_id": 1,
-  "spec_summary": null
-}
-```
-
-Response: product object.
-
-### GET /admin/products/:id
-
-Response: product object.
-
-### PATCH /admin/products/:id
-
-Request:
-
-```json
-{
-  "name": "Intel Core i5-12400F Tray",
-  "category_id": 1,
-  "spec_summary": "CPU Intel socket 1700"
-}
-```
-
-Response: product object.
-
-### PATCH /admin/products/:id/deactivate
-
-Soft deactivate product.
-
-### PATCH /admin/products/:id/activate
-
-Activate product.
-
-## Admin Customers
-
-### GET /admin/customers?keyword=nguyen&page=1&limit=20
-
-Response `data[]` item:
-
-```json
-{
-  "id": 1,
-  "name": "Nguyễn Văn A",
-  "phone": "0909000000",
-  "address": "123 Nguyễn Huệ",
-  "is_active": true,
-  "transaction_count": 2,
-  "last_transaction_at": "2026-06-02 10:30:00",
-  "created_at": "2026-06-02 10:00:00",
-  "updated_at": "2026-06-02 10:00:00"
-}
-```
-
-### POST /admin/customers
-
-Request:
-
-```json
-{
-  "name": "Nguyễn Văn A",
-  "phone": "0909000000",
-  "address": "123 Nguyễn Huệ"
-}
-```
-
-Response: customer object.
-
-### GET /admin/customers/:id
-
-Response: customer object.
-
-### GET /admin/customers/:id/transactions?page=1&limit=10
-
-Response `data[]` item:
-
-```json
-{
-  "id": 10,
-  "txn_type": "OUT",
-  "quantity": 1,
-  "note": "BH04.28",
-  "occurred_at": "2026-06-02 10:30:00",
-  "product": {
-    "id": 1,
-    "sku": "cpu.intel.12400f",
-    "name": "Intel Core i5-12400F"
-  },
-  "created_by_admin": {
-    "id": 1,
-    "username": "admin"
-  }
-}
-```
-
-## Admin Suppliers
-
-### GET /admin/suppliers?keyword=abc&page=1&limit=20
-
-Response `data[]` item:
-
-```json
-{
-  "id": 1,
-  "name": "Công ty Linh Kiện ABC",
-  "phone": "0280000000",
-  "address": "TP.HCM",
-  "is_active": true,
-  "transaction_count": 3,
-  "last_transaction_at": "2026-06-02 10:20:00",
-  "created_at": "2026-06-02 10:00:00",
-  "updated_at": "2026-06-02 10:00:00"
-}
-```
-
-### POST /admin/suppliers
-
-Request:
-
-```json
-{
-  "name": "Công ty Linh Kiện ABC",
-  "phone": "0280000000",
-  "address": "TP.HCM"
-}
-```
-
-Response: supplier object.
-
-## Admin Stock Operations
-
-### POST /admin/stock-in
-
-Nhập hàng theo SKU. `supplier_id` là optional.
-
-Request:
-
-```json
-{
-  "sku": "cpu.intel.12400f",
-  "quantity": 3,
-  "supplier_id": 1,
-  "note": "BH04.28"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "resolved": {
-      "product_id": 1,
-      "sku": "cpu.intel.12400f"
-    },
-    "transaction": {
-      "id": 10,
-      "txn_type": "IN",
-      "product_id": 1,
-      "customer_id": null,
-      "supplier_id": 1,
-      "quantity": 3,
-      "note": "BH04.28",
-      "created_by_admin_id": 1,
-      "occurred_at": "2026-06-02 10:20:00"
-    },
-    "inventory_balance": {
-      "sku": "cpu.intel.12400f",
-      "quantity": 4,
-      "updated_at": "2026-06-02 10:20:00"
-    }
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:20:00.000Z"
-  }
-}
-```
-
-### POST /admin/stock-out
-
-Xuất hàng theo SKU. `customer_id` là optional. Nếu sản phẩm có note group còn tồn thì cần chọn `warranty_note` hoặc gửi note tương ứng.
-
-Request:
-
-```json
-{
-  "sku": "cpu.intel.12400f",
-  "quantity": 1,
-  "customer_id": 1,
-  "warranty_note": "BH04.28",
-  "note": "BH04.28"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "resolved": {
-      "product_id": 1,
-      "sku": "cpu.intel.12400f"
-    },
-    "transaction": {
-      "id": 11,
-      "txn_type": "OUT",
-      "product_id": 1,
-      "customer_id": 1,
-      "supplier_id": null,
-      "quantity": 1,
-      "note": "BH04.28",
-      "created_by_admin_id": 1,
-      "occurred_at": "2026-06-02 10:30:00"
-    },
-    "inventory_balance": {
-      "sku": "cpu.intel.12400f",
-      "quantity": 3,
-      "updated_at": "2026-06-02 10:30:00"
-    }
-  },
-  "meta": {
-    "server_time": "2026-06-02T10:30:00.000Z"
-  }
-}
-```
-
-## Admin Stock Transactions
-
-### GET /admin/stock-transactions?page=1&limit=10&sku=cpu.intel.12400f&txn_type=IN&note=BH04.28
-
-Query hỗ trợ trong service hiện tại:
-
-- `page`
-- `limit`
-- `sku`
-- `txn_type`
-- `from`
-- `to`
-- `product_id`
-- `note`
-- `batch_code` như alias để tìm trong `note`
-
-Response `data[]` item:
-
-```json
-{
-  "id": 11,
-  "txn_type": "OUT",
-  "product": {
-    "id": 1,
-    "sku": "cpu.intel.12400f",
-    "name": "Intel Core i5-12400F",
-    "is_active": true
-  },
-  "category": {
-    "id": 1,
-    "name": "CPU",
-    "is_active": true
-  },
-  "warranty_batch": null,
-  "customer": {
-    "id": 1,
-    "name": "Nguyễn Văn A",
-    "phone": "0909000000",
-    "address": "123 Nguyễn Huệ"
-  },
-  "supplier": null,
-  "quantity": 1,
-  "note": "BH04.28",
-  "created_by_admin": {
-    "id": 1,
-    "username": "admin"
-  },
-  "occurred_at": "2026-06-02 10:30:00"
-}
-```
-
-## Admin Inventory
-
-### GET /admin/inventory?page=1&limit=20&q=12400&category_id=1&include_inactive=false
-
-Response `data[]` item:
-
-```json
-{
-  "product_id": 1,
-  "sku": "cpu.intel.12400f",
-  "product_name": "Intel Core i5-12400F",
-  "product_is_active": true,
-  "category": {
-    "id": 1,
-    "code": "cpu",
-    "name": "CPU",
-    "is_active": true
-  },
-  "total_quantity": 3,
-  "updated_at": "2026-06-02 10:30:00"
-}
-```
-
-## Admin Warranty Batch Module
-
-Module này vẫn tồn tại ở backend nhưng không phải workflow tồn kho chính hiện tại.
-
-### GET /admin/products/:productId/batches
-
-List batch theo product.
-
-### POST /admin/products/:productId/batches
-
-Request:
-
-```json
-{
-  "batch_code": "BH 07.26",
-  "warranty_end_month": 7,
-  "warranty_end_year": 2026
-}
-```
-
-### GET /admin/batches/:id
-
-Get batch.
-
-### PATCH /admin/batches/:id
-
-Update batch.
-
-### PATCH /admin/batches/:id/deactivate
-
-Soft deactivate batch.
-
-### PATCH /admin/batches/:id/activate
-
-Activate batch.
+- Không đổi payload nhập/xuất tồn nếu chưa có phase riêng.
+- Không thêm price/payment/debt/invoice vào API hiện tại.
+- Không đổi schema/route public lookup nếu không cần.
+- Nếu backend trả lỗi cụ thể, frontend phải hiển thị rõ thay vì thông báo mơ hồ.

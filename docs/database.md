@@ -1,187 +1,173 @@
-﻿# Database
+# DATABASE.md
 
-Database dùng MySQL, charset `utf8mb4`, collation `utf8mb4_unicode_ci`.
+Database hiện dùng MySQL với charset/collation `utf8mb4`. Schema tổng hợp nằm tại:
 
-Schema chính được khai báo trong `database/schema/*.sql`. Migration nằm trong `database/migrations`.
+```text
+database/schema/schema.sql
+```
 
-## Bảng admins
+Migration nằm tại:
+
+```text
+database/migrations/
+```
+
+## 1. Nhóm bảng auth
+
+### `admins`
 
 Lưu tài khoản admin.
 
-Trường quan trọng:
+Trường chính:
 
-- `id`: khóa chính.
-- `username`: unique.
-- `password_hash`: mật khẩu đã hash bằng bcrypt.
-- `display_name`: tên hiển thị.
-- `is_active`: admin inactive không được login.
-- `created_at`, `updated_at`: timestamp server/database.
+- `username` unique.
+- `password_hash` dùng bcrypt.
+- `display_name`.
+- `is_active`.
 
-Quan hệ:
-
-- `admin_refresh_tokens.admin_id` tham chiếu `admins.id`.
-- `stock_transactions.created_by_admin_id` tham chiếu `admins.id`.
-
-## Bảng admin_refresh_tokens
+### `admin_refresh_tokens`
 
 Lưu refresh token đã hash.
 
-Trường quan trọng:
+Trường chính:
 
-- `admin_id`: admin sở hữu token.
-- `token_hash`: SHA-256 hash của refresh token, không lưu token gốc.
-- `expires_at`: thời điểm hết hạn.
-- `revoked_at`: thời điểm thu hồi token.
+- `admin_id`.
+- `token_hash`.
+- `expires_at`.
+- `revoked_at`.
 
-## Bảng categories
+Không lưu refresh token gốc trong database.
 
-Lưu danh mục sản phẩm.
+## 2. Nhóm sản phẩm
 
-Trường quan trọng:
+### `categories`
 
-- `id`: khóa chính.
-- `code`: mã danh mục, unique.
-- `name`: tên danh mục, unique.
-- `description`: mô tả.
-- `is_active`: soft delete/deactivate.
+Lưu loại sản phẩm.
 
-Quan hệ:
+Backend/database gọi là `category`, UI gọi là “Loại sản phẩm”.
 
-- `products.category_id` tham chiếu `categories.id`.
+Trường chính:
 
-Lưu ý hiện tại: backend vẫn yêu cầu `code` khi tạo category. Frontend tạo code tự động từ tên category khi cần.
+- `code` unique.
+- `name` unique.
+- `description`.
+- `is_active`.
 
-## Bảng products
+### `products`
 
 Lưu model sản phẩm.
 
-Trường quan trọng:
+Trường chính:
 
-- `id`: khóa chính nội bộ.
-- `sku`: mã model sản phẩm, unique, ví dụ `cpu.intel.12400f`.
-- `name`: tên sản phẩm.
-- `category_id`: danh mục.
-- `spec_summary`: mô tả/spec ngắn.
-- `is_active`: sản phẩm inactive không hiện trong public search và list mặc định.
-- `created_at`, `updated_at`.
+- `sku` unique.
+- `name`.
+- `category_id`.
+- `spec_summary`.
+- `is_active`.
 
-Index:
+Quy tắc SKU hiện tại:
 
-- Unique `sku`.
-- Index `name`.
-- Fulltext index `ft_products_name` trên `name` nếu MySQL hỗ trợ.
+- chữ thường,
+- số,
+- dấu chấm,
+- không dấu cách/dấu gạch ngang/ký tự đặc biệt.
 
-Quan hệ:
+## 3. Nhóm tồn kho
 
-- Một product thuộc một category.
-- Một product có một dòng tồn trong `product_inventory_balances`.
-- Một product có nhiều `stock_transactions`.
+### `product_inventory_balances`
 
-## Bảng product_inventory_balances
+Nguồn tồn chính hiện tại.
 
-Đây là bảng tồn kho chính hiện tại.
+Trường chính:
 
-Trường quan trọng:
-
-- `product_id`: unique, tham chiếu `products.id`.
-- `quantity`: tổng tồn hiện tại theo sản phẩm.
-- `updated_at`: thời điểm cập nhật tồn.
+- `product_id` unique.
+- `quantity`.
+- `updated_at`.
 
 Quy tắc:
 
 - Không chỉnh trực tiếp từ UI.
-- Chỉ thay đổi qua stock-in hoặc stock-out.
-- Stock operation chạy trong database transaction.
+- Chỉ thay đổi qua nhập hàng, bán/xuất hàng, kiểm hàng/điều chỉnh tồn.
 
-## Bảng stock_transactions
+### `stock_transactions`
 
-Lưu lịch sử nhập/xuất kho.
+Sổ giao dịch nhập/xuất.
 
-Trường quan trọng:
+Trường chính:
 
 - `txn_type`: `IN` hoặc `OUT`.
-- `product_id`: sản phẩm.
-- `warranty_batch_id`: nullable, còn lại từ module cũ.
-- `customer_id`: nullable, đang dùng cho stock-out nếu chọn khách hàng.
-- `supplier_id`: nullable, đang dùng cho stock-in nếu chọn nhà cung cấp.
-- `quantity`: số lượng giao dịch.
-- `note`: ghi chú giao dịch; cũng là nguồn dữ liệu nhóm bảo hành hiện tại.
-- `created_by_admin_id`: admin tạo giao dịch.
-- `occurred_at`: timestamp server/database.
+- `product_id`.
+- `quantity`.
+- `note`: nhóm bảo hành/ghi chú hiện tại.
+- `customer_id` nullable.
+- `supplier_id` nullable.
+- `voucher_id` nullable/linked với phiếu.
+- `created_by_admin_id`.
+- `occurred_at`.
 
-Quan hệ:
+`note` là nguồn chính để tính nhóm bảo hành/ghi chú trong POS/public lookup.
 
-- `product_id` -> `products.id`.
-- `customer_id` -> `customers.id`.
-- `supplier_id` -> `suppliers.id`.
-- `warranty_batch_id` -> `warranty_batches.id` nếu có.
-- `created_by_admin_id` -> `admins.id`.
+### `stock_vouchers`
 
-## Bảng customers
+Nhóm các dòng `stock_transactions` thành phiếu nhập hoặc phiếu bán.
 
-Lưu khách hàng/contact.
+Dùng cho:
 
-Trường quan trọng:
+- transaction history list,
+- detail phiếu,
+- kiểm tra sản phẩm/số lượng trong phiếu.
 
-- `id`: khóa chính.
-- `name`: tên khách hàng.
-- `phone`: số điện thoại.
-- `address`: địa chỉ.
-- `is_active`: chỉ list customer active.
-- `created_at`, `updated_at`.
+Không phải invoice và không chứa payment/debt logic.
 
-Quan hệ:
+## 4. Nhóm đối tác
 
-- `stock_transactions.customer_id` tham chiếu `customers.id`.
+### `customers`
 
-## Bảng suppliers
+Trường thực tế đang dùng:
 
-Lưu nhà cung cấp/contact.
-
-Trường quan trọng:
-
-- `id`: khóa chính.
-- `name`: tên nhà cung cấp.
-- `phone`: số điện thoại.
-- `address`: địa chỉ.
-- `is_active`: chỉ list supplier active.
-- `created_at`, `updated_at`.
-
-Quan hệ:
-
-- `stock_transactions.supplier_id` tham chiếu `suppliers.id`.
-
-## Bảng warranty_batches
-
-Module lô bảo hành cũ vẫn tồn tại trong backend/database.
-
-Trường quan trọng:
-
-- `product_id`: sản phẩm.
-- `batch_code`: mã lô bảo hành.
-- `warranty_end_month`, `warranty_end_year`.
+- `name`.
+- `phone`.
+- `address`.
 - `is_active`.
 
-Lưu ý nghiệp vụ hiện tại:
+Được dùng trong POS/stock-out nếu chọn khách hàng.
 
-- UI tồn kho hiện tại không dùng warranty batch làm đơn vị nhập/xuất.
-- Ghi chú bảo hành hiện tại lấy từ `stock_transactions.note`.
+### `suppliers`
 
-## Bảng inventory_balances
+Trường thực tế đang dùng:
 
-Bảng tồn kho theo warranty batch từ kiến trúc cũ.
+- `name`.
+- `phone`.
+- `address`.
+- `is_active`.
 
-Trường quan trọng:
+Được dùng trong stock-in nếu chọn nhà cung cấp.
 
-- `product_id`.
-- `warranty_batch_id`.
-- `quantity`.
+## 5. Nhóm kiểm hàng
 
-Lưu ý nghiệp vụ hiện tại:
+### `inventory_note_adjustments`
 
-- Workflow tồn kho chính hiện tại dùng `product_inventory_balances`, không dùng `inventory_balances`.
+Ghi nhận thao tác chuyển tồn giữa các nhóm ghi chú/bảo hành.
 
-## Migration hiện có
+### `inventory_quantity_adjustments`
+
+Ghi nhận thao tác tăng/giảm tồn khi kiểm hàng.
+
+Các bảng này hỗ trợ màn `/admin/inventory-check`.
+
+## 6. Bảng legacy
+
+### `warranty_batches`
+
+Module lô bảo hành cũ. Hiện không phải workflow chính của POS/stock-in.
+
+### `inventory_balances`
+
+Bảng tồn theo warranty batch từ kiến trúc cũ. Workflow hiện tại dùng `product_inventory_balances`.
+
+Không xóa các bảng legacy nếu chưa có migration/phase dọn riêng.
+
+## 7. Migrations hiện có
 
 ```text
 001_create_admins.sql
@@ -198,4 +184,33 @@ Lưu ý nghiệp vụ hiện tại:
 012_alter_stock_transactions_add_customer_id.sql
 013_create_suppliers.sql
 014_alter_stock_transactions_add_supplier_id.sql
+015_create_inventory_note_adjustments.sql
+016_create_stock_voucher_history.sql
+017_create_inventory_quantity_adjustments.sql
 ```
+
+## 8. Backup/restore
+
+Trước khi deploy hoặc chạy migration trên server thật, luôn backup MySQL.
+
+Ví dụ backup server đã từng được tạo:
+
+```text
+~/backups/linhkienpc_before_codex_20260611_1546.sql
+```
+
+Không commit file backup chứa dữ liệu thật vào repo.
+
+## 9. Những bảng/chức năng chưa có
+
+Chưa có schema cho:
+
+- giá bán/giá nhập,
+- thanh toán,
+- công nợ,
+- hóa đơn,
+- kế toán,
+- báo cáo tài chính,
+- tags/aliases/compatibility search.
+
+Không document hoặc code UI như thể các phần này đã tồn tại.

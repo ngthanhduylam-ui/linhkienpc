@@ -1,153 +1,151 @@
-﻿# Business Rules
+# BUSINESS_RULES.md
 
-## Phạm vi hệ thống
+Tài liệu này là nguồn tham chiếu nghiệp vụ hiện tại cho **VI TÍNH PHƯỚC TÀI POS**.
 
-LINHKIENPC là hệ thống tra cứu tồn kho và quản lý nhập/xuất linh kiện PC.
+## 1. Phạm vi hệ thống
 
-Không có các tính năng sau:
+Hệ thống phục vụ cửa hàng linh kiện PC:
 
-- Giỏ hàng.
-- Checkout.
-- Đơn hàng bán hàng.
+- Tra cứu tồn kho công khai.
+- Quản lý sản phẩm và loại sản phẩm.
+- Nhập hàng.
+- Bán tại quầy / xuất kho.
+- Kiểm hàng và điều chỉnh tồn.
+- Quản lý khách hàng, nhà cung cấp.
+- Xem lịch sử phiếu nhập / phiếu bán.
+
+Hiện tại **không** có:
+
+- Giá bán, giá nhập, chiết khấu.
+- Thanh toán, công nợ.
+- Hóa đơn, kế toán, báo cáo tài chính.
+- E-commerce checkout.
 - Tài khoản khách công khai.
-- Hình ảnh sản phẩm.
-- Giá nhập.
-- Giá bán.
-- Doanh thu.
-- Công nợ.
-- Thanh toán.
-- Kế toán.
-- Dashboard biểu đồ.
+- Tags/aliases/compatibility search.
 
-## Quy tắc sản phẩm
+## 2. Sản phẩm và SKU
 
-- SKU đại diện cho model sản phẩm, ví dụ `cpu.intel.12400f`.
-- SKU là unique.
-- Product có `is_active` để soft delete/deactivate.
-- Product inactive không xuất hiện trong public search và admin list mặc định.
-- Product creation tạo luôn một dòng tồn kho trong `product_inventory_balances` với số lượng 0.
-- Product thuộc một category.
-- Category inactive không tự động ẩn/deactivate product đang active.
+- SKU đại diện cho một model sản phẩm và phải unique.
+- SKU chỉ dùng chữ thường, số và dấu chấm.
+- Không dùng dấu cách, dấu gạch ngang hoặc ký tự đặc biệt trong SKU.
+- UI tự chuyển SKU nhập hoa thành chữ thường.
+- Product inactive không xuất hiện trong public search và list mặc định.
+- Khi tạo product, hệ thống tạo dòng tồn ban đầu trong `product_inventory_balances` với số lượng 0.
+- Product thuộc một loại sản phẩm (`category_id` trong API/database, UI gọi là “Loại sản phẩm”).
 
-## Quy tắc danh mục
-
-- Danh mục lưu trong bảng `categories`.
-- Backend hiện yêu cầu `code` và `name` khi tạo category.
-- Frontend có thể tự tạo `code` từ tên category để đơn giản hóa UI.
-- Category dùng `is_active` để deactivate.
-- Deactivate category không cascade sang product.
-- Product active vẫn có thể hiển thị dù category inactive, tùy API/list đang gọi.
-
-## Quy tắc tồn kho
-
-- Tồn kho chính là tồn theo sản phẩm trong `product_inventory_balances`.
-- Admin không được chỉnh trực tiếp số lượng tồn từ UI.
-- Tồn chỉ thay đổi qua stock-in hoặc stock-out.
-- Mỗi lần thay đổi tồn phải tạo một dòng `stock_transactions`.
-- Stock-in và stock-out chạy trong MySQL transaction.
-- Backend lock tồn kho bằng `SELECT ... FOR UPDATE` trước khi cập nhật.
-- Stock-out phải kiểm tra đủ tồn.
-- Nếu không đủ tồn, backend trả lỗi `INSUFFICIENT_STOCK`.
-- Timestamp giao dịch do backend/database tạo bằng `CURRENT_TIMESTAMP`.
-
-## Workflow nhập hàng
-
-- Endpoint hiện tại: `POST /api/v1/admin/stock-in`.
-- Body bắt buộc: `sku`, `quantity`.
-- Body optional: `note`, `supplier_id`.
-- Backend validate SKU tồn tại và product active.
-- Backend validate supplier nếu có `supplier_id`.
-- Stock-in cộng vào `product_inventory_balances.quantity`.
-- Stock-in ghi transaction `txn_type = 'IN'`.
-- Note nhập hàng có thể chứa thông tin bảo hành như `BH04.28`.
-
-## Workflow xuất hàng
-
-- Endpoint hiện tại: `POST /api/v1/admin/stock-out`.
-- Body bắt buộc: `sku`, `quantity`.
-- Body optional: `note`, `warranty_note`, `customer_id`.
-- Backend validate SKU tồn tại và product active.
-- Backend validate customer nếu có `customer_id`.
-- Backend kiểm tra tổng tồn đủ xuất.
-- Nếu sản phẩm có nhóm ghi chú bảo hành còn tồn, admin phải chọn `warranty_note` hoặc gửi note tương ứng.
-- Stock-out không được vượt quá số lượng còn lại của nhóm ghi chú bảo hành được chọn.
-- Stock-out trừ `product_inventory_balances.quantity`.
-- Stock-out ghi transaction `txn_type = 'OUT'`.
-
-## Quy tắc bảo hành hiện tại
-
-- Workflow hiện tại không dùng `warranty_batches` làm đơn vị tồn kho.
-- Không có lot tracking thật.
-- Không có FIFO/FEFO.
-- Không quản lý hạn bảo hành bằng batch trong UI hiện tại.
-- Thông tin bảo hành được lưu trong `stock_transactions.note`.
-- Nhóm bảo hành được tính từ note đã normalize.
-- Remaining quantity theo note:
+Ví dụ SKU hợp lệ:
 
 ```text
-SUM(IN quantity theo note) - SUM(OUT quantity theo note)
+2nd.maybo.lenovo.v50t13imb
+2nd.cpu.intel.12400f
+new.ram.ddr4.8gb
 ```
 
-- Chỉ hiển thị note group có remaining > 0.
-- Public search hiển thị note group còn tồn trong phần “Thông tin bảo hành”.
-- Stock-out ghi lại note bảo hành đã chọn để remaining group giảm đúng.
+## 3. Loại sản phẩm
 
-## Quy tắc khách hàng
+- Loại sản phẩm lưu trong bảng `categories`.
+- Backend vẫn dùng tên kỹ thuật `category`.
+- UI hiển thị là “Loại sản phẩm” để gần cách dùng thực tế/Sapo hơn.
+- Deactivate loại sản phẩm không tự động deactivate sản phẩm đang active.
 
-- Customer là optional trong stock-out.
-- Customer có các trường: `name`, `phone`, `address`.
-- Customer inactive không xuất hiện trong list mặc định.
-- Customer có thể được tạo inline trong màn hình xuất hàng hoặc trong trang Khách hàng.
-- Transaction history trả về customer nếu `stock_transactions.customer_id` có dữ liệu.
-- Không có CRM, công nợ, thanh toán hoặc lịch sử mua bán ngoài stock transaction.
+## 4. Tồn kho
 
-## Quy tắc nhà cung cấp
+- Nguồn tồn hiện tại là `product_inventory_balances`.
+- Không chỉnh trực tiếp bảng tồn từ UI.
+- Tồn chỉ thay đổi qua:
+  - nhập hàng,
+  - bán/xuất hàng,
+  - kiểm hàng/điều chỉnh tồn.
+- Mỗi thay đổi tồn cần có lịch sử trong `stock_transactions` hoặc bảng điều chỉnh tương ứng.
+- Stock-out không được vượt tổng tồn hoặc vượt tồn theo nhóm bảo hành/ghi chú đã chọn.
 
-- Supplier là optional trong stock-in.
-- Supplier có các trường: `name`, `phone`, `address`.
-- Supplier inactive không xuất hiện trong list mặc định.
-- Supplier có thể được tạo inline trong màn hình nhập hàng hoặc trong trang Nhà cung cấp.
-- Transaction history trả về supplier nếu `stock_transactions.supplier_id` có dữ liệu.
-- Không có purchase order, công nợ, thanh toán hoặc kế toán nhà cung cấp.
+## 5. Nhóm bảo hành / ghi chú
 
-## Quy tắc public search
+- Workflow hiện tại không dùng `warranty_batches` làm đơn vị nhập/xuất chính.
+- Nhóm bảo hành/ghi chú được lấy từ note của giao dịch nhập/xuất và điều chỉnh tồn.
+- Nhóm trống được hiểu là không ghi chú.
+- POS/stock-out phải chọn đúng nhóm còn tồn trước khi xuất.
+- Public lookup hiển thị nhóm bảo hành/ghi chú còn tồn để người dùng tra cứu.
 
-- Public user không cần login.
-- Public search không hiển thị tất cả sản phẩm khi chưa nhập keyword ở frontend hiện tại.
-- Public API tìm theo:
-  - SKU.
-  - Tên sản phẩm.
-  - Note của stock-in transaction.
-- Public response trả:
-  - `sku`.
-  - `name`.
-  - `total_quantity`.
-  - `note_groups`.
-- Không trả giá, hình ảnh, giỏ hàng, checkout hoặc thông tin khách/admin.
+## 6. Nhập hàng
 
-## Quy tắc auth
+- Route UI chính: `/admin/stock-in`.
+- API chính: `POST /api/v1/admin/stock-in/bulk`.
+- Nhà cung cấp là optional.
+- Mỗi dòng nhập có:
+  - SKU/product,
+  - số lượng dương,
+  - nhóm bảo hành/ghi chú optional.
+- Nhập hàng cộng tồn và tạo phiếu nhập.
+- Không có giá nhập, thanh toán hoặc công nợ trong workflow hiện tại.
+
+## 7. Bán tại quầy / xuất kho
+
+- Route UI chính: `/admin/stock-out`.
+- API chính: `POST /api/v1/admin/stock-out/bulk`.
+- Khách hàng là optional.
+- Cart/đơn local chỉ là trạng thái frontend để thao tác nhanh tại quầy.
+- Cùng SKU + cùng nhóm bảo hành/ghi chú được merge trong cart.
+- Số lượng bán tối thiểu là 1 và tối đa là tồn còn lại của nhóm đã chọn.
+- Bán thành công tạo phiếu bán/stock voucher.
+- Phiếu bán không phải hóa đơn thanh toán.
+
+## 8. Kiểm hàng
+
+- Route UI: `/admin/inventory-check`.
+- Dùng để tìm sản phẩm, xem tồn, tăng/giảm tồn theo nhóm ghi chú và ghi lý do.
+- Nếu tìm không thấy sản phẩm, UI có hành động “+ Thêm sản phẩm mới”.
+- Đây chưa phải hệ thống phiếu kiểm hàng đầy đủ theo kiểu ERP.
+
+## 9. Khách hàng
+
+- Customer dùng cho POS/stock-out.
+- Các trường đang dùng thực tế:
+  - tên,
+  - số điện thoại,
+  - địa chỉ.
+- Customer inactive không xuất hiện trong selector/list mặc định.
+- Không có công nợ, nhóm khách hàng, tags, tax, email hoặc địa chỉ tỉnh/huyện/xã tách riêng trong API hiện tại.
+
+## 10. Nhà cung cấp
+
+- Supplier dùng cho stock-in.
+- Các trường đang dùng thực tế:
+  - tên,
+  - số điện thoại,
+  - địa chỉ.
+- Supplier inactive không xuất hiện trong selector/list mặc định.
+- Không có công nợ, tags, tax, email hoặc địa chỉ tỉnh/huyện/xã tách riêng trong API hiện tại.
+
+## 11. Public lookup
+
+- Public route `/` không yêu cầu login.
+- UI không hiển thị tất cả sản phẩm khi ô tìm kiếm trống.
+- Public search dùng để tra theo tên sản phẩm, SKU hoặc ghi chú bảo hành.
+- Không hiển thị:
+  - giá,
+  - admin actions,
+  - khách hàng/nhà cung cấp,
+  - lịch sử giao dịch nội bộ.
+
+## 12. Auth admin
 
 - Admin login bằng username/password.
 - Password lưu bằng bcrypt hash.
 - Access token dùng JWT.
-- Refresh token dùng JWT và chỉ lưu hash trong database.
-- Refresh token được rotate khi refresh.
-- Logout revoke refresh token bằng `revoked_at`.
+- Refresh token được hash trong database và rotate khi refresh.
 - Admin inactive không được login.
-- Protected admin API dùng `requireAuth` middleware.
-## Định hướng phát triển tương lai
+- Protected API dùng `requireAuth`.
 
-Các tính năng có thể triển khai trong tương lai nhưng hiện chưa tồn tại:
+## 13. Không tự ý mở rộng scope
 
-- Giá vốn
-- Giá bán
-- Công nợ khách hàng
-- Công nợ nhà cung cấp
-- Purchase Order
-- Sales Order
-- Import Excel
-- Export Excel
-- Barcode
-- QR Code
+Không thêm các mảng sau nếu chưa có yêu cầu phase riêng:
 
-Không được giả định các tính năng này đã tồn tại khi phát triển hệ thống.
+- price/pricing,
+- payment,
+- debt/công nợ,
+- invoice,
+- accounting,
+- reporting,
+- search tags/aliases/compatibility,
+- barcode/serial/IMEI/lô-HSD management.

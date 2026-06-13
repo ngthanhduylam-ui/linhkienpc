@@ -1,40 +1,93 @@
-﻿# PROJECT_RULES - LINHKIENPC
+# PROJECT_RULES.md
 
-## Mục tiêu
-Xây dựng hệ thống tra cứu tồn kho và quản trị kho linh kiện PC, gọn nhẹ, tách quyền public/admin rõ ràng.
+# Quy tắc cố định của dự án
 
-## Quy tắc cốt lõi (bắt buộc)
-1. Không phải website thương mại điện tử.
-2. Không có giỏ hàng.
-3. Không có thanh toán.
-4. Không có đơn hàng.
-5. Không có tài khoản khách hàng.
-6. Không có hình ảnh sản phẩm.
-7. Không lưu giá nhập.
-8. Không lưu giá bán.
-9. Không có doanh thu.
-10. Không có cảnh báo tồn kho thấp.
-11. Người dùng public được tìm kiếm tồn kho không cần đăng nhập.
-12. Chỉ admin đăng nhập mới được quản lý sản phẩm, lô bảo hành, nhập kho, xuất kho, lịch sử.
-13. SKU đại diện model sản phẩm. Ví dụ: `cpu.intel.12400f`.
-14. Một SKU có nhiều lô bảo hành. Ví dụ: `BH 07.26`, `BH 11.27`, `BH 02.28`.
-15. Tuyệt đối không gộp các lô bảo hành khác nhau.
-16. Nhập/xuất kho phải chỉ định đúng SKU và đúng lô bảo hành.
-17. Toàn bộ timestamp do backend/server sinh ra.
-18. Ứng dụng phải có khả năng chuyển máy khác qua cấu hình `.env`.
-19. Chỉ 1 ứng dụng React.
-20. Chỉ 1 backend Node.js Express.
-21. Chỉ 1 cơ sở dữ liệu MySQL.
-22. Dùng React Router cho phân trang.
-23. Route public: `/`.
-24. Tất cả route admin nằm dưới `/admin`.
+File này chứa các nguyên tắc an toàn lâu dài cho **VI TÍNH PHƯỚC TÀI POS**. Nếu task cụ thể mâu thuẫn với file này, cần hỏi lại hoặc kiểm tra với `docs/PROJECT_DIRECTION.md`.
 
-## Phạm vi chức năng
-- Public: tra cứu tồn kho theo SKU/tên/nhóm linh kiện và xem số lượng theo từng lô bảo hành.
-- Admin: đăng nhập, CRUD sản phẩm, quản lý lô bảo hành theo SKU, nhập kho, xuất kho, xem lịch sử giao dịch kho.
+## 1. Định hướng bắt buộc
 
-## Nguyên tắc dữ liệu
-- Không cho phép cập nhật số lượng tồn trực tiếp bằng tay.
-- Tồn kho được tính từ bảng tồn theo SKU + batch hoặc từ ledger giao dịch.
-- Mọi giao dịch nhập/xuất phải có người thực hiện (admin) và thời điểm server tạo.
-- Dùng soft delete cho các thực thể quản trị nếu cần truy vết.
+- POS First.
+- Offline First.
+- Self-hosted.
+- Sapo Inspired.
+- Stability First.
+- Not an ERP.
+- Inventory hỗ trợ bán hàng, không dẫn dắt workflow.
+
+## 2. Phạm vi đang bị cấm nếu chưa được yêu cầu rõ
+
+Không thêm hoặc mô tả là đã có:
+
+- Giá nhập.
+- Giá bán.
+- Chiết khấu.
+- Thanh toán.
+- Công nợ khách hàng.
+- Công nợ nhà cung cấp.
+- Hóa đơn/invoice.
+- Kế toán.
+- Báo cáo tài chính.
+- E-commerce checkout.
+- Tài khoản khách public.
+- Tags/aliases/compatibility search.
+
+Các mục trên là future backlog, không phải feature hiện tại.
+
+## 3. POS và cart
+
+- `/admin/stock-out` là **Bán tại quầy**.
+- POS có cart/order list nội bộ để bán tại quầy.
+- Cart POS **không phải** e-commerce checkout/cart public.
+- Không dùng từ “Xuất & Giao hàng” làm tên UI chính cho POS.
+- Không thêm payment/debt/invoice vào POS khi chưa mở phase tài chính.
+
+## 4. Public Lookup
+
+- Route `/` luôn phải public, không login.
+- Empty search không được show toàn bộ sản phẩm.
+- Không hiển thị admin action, giá, khách hàng, nhà cung cấp hoặc lịch sử giao dịch.
+- Public Lookup phải tiếp tục hoạt động sau mọi refactor admin/POS.
+
+## 5. SKU và sản phẩm
+
+- SKU phải unique.
+- SKU chỉ dùng chữ thường, số và dấu chấm.
+- Không dùng dấu cách, dấu gạch ngang hoặc ký tự đặc biệt trong SKU.
+- Model thật có dấu gạch ngang có thể normalize bằng cách bỏ dấu gạch ngang.
+- Product inactive không xuất hiện trong selector/search mặc định.
+- UI dùng wording `Loại sản phẩm`; backend/database vẫn có thể dùng `category`.
+
+## 6. Tồn kho
+
+- Không sửa trực tiếp bảng tồn kho từ UI thông thường.
+- Tồn kho thay đổi qua:
+  - Nhập hàng.
+  - Bán tại quầy / stock-out.
+  - Kiểm hàng / adjustment.
+- Mọi thay đổi tồn kho phải tạo stock transaction.
+- Bulk stock-in/out tạo stock voucher.
+- Stock voucher là phiếu nhập/phiếu bán nội bộ, không phải hóa đơn.
+
+## 7. Nhóm bảo hành / ghi chú
+
+- Tồn theo nhóm hiện dựa trên transaction note/warranty note.
+- Workflow chính hiện tại không dùng warranty batch làm đơn vị tồn kho UI.
+- Không gộp nhầm các nhóm bảo hành / ghi chú khác nhau khi bán.
+- Same SKU + same nhóm có thể merge trong cart POS; same SKU + khác nhóm phải là dòng riêng.
+
+## 8. Khách hàng và nhà cung cấp
+
+- Field đang lưu hiện tại: `name`, `phone`, `address`.
+- Không show field giả như tags, tax, customer group, province/ward, debt nếu backend chưa lưu.
+- Inactive customer/supplier không xuất hiện trong selector/recent.
+
+## 9. Kỹ thuật
+
+- Một frontend React.
+- Một backend Express.
+- Một MySQL database.
+- Admin route nằm dưới `/admin`.
+- Public route chính là `/`.
+- Không commit `.env` hoặc secret.
+- Tất cả timestamp nghiệp vụ do backend/database sinh.
+- Dùng branch `codex-dev` cho phát triển/deploy hiện tại.
