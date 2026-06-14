@@ -2,8 +2,15 @@ const { pool } = require('../../config/database');
 const AppError = require('../../utils/AppError');
 const { escapeLike, parsePagination } = require('../../utils/parsers');
 
+function mapMoney(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return Number(value);
+}
+
 function mapVoucherLabel(voucherType) {
-  return voucherType === 'IN' ? 'Nhập hàng' : 'Xuất & Giao hàng';
+  return voucherType === 'IN' ? 'Nhập hàng' : 'Bán hàng';
 }
 
 function mapPartner(row) {
@@ -65,6 +72,7 @@ function mapVoucher(row) {
     voucher_code: row.voucher_code,
     occurred_at: row.occurred_at,
     note: row.note,
+    total_amount: mapMoney(row.total_amount),
     partner: mapPartner(row),
     item_count: Number(row.item_count || 0),
     total_quantity: Number(row.total_quantity || 0),
@@ -118,6 +126,47 @@ async function attachPreviewItems(vouchers) {
   if (!vouchers.length) return vouchers;
 
   const voucherIds = vouchers.map((voucher) => voucher.id);
+  const [snapshotRows] = await pool.query(
+    `
+      SELECT
+        svi.voucher_id,
+        svi.quantity,
+        svi.warranty_note_snapshot AS note,
+        svi.sku_snapshot AS sku,
+        svi.product_name_snapshot AS product_name,
+        svi.unit_price,
+        svi.line_total
+      FROM stock_voucher_items svi
+      WHERE svi.voucher_id IN (?)
+      ORDER BY svi.voucher_id DESC, svi.id ASC
+    `,
+    [voucherIds]
+  );
+
+  const previewByVoucher = new Map();
+  snapshotRows.forEach((row) => {
+    const current = previewByVoucher.get(row.voucher_id) || [];
+    if (current.length >= 3) return;
+
+    current.push({
+      product_name: row.product_name,
+      sku: row.sku,
+      quantity: Number(row.quantity || 0),
+      note: row.note,
+      unit_price: mapMoney(row.unit_price),
+      line_total: mapMoney(row.line_total)
+    });
+    previewByVoucher.set(row.voucher_id, current);
+  });
+
+  const fallbackVoucherIds = voucherIds.filter((voucherId) => !previewByVoucher.has(voucherId));
+  if (!fallbackVoucherIds.length) {
+    return vouchers.map((voucher) => ({
+      ...voucher,
+      preview_items: previewByVoucher.get(voucher.id) || []
+    }));
+  }
+
   const [previewRows] = await pool.query(
     `
       SELECT
@@ -131,10 +180,9 @@ async function attachPreviewItems(vouchers) {
       WHERE st.voucher_id IN (?)
       ORDER BY st.voucher_id DESC, st.id ASC
     `,
-    [voucherIds]
+    [fallbackVoucherIds]
   );
 
-  const previewByVoucher = new Map();
   previewRows.forEach((row) => {
     const current = previewByVoucher.get(row.voucher_id) || [];
     if (current.length >= 3) return;
@@ -143,7 +191,9 @@ async function attachPreviewItems(vouchers) {
       product_name: row.product_name,
       sku: row.sku,
       quantity: Number(row.quantity || 0),
-      note: row.note
+      note: row.note,
+      unit_price: null,
+      line_total: null
     });
     previewByVoucher.set(row.voucher_id, current);
   });
@@ -179,6 +229,7 @@ async function listStockVouchers(query = {}) {
         sv.supplier_id,
         sv.occurred_at,
         sv.note,
+        sv.total_amount,
         cu.name AS customer_name,
         cu.phone AS customer_phone,
         cu.address AS customer_address,
@@ -223,6 +274,7 @@ async function getStockVoucherById(id) {
         sv.supplier_id,
         sv.occurred_at,
         sv.note,
+        sv.total_amount,
         cu.name AS customer_name,
         cu.phone AS customer_phone,
         cu.address AS customer_address,
@@ -252,6 +304,47 @@ async function getStockVoucherById(id) {
   const [itemRows] = await pool.query(
     `
       SELECT
+        svi.stock_transaction_id AS transaction_id,
+        svi.product_id,
+        svi.sku_snapshot AS sku,
+        svi.product_name_snapshot AS product_name,
+        svi.warranty_note_snapshot AS note,
+        svi.quantity,
+        svi.unit_price,
+        svi.line_total
+      FROM stock_voucher_items svi
+      WHERE svi.voucher_id = ?
+      ORDER BY svi.id ASC
+    `,
+    [id]
+  );
+
+  if (itemRows.length > 0) {
+    return {
+      ...mapVoucher(voucherRows[0]),
+      items: itemRows.map((row) => ({
+        transaction_id: row.transaction_id,
+        txn_type: voucherRows[0].voucher_type,
+        quantity: Number(row.quantity || 0),
+        note: row.note,
+        warranty_note: row.note,
+        unit_price: mapMoney(row.unit_price),
+        line_total: mapMoney(row.line_total),
+        occurred_at: voucherRows[0].occurred_at,
+        sku: row.sku,
+        product_name: row.product_name,
+        product: {
+          id: row.product_id,
+          sku: row.sku,
+          name: row.product_name
+        }
+      }))
+    };
+  }
+
+  const [legacyItemRows] = await pool.query(
+    `
+      SELECT
         st.id AS transaction_id,
         st.txn_type,
         st.quantity,
@@ -270,13 +363,17 @@ async function getStockVoucherById(id) {
 
   return {
     ...mapVoucher(voucherRows[0]),
-    items: itemRows.map((row) => ({
+    items: legacyItemRows.map((row) => ({
       transaction_id: row.transaction_id,
       txn_type: row.txn_type,
       quantity: Number(row.quantity || 0),
       note: row.note,
       warranty_note: row.note,
+      unit_price: null,
+      line_total: null,
       occurred_at: row.occurred_at,
+      sku: row.sku,
+      product_name: row.product_name,
       product: {
         id: row.product_id,
         sku: row.sku,

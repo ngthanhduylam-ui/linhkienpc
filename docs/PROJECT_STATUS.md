@@ -32,7 +32,7 @@ Database:
 - Migration scripts trong `database/migrations`
 - Schema trong `database/schema/schema.sql`
 - Seed admin/category qua `backend/scripts/seed.js`
-- Schema Phase 2A cho giá bán/snapshot phiếu bán đã được chuẩn bị, nhưng backend/frontend chưa sử dụng giá trong POS.
+- Schema Phase 2A và backend snapshot giá phiếu bán đã được chuẩn bị. Frontend POS chưa hiển thị hoặc cho sửa giá.
 
 ## 2. Deployment Status
 
@@ -162,9 +162,10 @@ Legacy/redirect:
 - Close order có confirm nếu đơn chưa lưu
 - Submit gọi bulk stock-out hiện có
 - Backend tạo voucher
+- Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
 - Có double-submit guard
 - Nếu sale thành công nhưng reload tồn kho lỗi, UI không báo “bán thất bại” sai
-- Không có giá/payment/debt/invoice
+- Frontend POS chưa hiển thị/tính tiền; chưa có payment/debt/invoice
 
 ### Inventory Check / Kiểm hàng - Working
 
@@ -245,7 +246,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 
 ## 7. Current Limitations
 
-- Chưa có giá bán hoạt động trong POS; schema Phase 2A và backend admin product API cho `sale_price` đã được chuẩn bị.
+- Chưa có giá bán hiển thị/cho sửa trong frontend POS; backend đã snapshot giá bán mặc định vào phiếu bán.
 - Chưa có giá nhập.
 - Chưa có thanh toán.
 - Chưa có công nợ khách hàng/nhà cung cấp.

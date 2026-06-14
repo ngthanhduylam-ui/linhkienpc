@@ -120,11 +120,11 @@ Dùng cho:
 
 Không phải invoice và không chứa payment/debt logic.
 
-Phase 2A schema chuẩn bị thêm `total_amount` nullable để lưu tổng tiền phiếu bán khi backend POS được cập nhật ở task sau. Phiếu cũ và phiếu nhập có thể giữ `NULL`.
+Phase 2A thêm `total_amount` nullable để lưu tổng tiền phiếu bán được backend bulk stock-out snapshot. Phiếu cũ, phiếu nhập, hoặc phiếu bán có dòng thiếu giá có thể giữ `NULL`.
 
 ### `stock_voucher_items`
 
-Bảng dòng phiếu chuẩn bị cho Phase 2A.
+Bảng dòng phiếu cho Phase 2A.
 
 Trường chính:
 
@@ -138,7 +138,7 @@ Trường chính:
 - `unit_price` nullable.
 - `line_total` nullable.
 
-Bảng này dùng để lưu snapshot dòng phiếu bán trong tương lai, không thay thế `stock_transactions` và không đổi logic tồn kho hiện tại. `unit_price` và `line_total` nullable để tương thích phiếu cũ.
+Bảng này dùng để lưu snapshot dòng phiếu bán, không thay thế `stock_transactions` và không đổi logic tồn kho hiện tại. `sku_snapshot`, `product_name_snapshot`, `warranty_note_snapshot`, `quantity`, `unit_price` và `line_total` là dữ liệu tại thời điểm bán. `unit_price` và `line_total` nullable để tương thích phiếu cũ và sản phẩm chưa có giá.
 
 ## 4. Nhóm đối tác
 
@@ -230,7 +230,7 @@ Schema đã chuẩn bị cho Phase 2A:
 - giá bán mặc định trên `products.sale_price`,
 - snapshot giá bán/tổng tiền phiếu bán qua `stock_vouchers.total_amount` và `stock_voucher_items`.
 
-Backend/frontend hiện chưa sử dụng các field này, và POS chưa có giá bán hoạt động trong task schema này.
+Backend bulk stock-out đã sử dụng các field này để snapshot giá bán vào phiếu bán. Frontend POS chưa hiển thị hoặc cho sửa giá, và hệ thống chưa có thanh toán/công nợ/hóa đơn.
 
 Chưa có schema cho:
 

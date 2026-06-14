@@ -105,6 +105,14 @@ function bulkStockOutBodyValidator(req, res, next) {
         details.push({ field: `${fieldPrefix}.quantity`, issue: 'quantity must be a positive integer' });
       }
 
+      if (item.unit_price !== undefined) {
+        details.push({ field: `${fieldPrefix}.unit_price`, issue: 'unit_price is not accepted for stock-out' });
+      }
+
+      if (item.line_total !== undefined) {
+        details.push({ field: `${fieldPrefix}.line_total`, issue: 'line_total is not accepted for stock-out' });
+      }
+
       if (item.warranty_note !== undefined && item.warranty_note !== null && typeof item.warranty_note !== 'string') {
         details.push({ field: `${fieldPrefix}.warranty_note`, issue: 'warranty_note must be a string' });
       } else if (typeof item.warranty_note === 'string' && item.warranty_note.length > 500) {

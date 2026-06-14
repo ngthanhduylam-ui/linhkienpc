@@ -14,7 +14,7 @@ Hệ thống phục vụ cửa hàng linh kiện PC:
 - Quản lý khách hàng, nhà cung cấp.
 - Xem lịch sử phiếu nhập / phiếu bán.
 
-Hiện tại admin product API đã có `sale_price` optional/nullable để lưu giá bán mặc định của sản phẩm. Giá này chưa được dùng trong POS, phiếu bán, thanh toán, công nợ hoặc báo cáo.
+Hiện tại admin product API đã có `sale_price` optional/nullable để lưu giá bán mặc định của sản phẩm. Backend bulk stock-out snapshot giá này vào phiếu bán, nhưng frontend POS chưa hiển thị/tính tiền và hệ thống chưa có thanh toán, công nợ hoặc báo cáo tài chính.
 
 Hiện tại **không** có:
 
@@ -35,7 +35,8 @@ Hiện tại **không** có:
 - Khi tạo product, hệ thống tạo dòng tồn ban đầu trong `product_inventory_balances` với số lượng 0.
 - Product thuộc một loại sản phẩm (`category_id` trong API/database, UI gọi là “Loại sản phẩm”).
 - `sale_price` là giá bán mặc định optional/nullable trong admin product API. `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
-- Task 2 Phase 2A chưa dùng `sale_price` trong POS, phiếu bán, thanh toán, công nợ hoặc báo cáo.
+- Phase 2A snapshot `sale_price` khi bán qua backend bulk stock-out. Sản phẩm chưa có giá vẫn bán được; dòng thiếu giá có `unit_price = NULL`, `line_total = NULL`, và nếu đơn có bất kỳ dòng thiếu giá thì `total_amount = NULL`.
+- `sale_price = 0` là giá bán thực sự bằng 0, không phải trạng thái thiếu giá.
 
 Ví dụ SKU hợp lệ:
 
@@ -92,6 +93,8 @@ new.ram.ddr4.8gb
 - Cùng SKU + cùng nhóm bảo hành/ghi chú được merge trong cart.
 - Số lượng bán tối thiểu là 1 và tối đa là tồn còn lại của nhóm đã chọn.
 - Bán thành công tạo phiếu bán/stock voucher.
+- Backend snapshot giá bán mặc định vào `stock_voucher_items` cho phiếu bán. Việc snapshot này không thay đổi quy tắc trừ tồn.
+- Chưa có thanh toán, giảm giá, công nợ, hóa đơn hoặc báo cáo tài chính.
 - Phiếu bán không phải hóa đơn thanh toán.
 
 ## 8. Kiểm hàng

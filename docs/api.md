@@ -209,7 +209,10 @@ POST /admin/stock-out
 - Có thể gắn `customer_id`.
 - Validate tổng tồn và tồn theo nhóm note/warranty.
 - Tạo stock transactions và stock voucher.
-- Không gửi price/payment/debt/invoice fields.
+- Frontend không gửi `unit_price`; backend tự snapshot giá từ `products.sale_price`.
+- Nếu sản phẩm có `sale_price`, backend lưu `unit_price` và `line_total` vào `stock_voucher_items`.
+- Nếu có bất kỳ dòng nào chưa có giá (`sale_price IS NULL`), `stock_vouchers.total_amount` là `NULL`.
+- Không gửi payment/debt/discount/invoice fields.
 
 ## 10. Stock transactions
 
@@ -241,7 +244,10 @@ Voucher dùng để xem:
 - người tạo,
 - khách hàng/nhà cung cấp nếu có,
 - tổng số lượng,
+- `total_amount` nullable,
 - danh sách sản phẩm.
+- Với phiếu bán mới, detail item có `unit_price` và `line_total` nullable từ snapshot.
+- Với phiếu cũ chưa có snapshot, detail fallback về `stock_transactions` và giá là `NULL`.
 
 Voucher không phải invoice.
 
@@ -281,7 +287,8 @@ Không dùng các route batch làm workflow chính cho POS/stock-in hiện tại
 
 - Không đổi payload nhập/xuất tồn nếu chưa có phase riêng.
 - Public lookup không trả price/payment/debt/invoice/admin actions.
-- Không thêm price/payment/debt/invoice vào stock-in, stock-out hoặc voucher APIs nếu chưa có Phase 2A task được duyệt rõ.
+- Stock-in không có giá nhập trong Phase 2A.
+- Stock-out/voucher APIs chỉ snapshot giá bán mặc định theo Phase 2A; không thêm payment/debt/discount/invoice nếu chưa có task được duyệt rõ.
 - Admin product API được phép lưu giá bán mặc định qua `sale_price`.
 - Không đổi schema/route public lookup nếu không cần.
 - Nếu backend trả lỗi cụ thể, frontend phải hiển thị rõ thay vì thông báo mơ hồ.

@@ -3,10 +3,86 @@ const AppError = require('../../utils/AppError');
 const { escapeLike, parsePagination, parseNullableInt } = require('../../utils/parsers');
 const { NO_NOTE_WARRANTY_KEY, getAdjustedNoteGroups, normalizeNoteKey } = require('../../utils/inventoryNoteGroups');
 
+const MAX_MONEY_AMOUNT = 999999999999999n;
+
 function validateQuantity(quantity) {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new AppError('quantity must be a positive integer.', 400, 'VALIDATION_ERROR');
   }
+}
+
+function decimalToBigInt(value, fieldName) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new AppError(`${fieldName} must be a non-negative integer.`, 500, 'INVALID_MONEY_AMOUNT');
+  }
+
+  const parsed = BigInt(normalized);
+  if (parsed > MAX_MONEY_AMOUNT) {
+    throw new AppError(`${fieldName} exceeds supported amount.`, 500, 'MONEY_AMOUNT_OVERFLOW');
+  }
+
+  return parsed;
+}
+
+function moneyToSql(value) {
+  return value === null || value === undefined ? null : value.toString();
+}
+
+function moneyToResponse(value) {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+function buildSaleSnapshot(item) {
+  const unitPrice = decimalToBigInt(item.sale_price, 'sale_price');
+  if (unitPrice === null) {
+    return {
+      unit_price: null,
+      line_total: null
+    };
+  }
+
+  const lineTotal = unitPrice * BigInt(item.quantity);
+  if (lineTotal > MAX_MONEY_AMOUNT) {
+    throw new AppError('line_total exceeds supported amount.', 400, 'MONEY_AMOUNT_OVERFLOW', [
+      {
+        sku: item.sku,
+        product_id: item.product_id,
+        field: 'line_total',
+        issue: 'exceeds_supported_amount'
+      }
+    ]);
+  }
+
+  return {
+    unit_price: unitPrice,
+    line_total: lineTotal
+  };
+}
+
+function calculateVoucherTotalAmount(items) {
+  let total = 0n;
+
+  for (const item of items) {
+    if (item.line_total === null || item.line_total === undefined) {
+      return null;
+    }
+    total += item.line_total;
+    if (total > MAX_MONEY_AMOUNT) {
+      throw new AppError('total_amount exceeds supported amount.', 400, 'MONEY_AMOUNT_OVERFLOW', [
+        {
+          field: 'total_amount',
+          issue: 'exceeds_supported_amount'
+        }
+      ]);
+    }
+  }
+
+  return total;
 }
 
 function normalizeWarrantyNote(note) {
@@ -87,7 +163,7 @@ async function resolveProductsBySku(connection, items) {
   const placeholders = skuKeys.map(() => '?').join(',');
   const [rows] = await connection.query(
     `
-      SELECT id, sku, name, is_active
+      SELECT id, sku, name, sale_price, is_active
       FROM products
       WHERE LOWER(sku) IN (${placeholders})
     `,
@@ -498,6 +574,7 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         sku: product.sku,
         product_id: Number(product.id),
         product_name: product.name,
+        sale_price: product.sale_price,
         quantity: Number(item.quantity),
         warranty_note: item.warranty_note,
         warranty_note_key: warrantyNoteKey,
@@ -505,6 +582,12 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         transaction_note: warrantySelected && warrantyNoteKey ? warrantyNoteKey : null
       };
     });
+    resolvedItems.forEach((item) => {
+      const priceSnapshot = buildSaleSnapshot(item);
+      item.unit_price = priceSnapshot.unit_price;
+      item.line_total = priceSnapshot.line_total;
+    });
+    const totalAmount = calculateVoucherTotalAmount(resolvedItems);
     const voucher = await createStockVoucher(connection, {
       voucherType: 'OUT',
       adminId,
@@ -644,6 +727,35 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         [voucher.id, item.product_id, resolvedCustomerId, item.quantity, item.transaction_note, adminId]
       );
 
+      await connection.query(
+        `
+          INSERT INTO stock_voucher_items
+            (
+              voucher_id,
+              stock_transaction_id,
+              product_id,
+              sku_snapshot,
+              product_name_snapshot,
+              warranty_note_snapshot,
+              quantity,
+              unit_price,
+              line_total
+            )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          voucher.id,
+          txResult.insertId,
+          item.product_id,
+          item.sku,
+          item.product_name,
+          item.transaction_note,
+          item.quantity,
+          moneyToSql(item.unit_price),
+          moneyToSql(item.line_total)
+        ]
+      );
+
       responseItems.push({
         sku: item.sku,
         product_id: item.product_id,
@@ -651,9 +763,20 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         quantity: item.quantity,
         warranty_note: item.warranty_note === NO_NOTE_WARRANTY_KEY ? NO_NOTE_WARRANTY_KEY : item.transaction_note,
         transaction_id: txResult.insertId,
+        unit_price: moneyToResponse(item.unit_price),
+        line_total: moneyToResponse(item.line_total),
         new_total_quantity: nextQuantity
       });
     }
+
+    await connection.query(
+      `
+        UPDATE stock_vouchers
+        SET total_amount = ?
+        WHERE id = ?
+      `,
+      [moneyToSql(totalAmount), voucher.id]
+    );
 
     await connection.commit();
 
@@ -661,6 +784,7 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
       txn_type: 'OUT',
       voucher_id: voucher.id,
       voucher_code: voucher.voucher_code,
+      total_amount: moneyToResponse(totalAmount),
       customer_id: resolvedCustomerId,
       items: responseItems
     };
