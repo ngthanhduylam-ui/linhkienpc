@@ -3,11 +3,18 @@ const AppError = require('../../utils/AppError');
 const { parsePagination, parseNullableInt, parseBooleanQuery, escapeLike } = require('../../utils/parsers');
 const { buildAdjustedNoteGroupMap } = require('../../utils/inventoryNoteGroups');
 
+function mapSalePrice(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return Number(value);
+}
+
 async function getProductById(id) {
   const [rows] = await pool.query(
     `
       SELECT
-        p.id, p.sku, p.name, p.category_id, p.spec_summary, p.is_active, p.created_at, p.updated_at,
+        p.id, p.sku, p.name, p.category_id, p.spec_summary, p.sale_price, p.is_active, p.created_at, p.updated_at,
         c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active,
         COALESCE(pib.quantity, 0) AS total_quantity
       FROM products p
@@ -38,6 +45,7 @@ async function getProductById(id) {
     },
     category_is_active: row.category_is_active === 1,
     spec_summary: row.spec_summary,
+    sale_price: mapSalePrice(row.sale_price),
     total_quantity: Number(row.total_quantity || 0),
     note_groups: noteGroupMap.get(row.id) || [],
     is_active: row.is_active === 1,
@@ -90,7 +98,7 @@ async function listAdminProducts(query) {
   const [rows] = await pool.query(
     `
       SELECT
-        p.id, p.sku, p.name, p.category_id, p.spec_summary, p.is_active, p.created_at, p.updated_at,
+        p.id, p.sku, p.name, p.category_id, p.spec_summary, p.sale_price, p.is_active, p.created_at, p.updated_at,
         c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active,
         COALESCE(pib.quantity, 0) AS total_quantity
       FROM products p
@@ -118,6 +126,7 @@ async function listAdminProducts(query) {
       },
       category_is_active: row.category_is_active === 1,
       spec_summary: row.spec_summary,
+      sale_price: mapSalePrice(row.sale_price),
       total_quantity: Number(row.total_quantity || 0),
       note_groups: noteGroupMap.get(row.id) || [],
       is_active: row.is_active === 1,
@@ -132,7 +141,7 @@ async function listAdminProducts(query) {
 }
 
 async function createProduct(payload) {
-  const { sku, name, category_id, spec_summary = null, is_active = true } = payload;
+  const { sku, name, category_id, spec_summary = null, sale_price = null, is_active = true } = payload;
   await ensureCategoryExists(category_id);
 
   const connection = await pool.getConnection();
@@ -141,10 +150,10 @@ async function createProduct(payload) {
 
     const [result] = await connection.query(
       `
-      INSERT INTO products (sku, name, category_id, spec_summary, is_active)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO products (sku, name, category_id, spec_summary, sale_price, is_active)
+      VALUES (?, ?, ?, ?, ?, ?)
     `,
-      [sku.trim(), name.trim(), category_id, spec_summary, is_active ? 1 : 0]
+      [sku.trim(), name.trim(), category_id, spec_summary, sale_price, is_active ? 1 : 0]
     );
 
     await connection.query(
@@ -184,6 +193,7 @@ async function updateProduct(id, payload) {
     name: payload.name !== undefined ? payload.name.trim() : current.name,
     category_id: nextCategoryId,
     spec_summary: payload.spec_summary !== undefined ? payload.spec_summary : current.spec_summary,
+    sale_price: payload.sale_price !== undefined ? payload.sale_price : current.sale_price,
     is_active: payload.is_active !== undefined ? (payload.is_active ? 1 : 0) : (current.is_active ? 1 : 0)
   };
 
@@ -191,10 +201,10 @@ async function updateProduct(id, payload) {
     await pool.query(
       `
         UPDATE products
-        SET sku = ?, name = ?, category_id = ?, spec_summary = ?, is_active = ?
+        SET sku = ?, name = ?, category_id = ?, spec_summary = ?, sale_price = ?, is_active = ?
         WHERE id = ?
       `,
-      [updates.sku, updates.name, updates.category_id, updates.spec_summary, updates.is_active, id]
+      [updates.sku, updates.name, updates.category_id, updates.spec_summary, updates.sale_price, updates.is_active, id]
     );
     return getProductById(id);
   } catch (error) {

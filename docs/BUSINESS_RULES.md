@@ -14,9 +14,11 @@ Hệ thống phục vụ cửa hàng linh kiện PC:
 - Quản lý khách hàng, nhà cung cấp.
 - Xem lịch sử phiếu nhập / phiếu bán.
 
+Hiện tại admin product API đã có `sale_price` optional/nullable để lưu giá bán mặc định của sản phẩm. Giá này chưa được dùng trong POS, phiếu bán, thanh toán, công nợ hoặc báo cáo.
+
 Hiện tại **không** có:
 
-- Giá bán, giá nhập, chiết khấu.
+- Giá nhập, chiết khấu.
 - Thanh toán, công nợ.
 - Hóa đơn, kế toán, báo cáo tài chính.
 - E-commerce checkout.
@@ -32,6 +34,8 @@ Hiện tại **không** có:
 - Product inactive không xuất hiện trong public search và list mặc định.
 - Khi tạo product, hệ thống tạo dòng tồn ban đầu trong `product_inventory_balances` với số lượng 0.
 - Product thuộc một loại sản phẩm (`category_id` trong API/database, UI gọi là “Loại sản phẩm”).
+- `sale_price` là giá bán mặc định optional/nullable trong admin product API. `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
+- Task 2 Phase 2A chưa dùng `sale_price` trong POS, phiếu bán, thanh toán, công nợ hoặc báo cáo.
 
 Ví dụ SKU hợp lệ:
 

@@ -33,6 +33,9 @@ function validateField(value, rule, fieldPath) {
     if (rule.min !== undefined && value < rule.min) {
       return `${fieldPath} must be >= ${rule.min}`;
     }
+    if (rule.max !== undefined && value > rule.max) {
+      return `${fieldPath} must be <= ${rule.max}`;
+    }
   }
 
   if (rule.enum && !rule.enum.includes(value)) {

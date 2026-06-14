@@ -126,6 +126,7 @@ Legacy/redirect:
 - Activate/deactivate/restore
 - SKU validation
 - Duplicate SKU error handling
+- Backend admin product API đã hỗ trợ `sale_price` nullable cho giá bán mặc định
 - UI Sapo-inspired full page
 - Wording visible: `Thêm sản phẩm`, `Sửa sản phẩm`, `Loại sản phẩm`
 - API/database nội bộ vẫn dùng `category` / `category_id`
@@ -244,7 +245,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 
 ## 7. Current Limitations
 
-- Chưa có giá bán hoạt động trong POS; schema Phase 2A cho giá bán đã được chuẩn bị.
+- Chưa có giá bán hoạt động trong POS; schema Phase 2A và backend admin product API cho `sale_price` đã được chuẩn bị.
 - Chưa có giá nhập.
 - Chưa có thanh toán.
 - Chưa có công nợ khách hàng/nhà cung cấp.
@@ -260,6 +261,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 
 Backlog sau khi chạy ổn định:
 
+- Dùng giá bán mặc định `sale_price` trong Product UI và POS.
 - In phiếu bán/phiếu nhập đơn giản bằng dữ liệu voucher hiện có.
 - Nghiên cứu địa chỉ khách hàng kiểu Province/District/Ward/Detailed address.
 - Customer warranty tracking/history view tốt hơn.
@@ -269,7 +271,8 @@ Backlog sau khi chạy ổn định:
 
 Backlog tài chính chỉ làm sau:
 
-- Giá nhập / giá bán
+- Giá nhập
+- Sửa giá trực tiếp trong POS
 - Thanh toán
 - Công nợ
 - Sổ quỹ/kế toán
