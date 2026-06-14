@@ -108,6 +108,13 @@ PATCH /admin/products/:id/deactivate
 PATCH /admin/products/:id/activate
 ```
 
+Admin product API hỗ trợ `sale_price` cho giá bán mặc định:
+
+- `sale_price` chỉ xuất hiện trong admin product list/detail/create/update response.
+- `sale_price` là optional và nullable; `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
+- Giá hợp lệ là số nguyên không âm, tối đa `999999999999999`.
+- Public lookup không trả `sale_price`.
+
 Quy tắc SKU:
 
 - Unique.
@@ -273,6 +280,8 @@ Không dùng các route batch làm workflow chính cho POS/stock-in hiện tại
 ## 15. Nguyên tắc thay đổi API
 
 - Không đổi payload nhập/xuất tồn nếu chưa có phase riêng.
-- Không thêm price/payment/debt/invoice vào API hiện tại.
+- Public lookup không trả price/payment/debt/invoice/admin actions.
+- Không thêm price/payment/debt/invoice vào stock-in, stock-out hoặc voucher APIs nếu chưa có Phase 2A task được duyệt rõ.
+- Admin product API được phép lưu giá bán mặc định qua `sale_price`.
 - Không đổi schema/route public lookup nếu không cần.
 - Nếu backend trả lỗi cụ thể, frontend phải hiển thị rõ thay vì thông báo mơ hồ.
