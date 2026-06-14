@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS stock_vouchers (
   created_by_admin_id BIGINT UNSIGNED NOT NULL,
   occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   note VARCHAR(500) NULL,
+  total_amount DECIMAL(15,0) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_stock_vouchers_type_time (voucher_type, occurred_at),
@@ -21,5 +22,6 @@ CREATE TABLE IF NOT EXISTS stock_vouchers (
     ON UPDATE CASCADE,
   CONSTRAINT fk_stock_vouchers_admin
     FOREIGN KEY (created_by_admin_id) REFERENCES admins(id)
-    ON UPDATE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT chk_stock_vouchers_total_amount_non_negative CHECK (total_amount IS NULL OR total_amount >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

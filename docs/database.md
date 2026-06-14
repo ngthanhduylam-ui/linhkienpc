@@ -63,6 +63,7 @@ Trường chính:
 - `name`.
 - `category_id`.
 - `spec_summary`.
+- `sale_price` nullable, chuẩn bị Phase 2A cho giá bán mặc định.
 - `is_active`.
 
 Quy tắc SKU hiện tại:
@@ -118,6 +119,26 @@ Dùng cho:
 - kiểm tra sản phẩm/số lượng trong phiếu.
 
 Không phải invoice và không chứa payment/debt logic.
+
+Phase 2A schema chuẩn bị thêm `total_amount` nullable để lưu tổng tiền phiếu bán khi backend POS được cập nhật ở task sau. Phiếu cũ và phiếu nhập có thể giữ `NULL`.
+
+### `stock_voucher_items`
+
+Bảng dòng phiếu chuẩn bị cho Phase 2A.
+
+Trường chính:
+
+- `voucher_id`.
+- `stock_transaction_id` nullable.
+- `product_id`.
+- `sku_snapshot`.
+- `product_name_snapshot`.
+- `warranty_note_snapshot` nullable.
+- `quantity`.
+- `unit_price` nullable.
+- `line_total` nullable.
+
+Bảng này dùng để lưu snapshot dòng phiếu bán trong tương lai, không thay thế `stock_transactions` và không đổi logic tồn kho hiện tại. `unit_price` và `line_total` nullable để tương thích phiếu cũ.
 
 ## 4. Nhóm đối tác
 
@@ -187,6 +208,7 @@ Không xóa các bảng legacy nếu chưa có migration/phase dọn riêng.
 015_create_inventory_note_adjustments.sql
 016_create_stock_voucher_history.sql
 017_create_inventory_quantity_adjustments.sql
+018_add_phase_2a_sale_price_snapshot_schema.sql
 ```
 
 ## 8. Backup/restore
@@ -203,9 +225,16 @@ Không commit file backup chứa dữ liệu thật vào repo.
 
 ## 9. Những bảng/chức năng chưa có
 
+Schema đã chuẩn bị cho Phase 2A:
+
+- giá bán mặc định trên `products.sale_price`,
+- snapshot giá bán/tổng tiền phiếu bán qua `stock_vouchers.total_amount` và `stock_voucher_items`.
+
+Backend/frontend hiện chưa sử dụng các field này, và POS chưa có giá bán hoạt động trong task schema này.
+
 Chưa có schema cho:
 
-- giá bán/giá nhập,
+- giá nhập,
 - thanh toán,
 - công nợ,
 - hóa đơn,

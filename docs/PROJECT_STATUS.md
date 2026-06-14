@@ -32,6 +32,7 @@ Database:
 - Migration scripts trong `database/migrations`
 - Schema trong `database/schema/schema.sql`
 - Seed admin/category qua `backend/scripts/seed.js`
+- Schema Phase 2A cho giá bán/snapshot phiếu bán đã được chuẩn bị, nhưng backend/frontend chưa sử dụng giá trong POS.
 
 ## 2. Deployment Status
 
@@ -243,7 +244,8 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 
 ## 7. Current Limitations
 
-- Chưa có giá bán/giá nhập.
+- Chưa có giá bán hoạt động trong POS; schema Phase 2A cho giá bán đã được chuẩn bị.
+- Chưa có giá nhập.
 - Chưa có thanh toán.
 - Chưa có công nợ khách hàng/nhà cung cấp.
 - Chưa có invoice/hóa đơn.
