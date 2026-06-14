@@ -12,6 +12,9 @@ const SKU_PATTERN = /^[a-z0-9]+(\.[a-z0-9]+)*$/i;
 const SKU_FORMAT_MESSAGE = "SKU không hợp lệ. Chỉ dùng chữ thường, số và dấu chấm.";
 const SKU_DUPLICATE_MESSAGE = "SKU này đã tồn tại. Vui lòng dùng SKU khác.";
 const SKU_HELPER_TEXT = "SKU chỉ dùng chữ thường, số và dấu chấm. Ví dụ: 2nd.maybo.lenovo.v50t13imb";
+const MAX_SALE_PRICE = 999999999999999;
+const SALE_PRICE_INTEGER_MESSAGE = "Giá bán phải là số nguyên không âm.";
+const SALE_PRICE_MAX_MESSAGE = "Giá bán vượt quá giới hạn cho phép.";
 
 function stripDiacritics(value) {
   return (value || "")
@@ -62,7 +65,7 @@ function getProductErrorMessage(error, fallbackMessage) {
     return SKU_DUPLICATE_MESSAGE;
   }
 
-  if (code === "VALIDATION_ERROR" && (hasSkuValidationError || normalizedMessage.includes("validation failed"))) {
+  if (code === "VALIDATION_ERROR" && hasSkuValidationError) {
     return SKU_FORMAT_MESSAGE;
   }
 
@@ -74,6 +77,40 @@ function replaceSkuConditionPrefix(sku, nextCondition) {
   if (value.startsWith("new.")) return `${nextCondition}.${value.slice(4)}`;
   if (value.startsWith("2nd.")) return `${nextCondition}.${value.slice(4)}`;
   return value;
+}
+
+function salePriceToInput(value) {
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function normalizeSalePriceInput(value) {
+  const rawValue = String(value ?? "").trim();
+  if (!rawValue) {
+    return { value: null, error: "" };
+  }
+
+  const hasSeparator = /[.,]/.test(rawValue);
+  const isValidDigits = /^\d+$/.test(rawValue);
+  const isValidGroupedNumber = /^\d{1,3}([.,]\d{3})+$/.test(rawValue);
+
+  if (!isValidDigits && !(hasSeparator && isValidGroupedNumber)) {
+    return { value: null, error: SALE_PRICE_INTEGER_MESSAGE };
+  }
+
+  const normalizedValue = rawValue.replace(/[.,]/g, "");
+  const numericValue = Number(normalizedValue);
+  if (!Number.isSafeInteger(numericValue) || numericValue > MAX_SALE_PRICE) {
+    return { value: null, error: SALE_PRICE_MAX_MESSAGE };
+  }
+
+  return { value: numericValue, error: "" };
+}
+
+function formatSalePricePreview(value) {
+  const normalized = normalizeSalePriceInput(value);
+  if (normalized.error || normalized.value === null) return "-";
+  return `${normalized.value.toLocaleString("vi-VN")} VND`;
 }
 
 export function ProductFormPage() {
@@ -89,7 +126,8 @@ export function ProductFormPage() {
     category_id: "",
     condition: "2nd",
     unit: "cái",
-    spec_summary: ""
+    spec_summary: "",
+    sale_price: ""
   });
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(false);
   const [showCategoryCreateForm, setShowCategoryCreateForm] = useState(false);
@@ -140,7 +178,8 @@ export function ProductFormPage() {
           category_id: product?.category_id ? String(product.category_id) : "",
           condition: getConditionFromSku(product?.sku),
           unit: "cái",
-          spec_summary: product?.spec_summary || ""
+          spec_summary: product?.spec_summary || "",
+          sale_price: salePriceToInput(product?.sale_price)
         });
         setIsSkuManuallyEdited(true);
       } catch (err) {
@@ -267,6 +306,11 @@ export function ProductFormPage() {
       setError("Vui lòng chọn loại sản phẩm.");
       return;
     }
+    const salePrice = normalizeSalePriceInput(form.sale_price);
+    if (salePrice.error) {
+      setError(salePrice.error);
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -275,14 +319,16 @@ export function ProductFormPage() {
           name,
           sku,
           category_id: Number(categoryId),
-          spec_summary: form.spec_summary.trim() || null
+          spec_summary: form.spec_summary.trim() || null,
+          sale_price: salePrice.value
         });
         setSuccess("Đã lưu sản phẩm.");
       } else {
         await createProductRequest({
           name,
           sku,
-          category_id: Number(categoryId)
+          category_id: Number(categoryId),
+          sale_price: salePrice.value
         });
         setSuccess("Đã thêm sản phẩm.");
       }
@@ -429,6 +475,23 @@ export function ProductFormPage() {
                       />
                     </div>
 
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Giá bán</label>
+                      <div className="relative">
+                        <input
+                          className="h-10 w-full rounded border border-slate-300 px-3 pr-14 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                          value={form.sale_price}
+                          inputMode="numeric"
+                          onChange={(event) => updateForm({ sale_price: event.target.value })}
+                          placeholder="Nhập giá bán"
+                        />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
+                          VND
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Giá bán mặc định, có thể để trống.</p>
+                    </div>
+
                     <div className="md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-slate-700">Mô tả / spec summary</label>
                       <textarea
@@ -476,6 +539,10 @@ export function ProductFormPage() {
                   <div className="flex justify-between gap-3 py-2">
                     <span className="text-slate-500">Đơn vị</span>
                     <span className="font-medium text-slate-900">{form.unit}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 py-2">
+                    <span className="text-slate-500">Giá bán</span>
+                    <span className="text-right font-medium text-slate-900">{formatSalePricePreview(form.sale_price)}</span>
                   </div>
                 </div>
               </div>

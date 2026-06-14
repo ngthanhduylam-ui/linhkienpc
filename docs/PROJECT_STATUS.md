@@ -32,7 +32,7 @@ Database:
 - Migration scripts trong `database/migrations`
 - Schema trong `database/schema/schema.sql`
 - Seed admin/category qua `backend/scripts/seed.js`
-- Schema Phase 2A và backend snapshot giá phiếu bán đã được chuẩn bị. Frontend POS chưa hiển thị hoặc cho sửa giá.
+- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Frontend POS chưa hiển thị hoặc cho sửa giá.
 
 ## 2. Deployment Status
 
@@ -121,8 +121,10 @@ Legacy/redirect:
 
 - Danh sách sản phẩm
 - Search/filter/pagination
+- Product list hiển thị giá bán mặc định nếu đã thiết lập
 - Add product page
 - Edit product page
+- Product Add/Edit UI hỗ trợ nhập `sale_price` optional/nullable cho giá bán mặc định
 - Activate/deactivate/restore
 - SKU validation
 - Duplicate SKU error handling
@@ -163,9 +165,11 @@ Legacy/redirect:
 - Submit gọi bulk stock-out hiện có
 - Backend tạo voucher
 - Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
+- POS hiển thị giá bán mặc định trong dropdown, đơn giá trong cart, thành tiền từng dòng và tổng tiền đơn hiện tại
+- Giá trong POS vẫn chỉ đọc; backend vẫn tự snapshot và tính lại tiền khi submit
 - Có double-submit guard
 - Nếu sale thành công nhưng reload tồn kho lỗi, UI không báo “bán thất bại” sai
-- Frontend POS chưa hiển thị/tính tiền; chưa có payment/debt/invoice
+- POS chưa có sửa giá trực tiếp, giảm giá, thanh toán, công nợ hoặc hóa đơn
 
 ### Inventory Check / Kiểm hàng - Working
 
@@ -246,7 +250,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 
 ## 7. Current Limitations
 
-- Chưa có giá bán hiển thị/cho sửa trong frontend POS; backend đã snapshot giá bán mặc định vào phiếu bán.
+- Product Add/Edit UI đã cho quản lý giá bán mặc định; frontend POS chưa hiển thị hoặc cho sửa giá khi bán.
 - Chưa có giá nhập.
 - Chưa có thanh toán.
 - Chưa có công nợ khách hàng/nhà cung cấp.
@@ -262,7 +266,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 
 Backlog sau khi chạy ổn định:
 
-- Dùng giá bán mặc định `sale_price` trong Product UI và POS.
+- Dùng giá bán mặc định `sale_price` trong POS.
 - In phiếu bán/phiếu nhập đơn giản bằng dữ liệu voucher hiện có.
 - Nghiên cứu địa chỉ khách hàng kiểu Province/District/Ward/Detailed address.
 - Customer warranty tracking/history view tốt hơn.

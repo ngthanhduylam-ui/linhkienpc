@@ -181,12 +181,40 @@ Product Management được polish theo Sapo-like layout:
 
 Không thêm:
 
-- Price
 - Barcode
 - Tax
 - Brand
 - Tags
 - Warranty config
+
+## 10.1. Phase 2A Task 4 - Product Default Sale Price UI
+
+Product Add/Edit đã thêm field `Giá bán` để admin nhập giá bán mặc định của sản phẩm:
+
+- Giá bán optional, để trống nghĩa là chưa thiết lập.
+- Giá `0` là giá hợp lệ, không bị đổi thành trống.
+- Frontend gửi `sale_price` dạng number hoặc `null` cho admin product API.
+- POS vẫn chưa hiển thị giá, chưa cho sửa giá khi bán và chưa có thanh toán/công nợ/hóa đơn.
+
+## 10.2. Phase 2A Task 5 - Product List Sale Price
+
+Product list đã thêm cột `Giá bán` để xem nhanh giá bán mặc định:
+
+- Chưa có giá hiển thị `Chưa thiết lập`.
+- Giá `0` hiển thị `0 ₫`.
+- Giá dương hiển thị theo định dạng VND.
+- Public lookup vẫn không hiển thị giá.
+
+## 10.3. Phase 2A POS Read-only Sale Price Display
+
+POS `/admin/stock-out` đã hiển thị giá bán mặc định ở các điểm đọc:
+
+- Product dropdown hiển thị giá để admin tham khảo khi chọn sản phẩm.
+- Cart hiển thị `Đơn giá` và `Thành tiền` từng dòng.
+- Sidebar hiển thị `Tổng tiền` của đơn hiện tại.
+- Giá trong POS vẫn chỉ đọc, chưa cho sửa trực tiếp khi bán.
+- Submit payload không gửi `unit_price`, `line_total` hoặc `total_amount`; backend vẫn tự snapshot và tính lại khi submit.
+- Chưa có thanh toán, giảm giá, công nợ hoặc hóa đơn.
 
 ## 11. Inventory Check UI Refactor
 

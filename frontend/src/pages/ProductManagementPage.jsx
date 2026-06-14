@@ -117,6 +117,14 @@ function getProductStatusBadge(product) {
   return product?.is_active ? "Đang sử dụng" : "Ngừng sử dụng";
 }
 
+function formatSalePrice(value) {
+  if (value === null || value === undefined) {
+    return "Chưa thiết lập";
+  }
+
+  return `${Number(value).toLocaleString("vi-VN")} ₫`;
+}
+
 export function ProductManagementPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -563,9 +571,10 @@ export function ProductManagementPage() {
           <span className="col-span-3">Tên sản phẩm</span>
           <span className="col-span-2">SKU</span>
           <span className="col-span-2">Loại sản phẩm</span>
+          <span className="col-span-2 text-right">Giá bán</span>
           <span className="col-span-1 text-right">Tồn</span>
-          <span className="col-span-2 text-center">Trạng thái</span>
-          <span className="col-span-2 text-right">Thao tác</span>
+          <span className="col-span-1 text-center">Trạng thái</span>
+          <span className="col-span-1 text-right">Thao tác</span>
         </div>
 
         {isLoading ? (
@@ -580,10 +589,18 @@ export function ProductManagementPage() {
                 </div>
                 <p className="text-sm text-slate-700 md:col-span-2">{product.sku}</p>
                 <p className="text-sm text-slate-700 md:col-span-2">{getCategoryName(product, categories)}</p>
+                <p
+                  className={[
+                    "text-sm font-semibold md:col-span-2 md:text-right",
+                    product.sale_price === null || product.sale_price === undefined ? "text-slate-400" : "text-slate-900"
+                  ].join(" ")}
+                >
+                  {formatSalePrice(product.sale_price)}
+                </p>
                 <p className="text-lg font-bold text-brand-800 md:col-span-1 md:text-right">
                   {Number(product.total_quantity || 0)}
                 </p>
-                <div className="md:col-span-2 md:text-center">
+                <div className="md:col-span-1 md:text-center">
                   <span
                     className={[
                       "inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1",
@@ -595,11 +612,11 @@ export function ProductManagementPage() {
                     {getProductStatusBadge(product)}
                   </span>
                 </div>
-                <div className="md:col-span-2 md:text-right">
+                <div className="md:col-span-1 md:text-right">
                   <div className="flex flex-wrap justify-start gap-2 md:justify-end">
                     <Link
                       to={`/admin/products/${product.id}/edit`}
-                      className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      className="rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
                       Sửa
                     </Link>
@@ -607,15 +624,15 @@ export function ProductManagementPage() {
                       <button
                         type="button"
                         onClick={() => handleDeactivateProduct(product)}
-                        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        className="rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
                       >
-                        Ngừng sử dụng
+                        Ngừng
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => handleActivateProduct(product)}
-                        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        className="rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
                       >
                         Khôi phục
                       </button>

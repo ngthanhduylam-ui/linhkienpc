@@ -45,6 +45,123 @@ function sortAvailableProductsFirst(items) {
   });
 }
 
+function formatSalePrice(value, emptyLabel = "Chưa thiết lập giá") {
+  if (value === null || value === undefined) {
+    return emptyLabel;
+  }
+
+  return `${Number(value).toLocaleString("vi-VN")} ₫`;
+}
+
+function getSafeLineTotal(salePrice, quantity) {
+  if (salePrice === null || salePrice === undefined) {
+    return {
+      value: null,
+      missingPrice: true,
+      overflow: false
+    };
+  }
+
+  const price = Number(salePrice);
+  const quantityValue = Number(quantity);
+  if (!Number.isSafeInteger(price) || !Number.isSafeInteger(quantityValue) || price < 0 || quantityValue < 0) {
+    return {
+      value: null,
+      missingPrice: false,
+      overflow: true
+    };
+  }
+
+  if (price !== 0 && quantityValue > Math.floor(Number.MAX_SAFE_INTEGER / price)) {
+    return {
+      value: null,
+      missingPrice: false,
+      overflow: true
+    };
+  }
+
+  return {
+    value: price * quantityValue,
+    missingPrice: false,
+    overflow: false
+  };
+}
+
+function getCartLineTotalDisplay(salePrice, quantity) {
+  const lineTotal = getSafeLineTotal(salePrice, quantity);
+
+  if (lineTotal.missingPrice) {
+    return {
+      label: "Chưa xác định",
+      isMuted: true
+    };
+  }
+
+  if (lineTotal.overflow) {
+    return {
+      label: "Vượt giới hạn",
+      isMuted: true
+    };
+  }
+
+  return {
+    label: formatSalePrice(lineTotal.value),
+    isMuted: false
+  };
+}
+
+function getCartTotalState(items) {
+  let total = 0;
+
+  for (const item of items) {
+    const lineTotal = getSafeLineTotal(item.product?.sale_price, item.quantity);
+    if (lineTotal.missingPrice) {
+      return {
+        value: null,
+        missingPrice: true,
+        overflow: false
+      };
+    }
+
+    if (lineTotal.overflow || total > Number.MAX_SAFE_INTEGER - lineTotal.value) {
+      return {
+        value: null,
+        missingPrice: false,
+        overflow: true
+      };
+    }
+
+    total += lineTotal.value;
+  }
+
+  return {
+    value: total,
+    missingPrice: false,
+    overflow: false
+  };
+}
+
+function getCartTotalDisplay(totalState) {
+  if (totalState.missingPrice) {
+    return {
+      label: "Chưa xác định",
+      isWarning: true
+    };
+  }
+
+  if (totalState.overflow) {
+    return {
+      label: "Vượt giới hạn",
+      isWarning: true
+    };
+  }
+
+  return {
+    label: formatSalePrice(totalState.value),
+    isWarning: false
+  };
+}
+
 function buildGroupFromApi(item) {
   const isNoNote = Boolean(item?.is_no_note || !item?.note);
   return {
@@ -151,7 +268,7 @@ export function StockOutBulkPage() {
     try {
       window.localStorage.setItem(RECENT_PRODUCTS_KEY, JSON.stringify(activeRecentProducts));
     } catch {
-      // Recent products chá»‰ lÃ  tÄƒng tá»‘c thao tÃ¡c, lá»—i lÆ°u localStorage khÃ´ng áº£nh hÆ°á»Ÿng nghiá»‡p vá»¥.
+      // Recent products chỉ là tăng tốc thao tác, lỗi lưu localStorage không ảnh hưởng nghiệp vụ.
     }
   }, [products]);
 
@@ -239,6 +356,7 @@ export function StockOutBulkPage() {
   const showNoResultState = !isLoading && debouncedSearch.length > 0 && filteredProducts.length === 0;
   const showEmptyState = !isLoading && products.length === 0;
   const totalCartQuantity = cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const cartTotalDisplay = getCartTotalDisplay(getCartTotalState(cartItems));
 
   function resetSharedSearchState() {
     setSearchInput("");
@@ -576,13 +694,20 @@ export function StockOutBulkPage() {
                             : "bg-slate-50/80 opacity-70 hover:opacity-90"
                       }`}
                     >
-                      <div className="grid grid-cols-[minmax(0,1fr)_84px] items-center gap-3 px-3 py-1.5">
+                      <div className="grid grid-cols-[minmax(0,1fr)_112px] items-center gap-3 px-3 py-1.5">
                         <div className="min-w-0">
                           <p className={`truncate text-[13px] font-semibold ${hasAvailableInventory ? "text-slate-900" : "text-slate-500"}`}>{product.name}</p>
                           <p className={`truncate text-[11px] ${hasAvailableInventory ? "text-slate-500" : "text-slate-400"}`}>{product.sku}</p>
                         </div>
                         <div className="text-right text-[11px] text-slate-500">
                           <p className={`font-semibold ${hasAvailableInventory ? "text-slate-800" : "text-slate-400"}`}>Tồn: {Number(product.total_quantity || 0)}</p>
+                          <p
+                            className={`truncate text-[10.5px] font-semibold ${
+                              product.sale_price === null || product.sale_price === undefined ? "text-slate-400" : "text-slate-700"
+                            }`}
+                          >
+                            {formatSalePrice(product.sale_price)}
+                          </p>
                           {!hasAvailableInventory && <p className="text-[10.5px] text-slate-400">hết hàng</p>}
                         </div>
                       </div>
@@ -715,61 +840,77 @@ export function StockOutBulkPage() {
                   </button>
                 </div>
               ) : (
-                <div className="min-w-[700px] pb-14">
-                  <div className="grid grid-cols-[minmax(220px,1fr)_128px_168px_132px_32px] items-center gap-2 border-b border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <div className="min-w-[900px] pb-14">
+                  <div className="grid grid-cols-[minmax(170px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 border-b border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     <span>Sản phẩm</span>
                     <span>SKU</span>
                     <span>Nhóm bảo hành / ghi chú</span>
+                    <span className="text-right">Đơn giá</span>
                     <span className="text-right">Số lượng</span>
+                    <span className="text-right">Thành tiền</span>
                     <span></span>
                   </div>
-                  {cartItems.map((item) => (
-                    <div key={item.cartKey} className="border-b border-slate-200 text-sm hover:bg-blue-50/60">
-                      <div className="grid grid-cols-[minmax(220px,1fr)_128px_168px_132px_32px] items-center gap-2 px-3 py-1.5">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-semibold text-slate-900">{item.product.name}</p>
+                  {cartItems.map((item) => {
+                    const lineTotal = getCartLineTotalDisplay(item.product?.sale_price, item.quantity);
+
+                    return (
+                      <div key={item.cartKey} className="border-b border-slate-200 text-sm hover:bg-blue-50/60">
+                        <div className="grid grid-cols-[minmax(170px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 px-3 py-1.5">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-slate-900">{item.product.name}</p>
+                          </div>
+                          <div className="min-w-0 break-all text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>
+                            {item.sku}
+                          </div>
+                          <div className="min-w-0 truncate rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-brand-800" title={formatWarrantyNote(item.warrantyLabel)}>
+                            {formatWarrantyNote(item.warrantyLabel)}
+                          </div>
+                          <div
+                            className={`text-right text-[12px] font-semibold tabular-nums ${
+                              item.product?.sale_price === null || item.product?.sale_price === undefined ? "text-slate-400" : "text-slate-900"
+                            }`}
+                          >
+                            {formatSalePrice(item.product?.sale_price, "Chưa thiết lập")}
+                          </div>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              disabled={isSubmitting || Number(item.quantity) <= 1}
+                              onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) - 1)}
+                              className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={item.quantity}
+                              disabled={isSubmitting}
+                              onChange={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
+                              onBlur={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
+                              className="h-8 w-14 min-w-[3.5rem] rounded border border-slate-300 bg-white px-1 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:text-slate-950 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                              aria-label={`Số lượng ${item.product.name} ${formatWarrantyNote(item.warrantyLabel)}`}
+                            />
+                            <button
+                              type="button"
+                              disabled={isSubmitting || Number(item.quantity) >= Number(item.maxQuantity || 0)}
+                              onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) + 1)}
+                              className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <div className={`text-right text-[12px] font-semibold tabular-nums ${lineTotal.isMuted ? "text-slate-400" : "text-slate-900"}`}>
+                            {lineTotal.label}
+                          </div>
+                          <button type="button" disabled={isSubmitting} onClick={() => removeCartItem(item.cartKey)} className="flex h-8 w-8 items-center justify-center rounded text-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Xóa sản phẩm">
+                            ×
+                          </button>
+                        </div>
                       </div>
-                      <div className="min-w-0 break-all text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>
-                        {item.sku}
-                      </div>
-                      <div className="min-w-0 truncate rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-brand-800" title={formatWarrantyNote(item.warrantyLabel)}>
-                        {formatWarrantyNote(item.warrantyLabel)}
-                      </div>
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          disabled={isSubmitting || Number(item.quantity) <= 1}
-                          onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) - 1)}
-                          className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={item.quantity}
-                          disabled={isSubmitting}
-                          onChange={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
-                          onBlur={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
-                          className="h-8 w-14 min-w-[3.5rem] rounded border border-slate-300 bg-white px-1 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:text-slate-950 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
-                          aria-label={`Số lượng ${item.product.name} ${formatWarrantyNote(item.warrantyLabel)}`}
-                        />
-                        <button
-                          type="button"
-                          disabled={isSubmitting || Number(item.quantity) >= Number(item.maxQuantity || 0)}
-                          onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) + 1)}
-                          className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button type="button" disabled={isSubmitting} onClick={() => removeCartItem(item.cartKey)} className="flex h-8 w-8 items-center justify-center rounded text-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Xóa sản phẩm">
-                        ×
-                      </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -800,6 +941,12 @@ export function StockOutBulkPage() {
                 <div className="flex items-center justify-between gap-3 py-2">
                   <span>Tổng số lượng</span>
                   <span className="font-semibold text-slate-900">{totalCartQuantity}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <span>Tổng tiền</span>
+                  <span className={`text-right text-base font-bold tabular-nums ${cartTotalDisplay.isWarning ? "text-amber-700" : "text-slate-950"}`}>
+                    {cartTotalDisplay.label}
+                  </span>
                 </div>
               </div>
 

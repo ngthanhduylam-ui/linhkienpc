@@ -14,7 +14,7 @@ Hệ thống phục vụ cửa hàng linh kiện PC:
 - Quản lý khách hàng, nhà cung cấp.
 - Xem lịch sử phiếu nhập / phiếu bán.
 
-Hiện tại admin product API đã có `sale_price` optional/nullable để lưu giá bán mặc định của sản phẩm. Backend bulk stock-out snapshot giá này vào phiếu bán, nhưng frontend POS chưa hiển thị/tính tiền và hệ thống chưa có thanh toán, công nợ hoặc báo cáo tài chính.
+Hiện tại admin product API và Product Admin UI đã có `sale_price` optional/nullable để lưu giá bán mặc định của sản phẩm. Backend bulk stock-out snapshot giá này vào phiếu bán, nhưng frontend POS chưa hiển thị/tính tiền và hệ thống chưa có thanh toán, công nợ hoặc báo cáo tài chính.
 
 Hiện tại **không** có:
 
@@ -34,7 +34,7 @@ Hiện tại **không** có:
 - Product inactive không xuất hiện trong public search và list mặc định.
 - Khi tạo product, hệ thống tạo dòng tồn ban đầu trong `product_inventory_balances` với số lượng 0.
 - Product thuộc một loại sản phẩm (`category_id` trong API/database, UI gọi là “Loại sản phẩm”).
-- `sale_price` là giá bán mặc định optional/nullable trong admin product API. `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
+- `sale_price` là giá bán mặc định optional/nullable trong admin product API và có thể quản lý trong Product Admin UI. `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
 - Phase 2A snapshot `sale_price` khi bán qua backend bulk stock-out. Sản phẩm chưa có giá vẫn bán được; dòng thiếu giá có `unit_price = NULL`, `line_total = NULL`, và nếu đơn có bất kỳ dòng thiếu giá thì `total_amount = NULL`.
 - `sale_price = 0` là giá bán thực sự bằng 0, không phải trạng thái thiếu giá.
 
