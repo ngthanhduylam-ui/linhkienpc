@@ -167,7 +167,7 @@ Legacy/redirect:
 - Backend tạo voucher
 - Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
 - POS đã có ô Serial/Ghi chú theo từng dòng cart, gửi `sale_note` nullable cho backend; backend lưu vào `stock_voucher_items.sale_note_snapshot` và voucher detail API trả `sale_note` nullable.
-- Chi tiết phiếu bán đã hiển thị sale note dưới tên sản phẩm khi dòng phiếu có dữ liệu; mẫu in chưa hiển thị sale note.
+- Chi tiết phiếu bán và mẫu in phiếu bán đã hiển thị sale note dưới tên sản phẩm khi dòng phiếu có dữ liệu.
 - POS hiển thị giá bán mặc định trong dropdown, đơn giá trong cart, thành tiền từng dòng và tổng tiền đơn hiện tại
 - Giá trong POS vẫn chỉ đọc; backend vẫn tự snapshot và tính lại tiền khi submit
 - Chi tiết phiếu bán hiển thị đơn giá, thành tiền và tổng tiền từ snapshot backend
@@ -267,7 +267,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 - Chưa có tags/aliases/compatibility search.
 - Inventory Check chưa phải hệ thống phiếu kiểm kê đầy đủ.
 - Mẫu in A4 phiếu bán đã có route riêng và nút `In phiếu`; chưa có nút Bán & In tại POS, chưa có cấu hình logo/mẫu và chưa hỗ trợ mẫu in phiếu nhập.
-- Serial/Ghi chú bán hàng từng dòng đã có schema snapshot, backend/API, POS input và hiển thị trong chi tiết phiếu bán; mẫu in chưa hiển thị sale note.
+- Serial/Ghi chú bán hàng từng dòng đã có schema snapshot, backend/API, POS input, hiển thị trong chi tiết phiếu bán và mẫu in phiếu bán.
 - POS warranty group vẫn chọn trước khi thêm vào cart; chuyển warranty selection vào cart là future work.
 - Không có draft persistence/localStorage cho multi-order.
 

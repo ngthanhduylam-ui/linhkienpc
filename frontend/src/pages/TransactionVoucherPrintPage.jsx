@@ -36,6 +36,11 @@ function formatNote(note) {
   return formatWarrantyNote(note);
 }
 
+function getSaleNote(item) {
+  if (item?.sale_note === null || item?.sale_note === undefined) return "";
+  return String(item.sale_note).trim();
+}
+
 function getSnapshotSku(item) {
   return item?.sku || item?.product?.sku || "-";
 }
@@ -176,19 +181,30 @@ export function TransactionVoucherPrintPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item, index) => (
-                <tr key={item.stock_voucher_item_id || item.transaction_id || index} className="voucher-print-row align-top">
-                  <td className="border border-slate-900 px-2 py-2 text-center">{index + 1}</td>
-                  <td className="break-words border border-slate-900 px-2 py-2">{getSnapshotSku(item)}</td>
-                  <td className="border border-slate-900 px-2 py-2 font-semibold">{getSnapshotProductName(item)}</td>
-                  <td className="border border-slate-900 px-2 py-2">
-                    {formatNote(item.warranty_note === null || item.warranty_note === undefined ? item.note : item.warranty_note)}
-                  </td>
-                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{Number(item.quantity || 0)}</td>
-                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.unit_price)}</td>
-                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.line_total)}</td>
-                </tr>
-              ))}
+              {items.map((item, index) => {
+                const saleNote = getSaleNote(item);
+
+                return (
+                  <tr key={item.stock_voucher_item_id || item.transaction_id || index} className="voucher-print-row align-top">
+                    <td className="border border-slate-900 px-2 py-2 text-center">{index + 1}</td>
+                    <td className="break-words border border-slate-900 px-2 py-2">{getSnapshotSku(item)}</td>
+                    <td className="border border-slate-900 px-2 py-2 font-semibold">
+                      <span className="voucher-print-product-name">{getSnapshotProductName(item)}</span>
+                      {saleNote && (
+                        <span className="voucher-print-sale-note mt-1 block text-[11px] font-normal leading-4 text-slate-700">
+                          <span className="font-semibold">Serial / Ghi chú:</span> {saleNote}
+                        </span>
+                      )}
+                    </td>
+                    <td className="border border-slate-900 px-2 py-2">
+                      {formatNote(item.warranty_note === null || item.warranty_note === undefined ? item.note : item.warranty_note)}
+                    </td>
+                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{Number(item.quantity || 0)}</td>
+                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.unit_price)}</td>
+                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.line_total)}</td>
+                  </tr>
+                );
+              })}
 
               {items.length === 0 && (
                 <tr>
