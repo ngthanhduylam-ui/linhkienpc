@@ -92,6 +92,15 @@ function normalizeWarrantyNote(note) {
   return normalizeNoteKey(note);
 }
 
+function normalizeSaleNote(note) {
+  if (note === undefined || note === null) {
+    return null;
+  }
+
+  const trimmed = String(note).trim();
+  return trimmed ? trimmed : null;
+}
+
 async function resolveProductBySku(connection, sku) {
   const [rows] = await connection.query(
     `
@@ -577,6 +586,7 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         sale_price: product.sale_price,
         quantity: Number(item.quantity),
         warranty_note: item.warranty_note,
+        sale_note: normalizeSaleNote(item.sale_note),
         warranty_note_key: warrantyNoteKey,
         has_warranty_selection: warrantySelected,
         transaction_note: warrantySelected && warrantyNoteKey ? warrantyNoteKey : null
@@ -737,11 +747,12 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
               sku_snapshot,
               product_name_snapshot,
               warranty_note_snapshot,
+              sale_note_snapshot,
               quantity,
               unit_price,
               line_total
             )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           voucher.id,
@@ -750,6 +761,7 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
           item.sku,
           item.product_name,
           item.transaction_note,
+          item.sale_note,
           item.quantity,
           moneyToSql(item.unit_price),
           moneyToSql(item.line_total)
@@ -762,6 +774,7 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         product_name: item.product_name,
         quantity: item.quantity,
         warranty_note: item.warranty_note === NO_NOTE_WARRANTY_KEY ? NO_NOTE_WARRANTY_KEY : item.transaction_note,
+        sale_note: item.sale_note,
         transaction_id: txResult.insertId,
         unit_price: moneyToResponse(item.unit_price),
         line_total: moneyToResponse(item.line_total),

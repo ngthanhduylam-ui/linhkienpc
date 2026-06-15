@@ -118,6 +118,12 @@ function bulkStockOutBodyValidator(req, res, next) {
       } else if (typeof item.warranty_note === 'string' && item.warranty_note.length > 500) {
         details.push({ field: `${fieldPrefix}.warranty_note`, issue: 'warranty_note must be at most 500 characters' });
       }
+
+      if (item.sale_note !== undefined && item.sale_note !== null && typeof item.sale_note !== 'string') {
+        details.push({ field: `${fieldPrefix}.sale_note`, issue: 'sale_note must be a string or null' });
+      } else if (typeof item.sale_note === 'string' && item.sale_note.length > 500) {
+        details.push({ field: `${fieldPrefix}.sale_note`, issue: 'sale_note must be at most 500 characters' });
+      }
     });
   }
 

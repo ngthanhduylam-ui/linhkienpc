@@ -212,6 +212,8 @@ POST /admin/stock-out
 - Frontend không gửi `unit_price`; backend tự snapshot giá từ `products.sale_price`.
 - Nếu sản phẩm có `sale_price`, backend lưu `unit_price` và `line_total` vào `stock_voucher_items`.
 - Nếu có bất kỳ dòng nào chưa có giá (`sale_price IS NULL`), `stock_vouchers.total_amount` là `NULL`.
+- Bulk stock-out item hỗ trợ optional nullable `sale_note` tối đa 500 ký tự. Backend trim trước khi lưu vào `stock_voucher_items.sale_note_snapshot`; chuỗi rỗng hoặc chỉ khoảng trắng lưu thành `NULL`.
+- `sale_note` là Serial/Ghi chú bán hàng riêng của dòng, tách biệt với `warranty_note`, không dùng để chọn nhóm tồn và không ghi vào `stock_transactions.note`.
 - Không gửi payment/debt/discount/invoice fields.
 
 ## 10. Stock transactions
@@ -247,7 +249,9 @@ Voucher dùng để xem:
 - `total_amount` nullable,
 - danh sách sản phẩm.
 - Với phiếu bán mới, detail item có `unit_price` và `line_total` nullable từ snapshot.
+- Với phiếu bán mới, detail item có `sale_note` nullable từ `stock_voucher_items.sale_note_snapshot`, tách biệt với `warranty_note`.
 - Với phiếu cũ chưa có snapshot, detail fallback về `stock_transactions` và giá là `NULL`.
+- Với phiếu cũ hoặc dòng không có ghi chú bán hàng, `sale_note` là `NULL`.
 
 Voucher không phải invoice.
 

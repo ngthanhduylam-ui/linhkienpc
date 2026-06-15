@@ -132,6 +132,7 @@ async function attachPreviewItems(vouchers) {
         svi.voucher_id,
         svi.quantity,
         svi.warranty_note_snapshot AS note,
+        svi.sale_note_snapshot AS sale_note,
         svi.sku_snapshot AS sku,
         svi.product_name_snapshot AS product_name,
         svi.unit_price,
@@ -153,6 +154,7 @@ async function attachPreviewItems(vouchers) {
       sku: row.sku,
       quantity: Number(row.quantity || 0),
       note: row.note,
+      sale_note: row.sale_note,
       unit_price: mapMoney(row.unit_price),
       line_total: mapMoney(row.line_total)
     });
@@ -192,6 +194,7 @@ async function attachPreviewItems(vouchers) {
       sku: row.sku,
       quantity: Number(row.quantity || 0),
       note: row.note,
+      sale_note: null,
       unit_price: null,
       line_total: null
     });
@@ -309,6 +312,7 @@ async function getStockVoucherById(id) {
         svi.sku_snapshot AS sku,
         svi.product_name_snapshot AS product_name,
         svi.warranty_note_snapshot AS note,
+        svi.sale_note_snapshot AS sale_note,
         svi.quantity,
         svi.unit_price,
         svi.line_total
@@ -328,6 +332,7 @@ async function getStockVoucherById(id) {
         quantity: Number(row.quantity || 0),
         note: row.note,
         warranty_note: row.note,
+        sale_note: row.sale_note,
         unit_price: mapMoney(row.unit_price),
         line_total: mapMoney(row.line_total),
         occurred_at: voucherRows[0].occurred_at,
@@ -369,6 +374,7 @@ async function getStockVoucherById(id) {
       quantity: Number(row.quantity || 0),
       note: row.note,
       warranty_note: row.note,
+      sale_note: null,
       unit_price: null,
       line_total: null,
       occurred_at: row.occurred_at,

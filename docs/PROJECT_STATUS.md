@@ -32,7 +32,7 @@ Database:
 - Migration scripts trong `database/migrations`
 - Schema trong `database/schema/schema.sql`
 - Seed admin/category qua `backend/scripts/seed.js`
-- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Schema cũng đã chuẩn bị `stock_voucher_items.sale_note_snapshot` cho Serial/Ghi chú bán hàng từng dòng, nhưng backend và POS chưa hỗ trợ field này.
+- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Backend bulk stock-out đã lưu và đọc `stock_voucher_items.sale_note_snapshot` cho Serial/Ghi chú bán hàng từng dòng; POS UI chưa có ô nhập field này.
 
 ## 2. Deployment Status
 
@@ -166,7 +166,7 @@ Legacy/redirect:
 - Submit gọi bulk stock-out hiện có
 - Backend tạo voucher
 - Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
-- Schema đã có `stock_voucher_items.sale_note_snapshot` cho Serial/Ghi chú bán hàng từng dòng, nhưng POS/backend chưa nhận hoặc lưu dữ liệu này.
+- Backend bulk stock-out đã nhận optional `sale_note`, lưu vào `stock_voucher_items.sale_note_snapshot` và voucher detail API trả `sale_note` nullable; POS chưa khôi phục ô nhập, voucher detail UI và mẫu in chưa hiển thị sale note trong Task 7B.
 - POS hiển thị giá bán mặc định trong dropdown, đơn giá trong cart, thành tiền từng dòng và tổng tiền đơn hiện tại
 - Giá trong POS vẫn chỉ đọc; backend vẫn tự snapshot và tính lại tiền khi submit
 - Chi tiết phiếu bán hiển thị đơn giá, thành tiền và tổng tiền từ snapshot backend
