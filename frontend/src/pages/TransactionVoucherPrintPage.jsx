@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getStockVoucherRequest } from "../services/inventoryOperations.service";
 import { formatWarrantyNote } from "../utils/warrantyNote";
+import "./TransactionVoucherPrintPage.css";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -128,27 +129,27 @@ export function TransactionVoucherPrintPage() {
   const items = voucher.items || [];
 
   return (
-    <main className="min-h-screen bg-white px-4 py-6 text-slate-950 sm:px-8">
-      <div className="mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3 print:hidden">
+    <main className="voucher-print-screen min-h-screen bg-white px-4 py-6 text-slate-950 sm:px-8">
+      <div className="voucher-print-controls mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3 print:hidden">
         <Link to={`/admin/transaction-history/${voucherId}`} className="text-sm font-semibold text-brand-700 hover:text-brand-900">
           ← Quay lại chi tiết phiếu
         </Link>
         <button
           type="button"
-          disabled
-          className="rounded-md border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-400"
+          onClick={() => window.print()}
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
         >
           In phiếu
         </button>
       </div>
 
-      <article className="mx-auto min-h-[297mm] max-w-[210mm] bg-white p-8 text-sm shadow-sm ring-1 ring-slate-200 print:min-h-0 print:max-w-none print:p-0 print:shadow-none print:ring-0">
-        <header className="border-b-2 border-slate-900 pb-5 text-center">
+      <article className="voucher-print-page mx-auto min-h-[297mm] max-w-[210mm] bg-white p-8 text-sm shadow-sm ring-1 ring-slate-200 print:min-h-0 print:max-w-none print:p-0 print:shadow-none print:ring-0">
+        <header className="voucher-print-header border-b-2 border-slate-900 pb-5 text-center">
           <p className="text-lg font-bold tracking-wide">VI TÍNH PHƯỚC TÀI</p>
           <h1 className="mt-4 text-2xl font-bold tracking-wide">PHIẾU BÁN HÀNG KIÊM BẢO HÀNH</h1>
         </header>
 
-        <section className="mt-6 grid gap-5 md:grid-cols-2">
+        <section className="voucher-print-info mt-6 grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <InfoLine label="Mã phiếu" value={formatText(voucher.voucher_code || `#${voucher.id}`)} />
             <InfoLine label="Ngày bán" value={formatDateTime(voucher.occurred_at)} />
@@ -161,31 +162,31 @@ export function TransactionVoucherPrintPage() {
           </div>
         </section>
 
-        <section className="mt-7 overflow-hidden border border-slate-900">
-          <table className="w-full border-collapse text-left text-xs">
+        <section className="voucher-print-table-wrap mt-7 overflow-visible border border-slate-900">
+          <table className="voucher-print-table w-full border-collapse text-left text-xs">
             <thead>
               <tr className="bg-slate-100">
                 <th className="w-10 border border-slate-900 px-2 py-2 text-center">STT</th>
                 <th className="w-28 border border-slate-900 px-2 py-2">SKU</th>
                 <th className="border border-slate-900 px-2 py-2">Tên sản phẩm</th>
+                <th className="w-36 border border-slate-900 px-2 py-2">Bảo hành/Ghi chú</th>
                 <th className="w-16 border border-slate-900 px-2 py-2 text-right">Số lượng</th>
                 <th className="w-24 border border-slate-900 px-2 py-2 text-right">Đơn giá</th>
                 <th className="w-28 border border-slate-900 px-2 py-2 text-right">Thành tiền</th>
-                <th className="w-36 border border-slate-900 px-2 py-2">Bảo hành/Ghi chú</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={item.stock_voucher_item_id || item.transaction_id || index} className="align-top">
+                <tr key={item.stock_voucher_item_id || item.transaction_id || index} className="voucher-print-row align-top">
                   <td className="border border-slate-900 px-2 py-2 text-center">{index + 1}</td>
                   <td className="break-words border border-slate-900 px-2 py-2">{getSnapshotSku(item)}</td>
                   <td className="border border-slate-900 px-2 py-2 font-semibold">{getSnapshotProductName(item)}</td>
-                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{Number(item.quantity || 0)}</td>
-                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.unit_price)}</td>
-                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.line_total)}</td>
                   <td className="border border-slate-900 px-2 py-2">
                     {formatNote(item.warranty_note === null || item.warranty_note === undefined ? item.note : item.warranty_note)}
                   </td>
+                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{Number(item.quantity || 0)}</td>
+                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.unit_price)}</td>
+                  <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.line_total)}</td>
                 </tr>
               ))}
 
@@ -200,10 +201,29 @@ export function TransactionVoucherPrintPage() {
           </table>
         </section>
 
-        <section className="mt-5 flex justify-end">
+        <section className="voucher-print-total mt-5 flex justify-end">
           <div className="grid min-w-[260px] grid-cols-[1fr_auto] gap-x-5 border-t-2 border-slate-900 pt-3 text-base">
             <span className="font-bold">Tổng tiền</span>
             <span className="text-right font-bold tabular-nums">{formatMoney(voucher.total_amount)}</span>
+          </div>
+        </section>
+
+        <section className="voucher-print-notes mt-7 rounded-sm border border-slate-300 p-4 text-sm">
+          <p className="font-semibold text-slate-900">Lưu ý bảo hành</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-700">
+            <li>Vui lòng giữ phiếu để được hỗ trợ bảo hành.</li>
+            <li>Bảo hành theo điều kiện của từng sản phẩm và nội dung ghi trên phiếu.</li>
+          </ul>
+        </section>
+
+        <section className="voucher-print-signatures mt-10 grid grid-cols-2 gap-10 text-center">
+          <div className="min-h-28">
+            <p className="font-bold">Khách hàng</p>
+            <p className="mt-1 text-xs italic text-slate-500">(Ký và ghi rõ họ tên)</p>
+          </div>
+          <div className="min-h-28">
+            <p className="font-bold">Người bán</p>
+            <p className="mt-1 text-xs italic text-slate-500">(Ký và ghi rõ họ tên)</p>
           </div>
         </section>
       </article>

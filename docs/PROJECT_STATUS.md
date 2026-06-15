@@ -218,10 +218,11 @@ Legacy/redirect:
 - Detail route riêng: `/admin/transaction-history/:voucherId`
 - Detail page không còn modal
 - Back link: `← Quay lại danh sách phiếu`
-- Print preview route riêng: `/admin/transaction-history/:voucherId/print`
+- Print route riêng: `/admin/transaction-history/:voucherId/print`
 - Hiển thị voucher code, loại phiếu, ngày tạo, người tạo, đối tác, tổng số lượng, số dòng, ghi chú và dòng sản phẩm
-- Chi tiết phiếu bán và bản xem trước mẫu in dùng snapshot giá từ backend nếu có
-- Bản xem trước mẫu in hiện chỉ hỗ trợ phiếu OUT/Bán hàng, chưa tự gọi hộp thoại in và chưa có nút Bán & In trong POS
+- Chi tiết phiếu bán và mẫu in A4 dùng snapshot giá từ backend nếu có
+- Mẫu in A4 hiện chỉ hỗ trợ phiếu OUT/Bán hàng; nút `In phiếu` gọi hộp thoại in trình duyệt nhưng không lưu PDF/file
+- Chưa có nút Bán & In trong POS và chưa có cấu hình logo/mẫu in
 - Không có payment/debt fields
 - Stock voucher không phải invoice
 
@@ -263,7 +264,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 - Chưa có báo cáo tài chính.
 - Chưa có tags/aliases/compatibility search.
 - Inventory Check chưa phải hệ thống phiếu kiểm kê đầy đủ.
-- Xem trước mẫu in phiếu bán đã có route riêng, nhưng chưa có in tự động, chưa có nút Bán & In và chưa hỗ trợ mẫu in phiếu nhập.
+- Mẫu in A4 phiếu bán đã có route riêng và nút `In phiếu`; chưa có nút Bán & In tại POS, chưa có cấu hình logo/mẫu và chưa hỗ trợ mẫu in phiếu nhập.
 - POS warranty group vẫn chọn trước khi thêm vào cart; chuyển warranty selection vào cart là future work.
 - Không có draft persistence/localStorage cho multi-order.
 

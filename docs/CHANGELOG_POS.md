@@ -226,17 +226,20 @@ Chi tiết phiếu `/admin/transaction-history/:voucherId` đã hiển thị ti�
 - Phiếu nhập chưa có giá nhập và không hiển thị giá nhập giả.
 - Chưa có thanh toán, giảm giá hoặc công nợ.
 
-## 10.5. Phase 2A Voucher Print Preview
+## 10.5. Phase 2A Voucher Print Preview and A4 Print
 
-Đã thêm route xem trước mẫu in phiếu bán:
+Đã thêm route xem trước và in mẫu A4 cho phiếu bán:
 
 - Route: `/admin/transaction-history/:voucherId/print`.
 - Trang xem trước không dùng AdminLayout, không có sidebar/header quản trị.
 - Mẫu hiện chỉ hỗ trợ phiếu OUT/Bán hàng.
 - Dữ liệu lấy từ voucher detail API và snapshot backend: SKU, tên sản phẩm, ghi chú bảo hành, đơn giá, thành tiền và tổng tiền.
+- Mẫu A4 có phần lưu ý bảo hành mặc định và khu vực ký tên khách hàng/người bán.
+- Nút `In phiếu` gọi hộp thoại in trình duyệt bằng `window.print()`.
+- Không tạo PDF, không lưu file và không gọi API mới.
 - Phiếu bán cũ thiếu snapshot giá vẫn mở được và hiển thị `Chưa xác định`.
 - Phiếu nhập hiển thị thông báo mẫu in phiếu nhập chưa được hỗ trợ, không dựng giá nhập giả.
-- Chưa có nút Bán & In trong POS và chưa tự gọi hộp thoại in.
+- Chưa có nút Bán & In trong POS và chưa có cấu hình logo/mẫu in.
 - Chưa có thanh toán, giảm giá, công nợ hoặc invoice/accounting.
 
 ## 11. Inventory Check UI Refactor
