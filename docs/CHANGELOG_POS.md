@@ -87,10 +87,11 @@ Product -> nhóm bảo hành / ghi chú -> Thêm 1 item -> chỉnh quantity tron
 - Cùng SKU + cùng nhóm bảo hành vẫn merge thành một dòng, tăng quantity và giữ nguyên ghi chú đã nhập.
 - Submit stock-out gửi `sale_note` đã trim, ô trống gửi `null`.
 - Backend lưu dữ liệu vào `stock_voucher_items.sale_note_snapshot`.
+- Chi tiết phiếu bán hiển thị `Serial / Ghi chú` dưới tên sản phẩm khi dòng phiếu có dữ liệu.
 
 Chưa có:
 
-- Chi tiết phiếu và mẫu in chưa hiển thị sale note.
+- Mẫu in chưa hiển thị sale note.
 - Chưa có quản lý serial riêng hoặc tách mỗi serial thành một dòng riêng.
 
 Thay đổi chính:

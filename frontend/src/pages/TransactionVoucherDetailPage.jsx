@@ -39,6 +39,11 @@ function formatNote(note) {
   return formatWarrantyNote(note);
 }
 
+function getSaleNote(item) {
+  if (item?.sale_note === null || item?.sale_note === undefined) return "";
+  return String(item.sale_note).trim();
+}
+
 function getSnapshotProductName(item) {
   return item?.product_name || item?.product?.name || "-";
 }
@@ -190,12 +195,18 @@ export function TransactionVoucherDetailPage() {
                     {(voucher.items || []).map((item, index) => {
                       const unitPrice = formatMoney(item.unit_price);
                       const lineTotal = formatMoney(item.line_total);
+                      const saleNote = isSaleVoucher ? getSaleNote(item) : "";
 
                       return (
                         <tr key={item.transaction_id || index} className="hover:bg-blue-50/40">
                           <td className="px-3 py-3 text-center text-slate-500">{index + 1}</td>
                           <td className="min-w-0 px-3 py-3 font-semibold text-slate-900">
                             <span className="line-clamp-2">{getSnapshotProductName(item)}</span>
+                            {saleNote && (
+                              <span className="mt-1 block text-[12px] font-medium leading-4 text-slate-500">
+                                <span className="font-semibold text-slate-600">Serial / Ghi chú:</span> {saleNote}
+                              </span>
+                            )}
                           </td>
                           <td className="min-w-0 break-words px-3 py-3 text-slate-600">{getSnapshotSku(item)}</td>
                           <td className="min-w-0 break-words px-3 py-3 text-brand-800">{formatNote(item.note || item.warranty_note)}</td>

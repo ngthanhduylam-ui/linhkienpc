@@ -32,7 +32,7 @@ Database:
 - Migration scripts trong `database/migrations`
 - Schema trong `database/schema/schema.sql`
 - Seed admin/category qua `backend/scripts/seed.js`
-- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Backend bulk stock-out đã lưu và đọc `stock_voucher_items.sale_note_snapshot` cho Serial/Ghi chú bán hàng từng dòng; POS UI chưa có ô nhập field này.
+- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Backend bulk stock-out đã lưu và đọc `stock_voucher_items.sale_note_snapshot`; POS UI và chi tiết phiếu bán đã hiển thị Serial/Ghi chú bán hàng từng dòng.
 
 ## 2. Deployment Status
 
@@ -167,7 +167,7 @@ Legacy/redirect:
 - Backend tạo voucher
 - Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
 - POS đã có ô Serial/Ghi chú theo từng dòng cart, gửi `sale_note` nullable cho backend; backend lưu vào `stock_voucher_items.sale_note_snapshot` và voucher detail API trả `sale_note` nullable.
-- Chi tiết phiếu UI và mẫu in chưa hiển thị sale note trong Task 7C.
+- Chi tiết phiếu bán đã hiển thị sale note dưới tên sản phẩm khi dòng phiếu có dữ liệu; mẫu in chưa hiển thị sale note.
 - POS hiển thị giá bán mặc định trong dropdown, đơn giá trong cart, thành tiền từng dòng và tổng tiền đơn hiện tại
 - Giá trong POS vẫn chỉ đọc; backend vẫn tự snapshot và tính lại tiền khi submit
 - Chi tiết phiếu bán hiển thị đơn giá, thành tiền và tổng tiền từ snapshot backend
@@ -267,7 +267,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 - Chưa có tags/aliases/compatibility search.
 - Inventory Check chưa phải hệ thống phiếu kiểm kê đầy đủ.
 - Mẫu in A4 phiếu bán đã có route riêng và nút `In phiếu`; chưa có nút Bán & In tại POS, chưa có cấu hình logo/mẫu và chưa hỗ trợ mẫu in phiếu nhập.
-- Serial/Ghi chú bán hàng từng dòng mới có schema snapshot, chưa có backend/API/POS UI sử dụng.
+- Serial/Ghi chú bán hàng từng dòng đã có schema snapshot, backend/API, POS input và hiển thị trong chi tiết phiếu bán; mẫu in chưa hiển thị sale note.
 - POS warranty group vẫn chọn trước khi thêm vào cart; chuyển warranty selection vào cart là future work.
 - Không có draft persistence/localStorage cho multi-order.
 
