@@ -94,8 +94,9 @@ new.ram.ddr4.8gb
 - Số lượng bán tối thiểu là 1 và tối đa là tồn còn lại của nhóm đã chọn.
 - Bán thành công tạo phiếu bán/stock voucher.
 - Backend snapshot giá bán mặc định vào `stock_voucher_items` cho phiếu bán. Việc snapshot này không thay đổi quy tắc trừ tồn.
-- Serial/Ghi chú bán hàng theo từng dòng là dữ liệu riêng của dòng phiếu, tách khỏi nhóm bảo hành/tồn kho. Từ Task 7B, backend bulk stock-out đã nhận optional `sale_note`, trim và lưu vào `stock_voucher_items.sale_note_snapshot`; POS UI chưa có ô nhập hoặc hiển thị field này.
+- Serial/Ghi chú bán hàng theo từng dòng là dữ liệu riêng của dòng phiếu, tách khỏi nhóm bảo hành/tồn kho. Từ Task 7C, POS có ô Serial/Ghi chú theo từng dòng cart và backend bulk stock-out lưu optional `sale_note` vào `stock_voucher_items.sale_note_snapshot`.
 - `sale_note` không ảnh hưởng tồn kho, không thay thế `warranty_note_snapshot` và không được ghi vào `stock_transactions.note`.
+- Chi tiết phiếu và mẫu in chưa hiển thị sale note cho đến task sau.
 - Chưa có thanh toán, giảm giá, công nợ, hóa đơn hoặc báo cáo tài chính.
 - Phiếu bán không phải hóa đơn thanh toán.
 

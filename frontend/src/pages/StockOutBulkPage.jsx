@@ -493,7 +493,8 @@ export function StockOutBulkPage() {
           warrantyNote: group.isNoNote ? NO_NOTE_WARRANTY_VALUE : group.note,
           warrantyLabel: group.label,
           maxQuantity,
-          quantity: 1
+          quantity: 1,
+          saleNote: ""
         }
       ];
     });
@@ -519,6 +520,15 @@ export function StockOutBulkPage() {
     if (isSubmitting) return;
     setActiveOrderCartItems((prev) => prev.map((item) => (
       item.cartKey === cartKey ? { ...item, quantity: clampCartQuantity(item, quantity) } : item
+    )));
+    setError("");
+    setSuccess("");
+  }
+
+  function updateCartItemSaleNote(cartKey, saleNote) {
+    if (isSubmitting) return;
+    setActiveOrderCartItems((prev) => prev.map((item) => (
+      item.cartKey === cartKey ? { ...item, saleNote } : item
     )));
     setError("");
     setSuccess("");
@@ -555,6 +565,9 @@ export function StockOutBulkPage() {
       if (Number(item.quantity) > Number(item.maxQuantity || 0)) {
         return `Dòng ${index + 1}: số lượng bán vượt quá tồn của nhóm ${formatWarrantyNote(item.warrantyLabel)}.`;
       }
+      if (typeof item.saleNote === "string" && item.saleNote.length > 500) {
+        return `Dòng ${index + 1}: Serial / Ghi chú không được vượt quá 500 ký tự.`;
+      }
     }
 
     return "";
@@ -581,11 +594,15 @@ export function StockOutBulkPage() {
 
     const payload = {
       ...(selectedCustomer?.id ? { customer_id: Number(selectedCustomer.id) } : {}),
-      items: cartItems.map((item) => ({
-        sku: item.sku,
-        quantity: Number(item.quantity),
-        warranty_note: item.warrantyNote
-      }))
+      items: cartItems.map((item) => {
+        const saleNote = typeof item.saleNote === "string" ? item.saleNote.trim() : "";
+        return {
+          sku: item.sku,
+          quantity: Number(item.quantity),
+          warranty_note: item.warrantyNote,
+          sale_note: saleNote !== "" ? saleNote : null
+        };
+      })
     };
 
     setIsSubmitting(true);
@@ -840,8 +857,8 @@ export function StockOutBulkPage() {
                   </button>
                 </div>
               ) : (
-                <div className="min-w-[900px] pb-14">
-                  <div className="grid grid-cols-[minmax(170px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 border-b border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <div className="min-w-[960px] pb-14">
+                  <div className="grid grid-cols-[minmax(220px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 border-b border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     <span>Sản phẩm</span>
                     <span>SKU</span>
                     <span>Nhóm bảo hành / ghi chú</span>
@@ -855,9 +872,19 @@ export function StockOutBulkPage() {
 
                     return (
                       <div key={item.cartKey} className="border-b border-slate-200 text-sm hover:bg-blue-50/60">
-                        <div className="grid grid-cols-[minmax(170px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 px-3 py-1.5">
+                        <div className="grid grid-cols-[minmax(220px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 px-3 py-1.5">
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-semibold text-slate-900">{item.product.name}</p>
+                            <input
+                              type="text"
+                              value={item.saleNote || ""}
+                              maxLength={500}
+                              disabled={isSubmitting}
+                              onChange={(event) => updateCartItemSaleNote(item.cartKey, event.target.value)}
+                              placeholder="Serial / Ghi chú"
+                              aria-label={`Serial / Ghi chú ${item.product.name}`}
+                              className="mt-1 h-7 w-full rounded border border-slate-200 bg-white px-2 text-[12px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                            />
                           </div>
                           <div className="min-w-0 break-all text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>
                             {item.sku}

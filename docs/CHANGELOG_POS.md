@@ -78,6 +78,21 @@ Workflow hiện tại:
 
 Product -> nhóm bảo hành / ghi chú -> Thêm 1 item -> chỉnh quantity trong cart.
 
+## Phase 2A - Serial / Ghi Chú Bán Hàng Theo Dòng
+
+Đã có:
+
+- POS `/admin/stock-out` có ô `Serial / Ghi chú` trong từng dòng cart.
+- Nội dung ghi chú thuộc từng order/tab và từng cart row.
+- Cùng SKU + cùng nhóm bảo hành vẫn merge thành một dòng, tăng quantity và giữ nguyên ghi chú đã nhập.
+- Submit stock-out gửi `sale_note` đã trim, ô trống gửi `null`.
+- Backend lưu dữ liệu vào `stock_voucher_items.sale_note_snapshot`.
+
+Chưa có:
+
+- Chi tiết phiếu và mẫu in chưa hiển thị sale note.
+- Chưa có quản lý serial riêng hoặc tách mỗi serial thành một dòng riêng.
+
 Thay đổi chính:
 
 - Bỏ quantity stepper khỏi dropdown warranty row.
