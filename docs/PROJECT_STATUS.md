@@ -86,6 +86,7 @@ Admin:
 - `/admin/suppliers` - nhà cung cấp
 - `/admin/transaction-history` - danh sách phiếu
 - `/admin/transaction-history/:voucherId` - chi tiết phiếu
+- `/admin/transaction-history/:voucherId/print` - xem trước mẫu in phiếu bán
 
 Legacy/redirect:
 
@@ -217,8 +218,11 @@ Legacy/redirect:
 - Detail route riêng: `/admin/transaction-history/:voucherId`
 - Detail page không còn modal
 - Back link: `← Quay lại danh sách phiếu`
+- Print preview route riêng: `/admin/transaction-history/:voucherId/print`
 - Hiển thị voucher code, loại phiếu, ngày tạo, người tạo, đối tác, tổng số lượng, số dòng, ghi chú và dòng sản phẩm
-- Không có price/payment/debt fields
+- Chi tiết phiếu bán và bản xem trước mẫu in dùng snapshot giá từ backend nếu có
+- Bản xem trước mẫu in hiện chỉ hỗ trợ phiếu OUT/Bán hàng, chưa tự gọi hộp thoại in và chưa có nút Bán & In trong POS
+- Không có payment/debt fields
 - Stock voucher không phải invoice
 
 ## 5. Current UI Status
@@ -259,7 +263,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 - Chưa có báo cáo tài chính.
 - Chưa có tags/aliases/compatibility search.
 - Inventory Check chưa phải hệ thống phiếu kiểm kê đầy đủ.
-- In phiếu bán/phiếu nhập mới ở mức nghiên cứu/chuẩn bị, chưa phải invoice.
+- Xem trước mẫu in phiếu bán đã có route riêng, nhưng chưa có in tự động, chưa có nút Bán & In và chưa hỗ trợ mẫu in phiếu nhập.
 - POS warranty group vẫn chọn trước khi thêm vào cart; chuyển warranty selection vào cart là future work.
 - Không có draft persistence/localStorage cho multi-order.
 
@@ -268,7 +272,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 Backlog sau khi chạy ổn định:
 
 - Dùng giá bán mặc định `sale_price` trong POS.
-- In phiếu bán/phiếu nhập đơn giản bằng dữ liệu voucher hiện có.
+- Hoàn thiện luồng in phiếu bán từ voucher nếu thực tế cần, bao gồm nút điều hướng/in sau khi bán.
 - Nghiên cứu địa chỉ khách hàng kiểu Province/District/Ward/Detailed address.
 - Customer warranty tracking/history view tốt hơn.
 - Search tags / aliases / compatibility.

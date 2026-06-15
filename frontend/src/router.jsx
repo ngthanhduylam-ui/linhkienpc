@@ -15,6 +15,7 @@ import { StockOutPage } from "./pages/StockOutPage";
 import { SupplierListPage } from "./pages/SupplierListPage";
 import { TransactionHistoryPage } from "./pages/TransactionHistoryPage";
 import { TransactionVoucherDetailPage } from "./pages/TransactionVoucherDetailPage";
+import { TransactionVoucherPrintPage } from "./pages/TransactionVoucherPrintPage";
 
 export const appRouter = createBrowserRouter([
   {
@@ -30,6 +31,7 @@ export const appRouter = createBrowserRouter([
     element: <ProtectedRoute />,
     children: [
       { path: "stock-out", element: <StockOutBulkPage /> },
+      { path: "transaction-history/:voucherId/print", element: <TransactionVoucherPrintPage /> },
       {
         element: <AdminLayout />,
         children: [
