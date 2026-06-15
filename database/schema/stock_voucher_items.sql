@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS stock_voucher_items (
   sku_snapshot VARCHAR(120) NOT NULL,
   product_name_snapshot VARCHAR(255) NOT NULL,
   warranty_note_snapshot VARCHAR(500) NULL,
+  sale_note_snapshot VARCHAR(500) NULL,
   quantity INT UNSIGNED NOT NULL,
   unit_price DECIMAL(15,0) NULL,
   line_total DECIMAL(15,0) NULL,

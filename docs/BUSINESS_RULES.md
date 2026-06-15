@@ -94,6 +94,7 @@ new.ram.ddr4.8gb
 - Số lượng bán tối thiểu là 1 và tối đa là tồn còn lại của nhóm đã chọn.
 - Bán thành công tạo phiếu bán/stock voucher.
 - Backend snapshot giá bán mặc định vào `stock_voucher_items` cho phiếu bán. Việc snapshot này không thay đổi quy tắc trừ tồn.
+- Serial/Ghi chú bán hàng theo từng dòng sẽ là dữ liệu riêng của dòng phiếu, tách khỏi nhóm bảo hành/tồn kho. Task 7A mới chuẩn bị schema `sale_note_snapshot`; backend và POS chưa nhận, lưu hoặc hiển thị field này.
 - Chưa có thanh toán, giảm giá, công nợ, hóa đơn hoặc báo cáo tài chính.
 - Phiếu bán không phải hóa đơn thanh toán.
 

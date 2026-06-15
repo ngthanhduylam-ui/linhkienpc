@@ -32,7 +32,7 @@ Database:
 - Migration scripts trong `database/migrations`
 - Schema trong `database/schema/schema.sql`
 - Seed admin/category qua `backend/scripts/seed.js`
-- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Frontend POS chưa hiển thị hoặc cho sửa giá.
+- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Schema cũng đã chuẩn bị `stock_voucher_items.sale_note_snapshot` cho Serial/Ghi chú bán hàng từng dòng, nhưng backend và POS chưa hỗ trợ field này.
 
 ## 2. Deployment Status
 
@@ -166,6 +166,7 @@ Legacy/redirect:
 - Submit gọi bulk stock-out hiện có
 - Backend tạo voucher
 - Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
+- Schema đã có `stock_voucher_items.sale_note_snapshot` cho Serial/Ghi chú bán hàng từng dòng, nhưng POS/backend chưa nhận hoặc lưu dữ liệu này.
 - POS hiển thị giá bán mặc định trong dropdown, đơn giá trong cart, thành tiền từng dòng và tổng tiền đơn hiện tại
 - Giá trong POS vẫn chỉ đọc; backend vẫn tự snapshot và tính lại tiền khi submit
 - Chi tiết phiếu bán hiển thị đơn giá, thành tiền và tổng tiền từ snapshot backend
@@ -265,6 +266,7 @@ Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-st
 - Chưa có tags/aliases/compatibility search.
 - Inventory Check chưa phải hệ thống phiếu kiểm kê đầy đủ.
 - Mẫu in A4 phiếu bán đã có route riêng và nút `In phiếu`; chưa có nút Bán & In tại POS, chưa có cấu hình logo/mẫu và chưa hỗ trợ mẫu in phiếu nhập.
+- Serial/Ghi chú bán hàng từng dòng mới có schema snapshot, chưa có backend/API/POS UI sử dụng.
 - POS warranty group vẫn chọn trước khi thêm vào cart; chuyển warranty selection vào cart là future work.
 - Không có draft persistence/localStorage cho multi-order.
 
