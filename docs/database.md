@@ -134,11 +134,12 @@ Trường chính:
 - `sku_snapshot`.
 - `product_name_snapshot`.
 - `warranty_note_snapshot` nullable.
+- `sale_note_snapshot` nullable, chuẩn bị để lưu Serial/Ghi chú bán hàng riêng của từng dòng phiếu bán.
 - `quantity`.
 - `unit_price` nullable.
 - `line_total` nullable.
 
-Bảng này dùng để lưu snapshot dòng phiếu bán, không thay thế `stock_transactions` và không đổi logic tồn kho hiện tại. `sku_snapshot`, `product_name_snapshot`, `warranty_note_snapshot`, `quantity`, `unit_price` và `line_total` là dữ liệu tại thời điểm bán. `unit_price` và `line_total` nullable để tương thích phiếu cũ và sản phẩm chưa có giá.
+Bảng này dùng để lưu snapshot dòng phiếu bán, không thay thế `stock_transactions` và không đổi logic tồn kho hiện tại. `sku_snapshot`, `product_name_snapshot`, `warranty_note_snapshot`, `sale_note_snapshot`, `quantity`, `unit_price` và `line_total` là dữ liệu tại thời điểm bán. `warranty_note_snapshot` là nhóm bảo hành/tồn kho đã chọn; `sale_note_snapshot` là Serial/Ghi chú bán hàng riêng của dòng và không dùng để tính tồn. `unit_price`, `line_total` và `sale_note_snapshot` nullable để tương thích phiếu cũ, sản phẩm chưa có giá hoặc dòng bán không có ghi chú bán hàng.
 
 ## 4. Nhóm đối tác
 
