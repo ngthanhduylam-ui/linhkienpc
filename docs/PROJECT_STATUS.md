@@ -167,9 +167,10 @@ Legacy/redirect:
 - Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
 - POS hiển thị giá bán mặc định trong dropdown, đơn giá trong cart, thành tiền từng dòng và tổng tiền đơn hiện tại
 - Giá trong POS vẫn chỉ đọc; backend vẫn tự snapshot và tính lại tiền khi submit
+- Chi tiết phiếu bán hiển thị đơn giá, thành tiền và tổng tiền từ snapshot backend
 - Có double-submit guard
 - Nếu sale thành công nhưng reload tồn kho lỗi, UI không báo “bán thất bại” sai
-- POS chưa có sửa giá trực tiếp, giảm giá, thanh toán, công nợ hoặc hóa đơn
+- Phiếu nhập chưa có giá nhập; POS chưa có sửa giá trực tiếp, giảm giá, thanh toán, công nợ hoặc hóa đơn
 
 ### Inventory Check / Kiểm hàng - Working
 

@@ -194,7 +194,7 @@ Product Add/Edit đã thêm field `Giá bán` để admin nhập giá bán mặc
 - Giá bán optional, để trống nghĩa là chưa thiết lập.
 - Giá `0` là giá hợp lệ, không bị đổi thành trống.
 - Frontend gửi `sale_price` dạng number hoặc `null` cho admin product API.
-- POS vẫn chưa hiển thị giá, chưa cho sửa giá khi bán và chưa có thanh toán/công nợ/hóa đơn.
+- Tại thời điểm Task 4, POS vẫn chưa hiển thị giá, chưa cho sửa giá khi bán và chưa có thanh toán/công nợ/hóa đơn.
 
 ## 10.2. Phase 2A Task 5 - Product List Sale Price
 
@@ -215,6 +215,16 @@ POS `/admin/stock-out` đã hiển thị giá bán mặc định ở các điể
 - Giá trong POS vẫn chỉ đọc, chưa cho sửa trực tiếp khi bán.
 - Submit payload không gửi `unit_price`, `line_total` hoặc `total_amount`; backend vẫn tự snapshot và tính lại khi submit.
 - Chưa có thanh toán, giảm giá, công nợ hoặc hóa đơn.
+
+## 10.4. Phase 2A Voucher Detail Sale Price Display
+
+Chi tiết phiếu `/admin/transaction-history/:voucherId` đã hiển thị tiền cho phiếu bán:
+
+- Phiếu bán hiển thị `Đơn giá`, `Thành tiền` từng dòng và `Tổng tiền`.
+- Dữ liệu lấy từ snapshot backend: `items[].unit_price`, `items[].line_total`, `total_amount`.
+- Phiếu bán cũ chưa có snapshot hiển thị `Chưa xác định` thay vì crash.
+- Phiếu nhập chưa có giá nhập và không hiển thị giá nhập giả.
+- Chưa có thanh toán, giảm giá hoặc công nợ.
 
 ## 11. Inventory Check UI Refactor
 

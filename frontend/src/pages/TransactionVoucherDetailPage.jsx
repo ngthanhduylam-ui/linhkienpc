@@ -39,6 +39,36 @@ function formatNote(note) {
   return formatWarrantyNote(note);
 }
 
+function getSnapshotProductName(item) {
+  return item?.product_name || item?.product?.name || "-";
+}
+
+function getSnapshotSku(item) {
+  return item?.sku || item?.product?.sku || "-";
+}
+
+function formatMoney(value) {
+  if (value === null || value === undefined) {
+    return {
+      label: "Chưa xác định",
+      isMissing: true
+    };
+  }
+
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return {
+      label: "Chưa xác định",
+      isMissing: true
+    };
+  }
+
+  return {
+    label: `${numberValue.toLocaleString("vi-VN")} ₫`,
+    isMissing: false
+  };
+}
+
 function VoucherTypeBadge({ type }) {
   const isIn = type === "IN";
   return (
@@ -105,6 +135,9 @@ export function TransactionVoucherDetailPage() {
     };
   }, [voucherId]);
 
+  const isSaleVoucher = voucher?.voucher_type === "OUT";
+  const totalAmount = formatMoney(voucher?.total_amount);
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -141,32 +174,49 @@ export function TransactionVoucherDetailPage() {
 
             <InfoCard title="Thông tin sản phẩm">
               <div className="overflow-x-auto rounded-md border border-slate-200">
-                <table className="w-full min-w-[640px] table-fixed border-collapse text-sm">
+                <table className={`w-full table-fixed border-collapse text-sm ${isSaleVoucher ? "min-w-[920px]" : "min-w-[640px]"}`}>
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="w-14 px-3 py-2.5 text-center">STT</th>
-                      <th className="px-3 py-2.5 text-left">Tên sản phẩm</th>
+                      <th className="px-3 py-2.5 text-left">Sản phẩm</th>
                       <th className="w-44 px-3 py-2.5 text-left">SKU</th>
-                      <th className="w-52 px-3 py-2.5 text-left">Nhóm bảo hành / ghi chú</th>
+                      <th className="w-52 px-3 py-2.5 text-left">Nhóm bảo hành / Ghi chú</th>
                       <th className="w-24 px-3 py-2.5 text-right">Số lượng</th>
+                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Đơn giá</th>}
+                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Thành tiền</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(voucher.items || []).map((item, index) => (
-                      <tr key={item.transaction_id} className="hover:bg-blue-50/40">
-                        <td className="px-3 py-3 text-center text-slate-500">{index + 1}</td>
-                        <td className="min-w-0 px-3 py-3 font-semibold text-slate-900">
-                          <span className="line-clamp-2">{item.product?.name || "-"}</span>
-                        </td>
-                        <td className="min-w-0 break-words px-3 py-3 text-slate-600">{item.product?.sku || "-"}</td>
-                        <td className="min-w-0 break-words px-3 py-3 text-brand-800">{formatNote(item.note || item.warranty_note)}</td>
-                        <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-900">{Number(item.quantity || 0)}</td>
-                      </tr>
-                    ))}
+                    {(voucher.items || []).map((item, index) => {
+                      const unitPrice = formatMoney(item.unit_price);
+                      const lineTotal = formatMoney(item.line_total);
+
+                      return (
+                        <tr key={item.transaction_id || index} className="hover:bg-blue-50/40">
+                          <td className="px-3 py-3 text-center text-slate-500">{index + 1}</td>
+                          <td className="min-w-0 px-3 py-3 font-semibold text-slate-900">
+                            <span className="line-clamp-2">{getSnapshotProductName(item)}</span>
+                          </td>
+                          <td className="min-w-0 break-words px-3 py-3 text-slate-600">{getSnapshotSku(item)}</td>
+                          <td className="min-w-0 break-words px-3 py-3 text-brand-800">{formatNote(item.note || item.warranty_note)}</td>
+                          <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-900">{Number(item.quantity || 0)}</td>
+                          {isSaleVoucher && (
+                            <td className={`px-3 py-3 text-right font-semibold tabular-nums ${unitPrice.isMissing ? "text-slate-400" : "text-slate-900"}`}>
+                              {unitPrice.label}
+                            </td>
+                          )}
+                          {isSaleVoucher && (
+                            <td className={`px-3 py-3 text-right font-semibold tabular-nums ${lineTotal.isMissing ? "text-slate-400" : "text-slate-900"}`}>
+                              {lineTotal.label}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
 
                     {(!voucher.items || voucher.items.length === 0) && (
                       <tr>
-                        <td colSpan={5} className="bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
+                        <td colSpan={isSaleVoucher ? 7 : 5} className="bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
                           Phiếu chưa có dòng sản phẩm.
                         </td>
                       </tr>
@@ -186,6 +236,13 @@ export function TransactionVoucherDetailPage() {
                 <SummaryRow label="Người tạo">{voucher.admin?.username || "-"}</SummaryRow>
                 <SummaryRow label="Tổng số lượng">{Number(voucher.total_quantity || 0)}</SummaryRow>
                 <SummaryRow label="Số dòng">{Number(voucher.item_count || 0)}</SummaryRow>
+                {isSaleVoucher && (
+                  <SummaryRow label="Tổng tiền">
+                    <span className={`text-base font-bold tabular-nums ${totalAmount.isMissing ? "text-amber-700" : "text-slate-950"}`}>
+                      {totalAmount.label}
+                    </span>
+                  </SummaryRow>
+                )}
                 <SummaryRow label="Ghi chú">{formatNote(voucher.note)}</SummaryRow>
               </div>
             </InfoCard>
