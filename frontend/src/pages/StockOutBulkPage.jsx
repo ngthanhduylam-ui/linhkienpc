@@ -869,21 +869,24 @@ export function StockOutBulkPage() {
                   </div>
                   {cartItems.map((item) => {
                     const lineTotal = getCartLineTotalDisplay(item.product?.sale_price, item.quantity);
+                    const saleNoteWidth = `${Math.min(Math.max((item.saleNote || "").length + 3, 12), 38)}ch`;
+                    const saleNoteRows = Math.min(Math.max(Math.ceil(((item.saleNote || "").length + 3) / 38), 1), 4);
 
                     return (
                       <div key={item.cartKey} className="border-b border-slate-200 text-sm hover:bg-blue-50/60">
                         <div className="grid grid-cols-[minmax(220px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 px-3 py-1.5">
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-semibold text-slate-900">{item.product.name}</p>
-                            <input
-                              type="text"
+                            <textarea
                               value={item.saleNote || ""}
                               maxLength={500}
                               disabled={isSubmitting}
                               onChange={(event) => updateCartItemSaleNote(item.cartKey, event.target.value)}
                               placeholder="Serial / Ghi chú"
                               aria-label={`Serial / Ghi chú ${item.product.name}`}
-                              className="mt-1 h-7 w-full rounded border border-slate-200 bg-white px-2 text-[12px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                              rows={saleNoteRows}
+                              style={{ width: saleNoteWidth, minWidth: "3cm", maxWidth: "100%" }}
+                              className="mt-1 min-h-7 resize-none overflow-y-auto rounded border border-slate-200 bg-white px-2 py-1 text-[12px] leading-4 text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                             />
                           </div>
                           <div className="min-w-0 break-all text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>

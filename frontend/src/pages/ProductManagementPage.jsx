@@ -567,14 +567,14 @@ export function ProductManagementPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="hidden grid-cols-12 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid">
-          <span className="col-span-3">Tên sản phẩm</span>
-          <span className="col-span-2">SKU</span>
-          <span className="col-span-2">Loại sản phẩm</span>
-          <span className="col-span-2 text-right">Giá bán</span>
-          <span className="col-span-1 text-right">Tồn</span>
-          <span className="col-span-1 text-center">Trạng thái</span>
-          <span className="col-span-1 text-right">Thao tác</span>
+        <div className="hidden border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3">
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">Tên sản phẩm</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">SKU</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">Loại sản phẩm</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right">Giá bán</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right">Tồn</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-center">Trạng thái</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right">Thao tác</span>
         </div>
 
         {isLoading ? (
@@ -582,41 +582,68 @@ export function ProductManagementPage() {
         ) : products.length > 0 ? (
           <div className="divide-y divide-slate-100">
             {products.map((product) => (
-              <div key={product.id} className="grid gap-2 px-4 py-4 md:grid-cols-12 md:items-center">
-                <div className="md:col-span-3">
-                  <p className="font-semibold text-slate-900">{product.name}</p>
-                  <p className="mt-1 text-xs text-slate-500 md:hidden">SKU: {product.sku}</p>
+              <div
+                key={product.id}
+                className="grid gap-2 px-4 py-4 md:grid-cols-[minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3"
+              >
+                <div className="min-w-0">
+                  <p
+                    title={product.name}
+                    className="line-clamp-2 break-words font-semibold text-slate-900"
+                  >
+                    {product.name}
+                  </p>
+                  <p className="mt-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-slate-500 md:hidden" title={product.sku}>
+                    SKU: {product.sku}
+                  </p>
                 </div>
-                <p className="text-sm text-slate-700 md:col-span-2">{product.sku}</p>
-                <p className="text-sm text-slate-700 md:col-span-2">{getCategoryName(product, categories)}</p>
+                <p
+                  title={product.sku}
+                  className="min-w-0 truncate text-sm text-slate-700"
+                >
+                  {product.sku}
+                </p>
+                <p
+                  title={getCategoryName(product, categories)}
+                  className="min-w-0 truncate text-sm text-slate-700"
+                >
+                  {getCategoryName(product, categories)}
+                </p>
                 <p
                   className={[
-                    "text-sm font-semibold md:col-span-2 md:text-right",
+                    "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold md:text-right",
                     product.sale_price === null || product.sale_price === undefined ? "text-slate-400" : "text-slate-900"
                   ].join(" ")}
+                  title={formatSalePrice(product.sale_price)}
                 >
                   {formatSalePrice(product.sale_price)}
                 </p>
-                <p className="text-lg font-bold text-brand-800 md:col-span-1 md:text-right">
+                <p
+                  className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-lg font-bold text-brand-800 md:text-right"
+                  title={String(Number(product.total_quantity || 0))}
+                >
                   {Number(product.total_quantity || 0)}
                 </p>
-                <div className="md:col-span-1 md:text-center">
+                <div className="min-w-0 overflow-hidden md:text-center">
                   <span
                     className={[
-                      "inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1",
+                      "inline-flex max-w-full rounded-full px-2 py-1 text-xs font-semibold ring-1",
                       product.is_active
                         ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
                         : "bg-slate-100 text-slate-600 ring-slate-200"
                     ].join(" ")}
+                    title={getProductStatusBadge(product)}
                   >
-                    {getProductStatusBadge(product)}
+                    <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                      {getProductStatusBadge(product)}
+                    </span>
                   </span>
                 </div>
-                <div className="md:col-span-1 md:text-right">
+                <div className="min-w-0 md:text-right">
                   <div className="flex flex-wrap justify-start gap-2 md:justify-end">
                     <Link
                       to={`/admin/products/${product.id}/edit`}
-                      className="rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      className="whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
                       Sửa
                     </Link>
@@ -624,7 +651,7 @@ export function ProductManagementPage() {
                       <button
                         type="button"
                         onClick={() => handleDeactivateProduct(product)}
-                        className="rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        className="whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
                       >
                         Ngừng
                       </button>
@@ -632,7 +659,7 @@ export function ProductManagementPage() {
                       <button
                         type="button"
                         onClick={() => handleActivateProduct(product)}
-                        className="rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        className="whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
                       >
                         Khôi phục
                       </button>
