@@ -5,8 +5,8 @@ const { testConnection } = require('./config/database');
 async function bootstrap() {
   await testConnection();
 
-  app.listen(env.port, () => {
-    console.log(`LINHKIENPC backend is running on port ${env.port}`);
+  app.listen(env.port, env.host, () => {
+    console.log(`LINHKIENPC backend is running on ${env.host}:${env.port}`);
   });
 }
 
