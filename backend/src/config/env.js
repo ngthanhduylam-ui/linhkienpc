@@ -22,6 +22,7 @@ for (const key of required) {
 
 module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
+  host: process.env.HOST || '127.0.0.1',
   port: Number(process.env.PORT || 3000),
   timezone: process.env.APP_TIMEZONE || 'Asia/Ho_Chi_Minh',
   db: {
@@ -40,7 +41,7 @@ module.exports = {
   },
   seed: {
     adminUsername: process.env.DEFAULT_ADMIN_USERNAME || 'admin',
-    adminPassword: process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123456',
+    adminPassword: process.env.DEFAULT_ADMIN_PASSWORD,
     adminDisplayName: process.env.DEFAULT_ADMIN_DISPLAY_NAME || 'System Admin'
   }
 };
