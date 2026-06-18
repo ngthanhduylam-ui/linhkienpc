@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1").replace(/\/$/, "");
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -14,13 +14,18 @@ export class ApiError extends Error {
 }
 
 function buildUrl(path, query = {}) {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  const normalizedBase = String(API_BASE_URL).replace(/\/+$/, "");
+  const normalizedPath = `/${String(path || "").replace(/^\/+/, "")}`;
+  const searchParams = new URLSearchParams();
+
   Object.entries(query).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(key, String(value));
+      searchParams.set(key, String(value));
     }
   });
-  return url.toString();
+
+  const queryString = searchParams.toString();
+  return `${normalizedBase}${normalizedPath}${queryString ? `?${queryString}` : ""}`;
 }
 
 function getStoredAccessToken() {
