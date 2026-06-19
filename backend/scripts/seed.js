@@ -13,8 +13,8 @@ const defaultCategories = [
   { code: 'case', name: 'Case' }
 ];
 
-async function seedAdmin() {
-  const [rows] = await pool.query(
+async function seedAdmin(database = pool) {
+  const [rows] = await database.query(
     'SELECT id FROM admins WHERE username = ? LIMIT 1',
     [env.seed.adminUsername]
   );
@@ -24,9 +24,15 @@ async function seedAdmin() {
     return;
   }
 
+  if (!env.seed.adminPassword) {
+    throw new Error(
+      `Cannot create admin "${env.seed.adminUsername}": DEFAULT_ADMIN_PASSWORD is required.`
+    );
+  }
+
   const passwordHash = await hashPassword(env.seed.adminPassword);
 
-  await pool.query(
+  await database.query(
     `INSERT INTO admins (username, password_hash, display_name, is_active)
      VALUES (?, ?, ?, 1)`,
     [env.seed.adminUsername, passwordHash, env.seed.adminDisplayName]
@@ -58,8 +64,16 @@ async function run() {
   await pool.end();
 }
 
-run().catch(async (error) => {
-  console.error('Seed failed:', error.message);
-  await pool.end();
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch(async (error) => {
+    console.error('Seed failed:', error.message);
+    await pool.end();
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  seedAdmin,
+  seedCategories,
+  run
+};
