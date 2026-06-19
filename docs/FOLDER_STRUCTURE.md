@@ -1,5 +1,3 @@
-# FOLDER_STRUCTURE.md
-
 # Cấu trúc thư mục hiện tại
 
 Tài liệu này mô tả cấu trúc repo thực tế của **VI TÍNH PHƯỚC TÀI POS**. Không dùng các tên page/module cũ như `/admin/batches` hoặc `Inventory Workbench` làm hướng chính.

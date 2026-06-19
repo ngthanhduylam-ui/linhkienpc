@@ -1,82 +1,84 @@
-# ARCHITECTURE.md
+# VI TÍNH PHƯỚC TÀI POS - Architecture
 
-Tài liệu này mô tả kiến trúc hiện tại của **VI TÍNH PHƯỚC TÀI POS**. Hướng chính hiện nay là POS-first, tồn kho thực tế, chạy nội bộ/offline-first; không phải ERP tài chính.
+Cập nhật: **19/06/2026**
 
 ## 1. Tổng quan
 
+Local:
+
 ```text
-Browser
-  -> React/Vite frontend
-  -> API client
-  -> Express backend /api/v1
-  -> MySQL
+Browser -> React/Vite -> Express /api/v1 -> MySQL
 ```
 
-Stack chính:
+Production:
 
-- Frontend: React 18, Vite, React Router, TailwindCSS.
-- Backend: Node.js, Express, MySQL, JWT, bcrypt.
-- Database: MySQL, schema tổng hợp tại `database/schema/schema.sql`.
+```text
+Browser
+  -> HTTPS https://vitinhphuoctai.duckdns.org
+  -> Nginx
+     -> frontend/dist
+     -> reverse proxy /api/v1
+  -> Express under PM2: linhkienpc-api
+  -> 127.0.0.1:3000
+  -> MySQL localhost
+```
+
+Stack:
+
+- React 18, Vite, React Router, TailwindCSS
+- Node.js 18+, Express
+- MySQL
+- JWT access/refresh token, bcrypt
+- Nginx, PM2, Let's Encrypt/Certbot
 
 ## 2. Frontend
 
-Thư mục chính:
-
 ```text
-frontend/src/api/          API client, refresh token handling
-frontend/src/components/   shared UI components
+frontend/src/api/          API client và refresh flow
+frontend/src/components/   shared UI
 frontend/src/contexts/     AuthContext
 frontend/src/layouts/      AdminLayout
 frontend/src/pages/        route pages
-frontend/src/services/     API service wrappers
+frontend/src/services/     API wrappers
 frontend/src/utils/        format/normalize helpers
 frontend/src/router.jsx    route config
 ```
 
-Routes public:
+Frontend production dùng `VITE_API_BASE_URL=/api/v1`. API client hỗ trợ base URL tương đối và tuyệt đối, chuẩn hóa dấu `/` và giữ query parameters.
+
+Routes chính:
 
 ```text
-/                              PublicSearchPage
+/                                      PublicSearchPage
+/admin/login                           AdminLoginPage
+/admin/products                        ProductManagementPage
+/admin/products/new                    ProductFormPage
+/admin/products/:id/edit               ProductFormPage
+/admin/stock-in                        StockInBulkPage
+/admin/stock-out                       StockOutBulkPage
+/admin/inventory-check                 InventoryCheckPage
+/admin/customers                       CustomerListPage
+/admin/customers/:id                   CustomerDetailPage
+/admin/suppliers                       SupplierListPage
+/admin/transaction-history             TransactionHistoryPage
+/admin/transaction-history/:voucherId  TransactionVoucherDetailPage
+/admin/transaction-history/:voucherId/print TransactionVoucherPrintPage
 ```
 
-Routes admin chính:
+POS và trang print dùng layout riêng; print route vẫn được bảo vệ bởi admin authentication nhưng không bọc `AdminLayout`.
 
-```text
-/admin/login                   AdminLoginPage
-/admin                         redirect /admin/stock-in
-/admin/products                ProductManagementPage
-/admin/products/new            ProductFormPage
-/admin/products/:id/edit       ProductFormPage
-/admin/stock-in                StockInBulkPage
-/admin/stock-out               StockOutBulkPage, full-screen POS
-/admin/inventory-check         InventoryCheckPage
-/admin/customers               CustomerListPage
-/admin/customers/:id           CustomerDetailPage
-/admin/suppliers               SupplierListPage
-/admin/transaction-history     TransactionHistoryPage
-/admin/transaction-history/:voucherId TransactionVoucherDetailPage
-```
+## 3. Auth
 
-Routes còn giữ để tương thích:
-
-```text
-/admin/inventory-workbench     redirect /admin/stock-in
-/admin/stock-out-bulk          redirect /admin/stock-out
-/admin/stock-in-single         StockInPage, legacy/single flow
-/admin/stock-out-single        StockOutPage, legacy/single flow
-```
-
-## 3. Auth frontend
-
-- `AuthContext.jsx` giữ trạng thái admin.
-- Access token và refresh token hiện lưu ở `localStorage`.
-- `apiClient.js` gắn `Authorization: Bearer <access_token>` cho admin request.
-- Khi API trả 401, client thử `/admin/auth/refresh` và retry request một lần.
-- Nếu refresh thất bại, token bị xóa và admin quay về `/admin/login`.
+- Access token và refresh token hiện lưu trong `localStorage`.
+- API client gắn Bearer token cho admin request.
+- Khi gặp 401, client thử refresh và retry một lần.
+- Refresh thất bại sẽ xóa token và chuyển về login.
+- Login limiter chỉ gắn tại `POST /admin/auth/login`.
+- Giới hạn: 10 request/15 phút/IP; request vượt giới hạn trả 429.
+- `app.set("trust proxy", "loopback")` chỉ tin Nginx chạy qua loopback.
+- Limiter memory store phù hợp một PM2 instance; multi-instance cần shared store.
 
 ## 4. Backend
-
-Thư mục chính:
 
 ```text
 backend/src/app.js
@@ -88,20 +90,29 @@ backend/src/routes/index.js
 backend/src/utils/
 ```
 
-Modules chính:
+Modules:
 
-- `auth`: login, refresh, logout, profile.
-- `category`: loại sản phẩm/category.
-- `product`: product CRUD, public search, inventory group lookup.
-- `customer`: khách hàng, trạng thái active/inactive.
-- `supplier`: nhà cung cấp, trạng thái active/inactive.
-- `stockTransaction`: stock-in, stock-out, bulk operations, transaction list.
-- `stockVoucher`: danh sách/detail phiếu nhập và phiếu bán.
-- `inventory`: inventory overview.
-- `inventoryCheck`: tìm sản phẩm, chuyển nhóm ghi chú, điều chỉnh tồn.
-- `warrantyBatch`: module legacy, không phải workflow UI chính.
+- `auth`
+- `category`
+- `product`
+- `customer`
+- `supplier`
+- `stockTransaction`
+- `stockVoucher`
+- `inventory`
+- `inventoryCheck`
+- `warrantyBatch` legacy
 
-## 5. Route mounting backend
+Production server dùng `app.listen(env.port, env.host)`, với `HOST=127.0.0.1`.
+
+Admin bootstrap:
+
+- Không có mật khẩu hard-code.
+- Chỉ lấy `DEFAULT_ADMIN_PASSWORD` từ environment.
+- Admin đã tồn tại không bị reset.
+- Chưa có admin và thiếu password sẽ báo lỗi rõ ràng.
+
+## 5. Route mounting
 
 Base URL:
 
@@ -144,166 +155,74 @@ Protected admin:
 /admin/stock-transactions
 ```
 
-Legacy warranty batch routes vẫn được mount dưới `/admin`, nhưng không dùng làm hướng chính cho POS/nhập hàng.
+## 6. Stock-in
 
-## 6. Request flow
+- Frontend chọn supplier optional, sản phẩm, quantity và nhóm bảo hành.
+- Backend bulk stock-in validate và cộng `product_inventory_balances`.
+- Ghi `stock_transactions` và tạo `stock_vouchers`.
+- Không có giá nhập, payment hoặc debt.
 
-Admin request:
+## 7. POS / Stock-out
 
-```text
-React page
-  -> service function
-  -> apiClient
-  -> Express route
-  -> requireAuth middleware
-  -> validation middleware
-  -> controller
-  -> service
-  -> MySQL transaction/query
-```
+- Full-screen POS, search/recent products, customer và multi-order.
+- Cart merge theo SKU + nhóm bảo hành.
+- `sale_note` thuộc từng cart row nhưng không tham gia merge key.
+- POS hiển thị giá, line total và cart total dạng chỉ đọc.
+- Payload gửi SKU, quantity, warranty note và sale note; không gửi field tiền.
+- Backend validate stock, tự lấy `products.sale_price`, trừ tồn và snapshot voucher.
 
-Public request:
+Snapshot:
 
 ```text
-PublicSearchPage
-  -> publicSearch.service.js
-  -> GET /public/products?q=...
-  -> product service
-  -> MySQL
+stock_voucher_items
+  sku_snapshot
+  product_name_snapshot
+  warranty_note_snapshot
+  sale_note_snapshot
+  quantity
+  unit_price
+  line_total
+
+stock_vouchers
+  total_amount
 ```
 
-## 7. Nhập hàng
+`stock_transactions.note` chỉ giữ nhóm bảo hành/tồn kho, không giữ sale note.
 
-Route chính: `/admin/stock-in`
+## 8. Voucher detail và print
 
-Frontend:
+- List/detail dùng stock voucher API.
+- Detail phiếu OUT hiển thị snapshot SKU/name/warranty/sale note/money.
+- Legacy voucher fallback không crash và có thể trả giá/sale note `NULL`.
+- Phiếu IN không hiển thị giá nhập giả.
+- Print route lấy voucher detail API, không lấy cart.
+- `window.print()` chỉ được gọi khi nhấn nút In phiếu.
+- CSS print dùng A4, table header lặp lại và tránh cắt row.
 
-- Chọn nhà cung cấp nếu có.
-- Tìm và thêm nhiều sản phẩm.
-- Mỗi dòng có số lượng nhập.
-- Mỗi dòng có nhóm bảo hành / ghi chú.
+## 9. Database
 
-Backend:
-
-- `POST /admin/stock-in/bulk`
-- Validate product active.
-- Validate supplier active nếu có `supplier_id`.
-- Cộng tồn trong `product_inventory_balances`.
-- Ghi `stock_transactions`.
-- Tạo `stock_vouchers`.
-
-Không có giá nhập, thanh toán, công nợ hoặc tổng tiền trong workflow hiện tại.
-
-## 8. Bán tại quầy / Stock-out POS
-
-Route chính: `/admin/stock-out`
-
-Frontend:
-
-- Full-screen POS.
-- Tìm sản phẩm và xem sản phẩm gần đây.
-- Chọn nhóm bảo hành / ghi chú trước khi thêm vào cart.
-- Cart nội bộ cho từng đơn local.
-- Sửa số lượng trong cart.
-- Chọn khách hàng nếu cần.
-- Hỗ trợ nhiều đơn local trên frontend.
-
-Backend:
-
-- `POST /admin/stock-out/bulk`
-- Validate product active.
-- Validate customer active nếu có `customer_id`.
-- Validate tổng tồn và tồn theo nhóm ghi chú.
-- Trừ tồn trong `product_inventory_balances`.
-- Ghi `stock_transactions`.
-- Tạo `stock_vouchers`.
-
-Phiếu bán là phiếu xuất kho nội bộ, không phải hóa đơn thanh toán.
-
-## 9. Kiểm hàng
-
-Route: `/admin/inventory-check`
-
-Hành vi hiện tại:
-
-- Tìm và chọn sản phẩm.
-- Xem tổng tồn và các nhóm ghi chú.
-- Tăng/giảm số lượng theo nhóm ghi chú.
-- Ghi lý do điều chỉnh.
-- Xem các điều chỉnh gần đây.
-
-Endpoints:
-
-```text
-GET  /admin/inventory-check/products
-GET  /admin/inventory-check/products/:sku
-POST /admin/inventory-check/note-move
-POST /admin/inventory-check/quantity-adjust
-```
-
-Đây là workflow điều chỉnh tồn trực tiếp, chưa phải hệ thống phiếu kiểm hàng/draft/cân bằng đầy đủ.
-
-## 10. Lịch sử giao dịch / phiếu kho
-
-Routes:
-
-```text
-/admin/transaction-history
-/admin/transaction-history/:voucherId
-```
-
-Backend:
-
-```text
-GET /admin/stock-vouchers
-GET /admin/stock-vouchers/:id
-```
-
-Detail phiếu hiển thị:
-
-- Mã phiếu.
-- Loại phiếu: Phiếu nhập / Phiếu bán.
-- Ngày tạo.
-- Người tạo.
-- Nhà cung cấp hoặc khách hàng nếu có.
-- Tổng số lượng.
-- Số dòng.
-- Ghi chú nếu có.
-- Danh sách sản phẩm, SKU, nhóm bảo hành/ghi chú, số lượng.
-
-Không hiển thị giá, thanh toán, công nợ, hóa đơn hoặc kế toán.
-
-## 11. Database
-
-Nguồn tồn hiện tại:
+Nguồn tồn:
 
 ```text
 product_inventory_balances
 ```
 
-Sổ giao dịch:
+Lịch sử và phiếu:
 
 ```text
 stock_transactions
-```
-
-Nhóm phiếu:
-
-```text
 stock_vouchers
-stock_transactions.voucher_id
+stock_voucher_items
 ```
 
-Nhóm bảo hành/ghi chú được tính từ `stock_transactions.note` và các bảng điều chỉnh tồn, không lấy `warranty_batches` làm workflow chính.
+Các bảng legacy `warranty_batches` và `inventory_balances` vẫn được giữ để tương thích, không phải workflow mới.
 
-## 12. Thành phần legacy
+## 10. Production boundaries
 
-Các phần sau còn tồn tại để tương thích hoặc chờ dọn sau:
-
-- Backend module `warrantyBatch`.
-- Bảng `warranty_batches`.
-- Bảng `inventory_balances`.
-- Trang single stock-in/stock-out.
-- Redirect `inventory-workbench`.
-
-Không dùng các phần legacy này làm hướng thiết kế mới.
+- Nginx là public entry point duy nhất cho web/API.
+- Backend chỉ bind loopback.
+- MySQL chỉ localhost.
+- UFW mở 80/443 public, SSH từ LAN; không mở 3000/3306.
+- DuckDNS cập nhật mỗi 5 phút.
+- Backup MySQL hằng ngày lúc 23:00, retention 14 ngày.
+- Hệ thống chưa có giá nhập, discount, payment, debt, invoice hoặc financial reporting.

@@ -19,7 +19,7 @@ File này chứa các nguyên tắc an toàn lâu dài cho **VI TÍNH PHƯỚC T
 Không thêm hoặc mô tả là đã có:
 
 - Giá nhập.
-- Giá bán.
+- Sửa giá bán trực tiếp tại POS.
 - Chiết khấu.
 - Thanh toán.
 - Công nợ khách hàng.
@@ -31,7 +31,7 @@ Không thêm hoặc mô tả là đã có:
 - Tài khoản khách public.
 - Tags/aliases/compatibility search.
 
-Các mục trên là future backlog, không phải feature hiện tại.
+Giá bán mặc định, snapshot tiền phiếu bán, Serial/Ghi chú theo dòng và mẫu in A4 là feature hiện tại. Các mục bị cấm ở trên vẫn là future backlog.
 
 ## 3. POS và cart
 
@@ -45,7 +45,7 @@ Các mục trên là future backlog, không phải feature hiện tại.
 
 - Route `/` luôn phải public, không login.
 - Empty search không được show toàn bộ sản phẩm.
-- Không hiển thị admin action, giá, khách hàng, nhà cung cấp hoặc lịch sử giao dịch.
+- Không hiển thị admin action, giá/dữ liệu tiền, Serial/Ghi chú bán hàng, khách hàng, nhà cung cấp hoặc lịch sử giao dịch.
 - Public Lookup phải tiếp tục hoạt động sau mọi refactor admin/POS.
 
 ## 5. SKU và sản phẩm

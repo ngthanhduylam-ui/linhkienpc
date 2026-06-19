@@ -1,251 +1,132 @@
-﻿# PROJECT_DIRECTION.md
-
 # VI TÍNH PHƯỚC TÀI POS - Định hướng chính thức
 
-Tài liệu này là nguồn nhớ dài hạn cho các phiên Codex mới. Nếu có mâu thuẫn với ghi chú cũ, ưu tiên tài liệu này và kiểm tra lại code hiện tại trước khi sửa.
+Cập nhật: **19/06/2026**
 
-## 1. Project Identity
+Tài liệu này là nguồn nhớ dài hạn về hướng sản phẩm. Khi ghi chú cũ mâu thuẫn, phải kiểm tra code và ưu tiên trạng thái đã xác nhận trong `PROJECT_STATUS.md`.
+
+## 1. Project identity
 
 Tên dự án: **VI TÍNH PHƯỚC TÀI POS**
-
-Định hướng chính thức:
 
 - POS First
 - Offline First
 - Self-hosted
-- Sapo Inspired
+- Inventory supports sales
+- Sapo-inspired
 - Fast operation
 - Minimal clicks
+- Stability before advanced finance
 - Not an ERP
-- Stability before advanced finance features
 
-Dự án phục vụ cửa hàng linh kiện PC và sửa chữa máy tính VI TÍNH PHƯỚC TÀI. Ứng dụng chạy nội bộ, tự host, ưu tiên thao tác bán tại quầy và tra cứu tồn kho nhanh.
+Ứng dụng phục vụ cửa hàng linh kiện PC và sửa chữa máy tính. Tồn kho là nền tảng hỗ trợ bán hàng, không phải lý do để biến workflow thành phần mềm kho hoặc ERP nhiều bước.
 
-## 2. Business Context
+## 2. Thứ tự ưu tiên
 
-Bối cảnh kinh doanh hiện tại:
+1. Bán tại quầy nhanh và chính xác.
+2. Tồn kho đúng, có lịch sử và rollback an toàn.
+3. Public Lookup dễ dùng, không cần đăng nhập.
+4. Khách hàng, nhà cung cấp và nhóm bảo hành đủ cho vận hành thật.
+5. Phiếu bán, Serial/Ghi chú và mẫu in phục vụ bảo hành.
+6. Bảo mật, backup và khả năng vận hành self-hosted.
+7. Chỉ sau khi ổn định mới xem xét tính năng tài chính nâng cao.
 
-- Cửa hàng máy tính, linh kiện PC và dịch vụ sửa chữa.
-- Bán linh kiện và số lượng theo lô cho khách reseller/cửa hàng khác là luồng quan trọng.
-- Khách lẻ tại quầy vẫn có, nhưng không phải lý do để biến hệ thống thành ERP/phần mềm bán lẻ phức tạp.
-- Tra cứu tồn kho nhanh, chọn đúng nhóm bảo hành / ghi chú và bán tại quầy ổn định quan trọng hơn quản trị kho nhiều bước.
+## 3. Trạng thái phase hiện tại
 
-## 3. POS-first Philosophy
+Hệ thống đang **Production trial / Chạy thử thực tế tại cửa hàng** từ ngày 19/06/2026.
 
-Inventory tồn tại để hỗ trợ bán hàng.
+Phase 2A đã cung cấp:
 
-Mỗi thay đổi UI/UX cần tự hỏi:
+- Giá bán mặc định optional trên sản phẩm.
+- Snapshot đơn giá, thành tiền và tổng tiền khi bán.
+- Hiển thị tiền chỉ đọc trong POS và chi tiết phiếu.
+- Serial/Ghi chú bán hàng riêng từng dòng.
+- Mẫu in A4 phiếu bán.
 
-> Nếu đây là Sapo POS, thao tác này sẽ được làm thế nào để người bán xử lý nhanh hơn, ít click hơn, ít nhầm hơn?
+Backend là nguồn tính và snapshot tiền. POS không tự quyết định giá và không gửi field tiền.
 
-Ưu tiên:
+## 4. Phạm vi không mở rộng hiện tại
 
-1. Tốc độ bán tại quầy.
-2. Màn hình rõ, gọn, dễ scan.
-3. Ít thao tác phụ.
-4. Dữ liệu tồn kho đúng và có lịch sử giao dịch.
-5. Không đưa tính năng tài chính nâng cao vào khi workflow POS chưa đủ ổn định.
+Không tự thêm:
 
-## 4. Official Priorities
+- Giá nhập.
+- Sửa giá trực tiếp tại POS.
+- Chiết khấu/giảm giá.
+- Thanh toán, khách đưa, tiền thừa.
+- Công nợ khách hàng/nhà cung cấp.
+- Hóa đơn, kế toán.
+- Báo cáo doanh thu/lợi nhuận/tài chính.
+- Workflow ERP phức tạp.
+- E-commerce checkout.
 
-Thứ tự ưu tiên sản phẩm:
+Giá bán mặc định và snapshot phiếu bán là tính năng active; chúng không đồng nghĩa hệ thống đã có payment, invoice hoặc accounting.
 
-1. **Bán tại quầy / POS**
-2. **Quản lý khách hàng**
-3. **Theo dõi bảo hành / nhóm ghi chú**
-4. **Theo dõi công nợ** trong phase tương lai, chưa phải hiện tại
-5. **Inventory support for sales**
-6. **Reports** trong phase tương lai
+## 5. Nguyên tắc UX
 
-## 5. Non-goals / Current Forbidden Scope
+- Giao diện dày thông tin nhưng dễ scan.
+- Search -> chọn -> thêm -> xác nhận.
+- POS full-screen, compact và ít click.
+- Không hiển thị field giả hoặc shortcut chưa hỗ trợ.
+- Dùng từ ngữ: Bán tại quầy, Nhập hàng, Kiểm hàng, Phiếu bán, Phiếu nhập, Nhóm bảo hành/Ghi chú.
+- Không dùng tên cũ như “Xuất & Giao hàng” trong UI chính.
 
-Không thiết kế dự án thành:
+## 6. Quy tắc tồn kho
 
-- ERP
-- Warehouse-first software
-- Enterprise inventory system
-- Hệ thống kế toán
-- Website thương mại điện tử
-- Phần mềm tài chính nhiều quy trình
+- Không sửa trực tiếp số dư tồn từ UI thông thường.
+- Tồn chỉ đổi qua stock-in, stock-out hoặc inventory-check.
+- Mọi thay đổi tồn phải có lịch sử.
+- Bulk stock-in/out tạo stock voucher.
+- Stock operation dựa trên SKU + nhóm bảo hành/ghi chú.
+- `sale_note` là dữ liệu bán hàng riêng, không tham gia chia nhóm tồn.
+- Stock voucher là phiếu nghiệp vụ nội bộ, không phải hóa đơn thanh toán.
 
-Không mô tả các mục sau là tính năng active nếu code chưa triển khai:
+## 7. Public Lookup
 
-- Giá bán
-- Giá nhập
-- Thanh toán
-- Chiết khấu
-- Công nợ khách hàng
-- Công nợ nhà cung cấp
-- Kế toán
-- Hóa đơn
-- Báo cáo tài chính
-- Workflow ERP phức tạp
+- Route `/`, không yêu cầu login.
+- Không show toàn bộ sản phẩm khi search rỗng.
+- Tìm theo tên, SKU và ghi chú bảo hành.
+- Hiển thị tồn và nhóm bảo hành.
+- Không trả giá, dữ liệu tiền, sale note, đối tác hoặc lịch sử nội bộ.
 
-Các tính năng trên chỉ là **future phase**, sau khi hệ thống chạy ổn định đủ lâu với dữ liệu thật.
+Public Lookup phải được bảo vệ khi refactor POS/admin.
 
-## 6. UX Principles
+## 8. Self-hosted production
 
-Phong cách UI:
+Production:
 
-- Sapo-inspired, không copy branding.
-- Dày thông tin nhưng không rối.
-- Bố cục rõ thứ bậc: search -> chọn -> thêm -> xác nhận.
-- Form admin phải gọn, tránh cảm giác form hành chính dài.
-- Màn POS phải full-screen, nhanh, ưu tiên bàn phím/focus và thao tác lặp lại.
-- Không hiển thị keyboard shortcut kiểu F1/F3/F10 nếu chưa thực sự hỗ trợ.
-- Không hiển thị field giả hoặc disabled placeholder như “chưa cấu hình” nếu backend chưa lưu.
+- `https://vitinhphuoctai.duckdns.org`
+- Ubuntu Server tại cửa hàng
+- Nginx + HTTPS Let's Encrypt
+- PM2 process `linhkienpc-api`
+- Express bind `127.0.0.1:3000`
+- MySQL localhost
+- DuckDNS cron mỗi 5 phút
+- Backup MySQL mỗi ngày 23:00, giữ 14 ngày
 
-Từ ngữ UI chính thức:
+Workflow chính không phụ thuộc cloud SaaS. Domain/Internet hỗ trợ truy cập từ ngoài, còn thiết kế vận hành vẫn ưu tiên self-hosted và khả năng dùng trong mạng cửa hàng.
 
-- Bán tại quầy
-- Nhập hàng
-- Kiểm hàng
-- Sản phẩm
-- Loại sản phẩm
-- Khách hàng
-- Nhà cung cấp
-- Lịch sử giao dịch
-- Phiếu nhập
-- Phiếu bán
-- Nhóm bảo hành / ghi chú
+## 9. Roadmap
 
-Tên cũ như “Xuất & Giao hàng”, “Inventory Workbench”, “Inventory First” chỉ được nhắc trong phần lịch sử migration, không dùng làm ngôn ngữ chính.
+### Hiện tại: production stabilization
 
-## 7. Core Inventory Rules
+- Chạy thử thực tế 1-2 tuần.
+- Theo dõi lỗi bán hàng, tồn, public lookup, phiếu, print và backup.
+- Theo dõi PM2/Nginx/MySQL/Certbot/cron sau reboot.
+- Sửa bug có bước tái hiện rõ.
 
-Quy tắc tồn kho:
+### Sau khi ổn định
 
-- Không sửa trực tiếp số dư tồn kho từ UI thông thường.
-- Mọi thay đổi tồn kho phải đi qua Nhập hàng, Bán tại quầy/stock-out hoặc Kiểm hàng/điều chỉnh được duyệt.
-- Mọi thay đổi tồn kho phải có stock transaction.
-- Bulk stock-in và bulk stock-out tạo stock voucher.
-- Stock voucher là phiếu kho/phiếu bán nội bộ, **không phải hóa đơn**.
-- Stock operation dựa trên SKU + nhóm bảo hành / ghi chú.
-- Product inactive không nên xuất hiện trong selector/search mặc định.
-
-## 8. SKU Strategy
-
-SKU phải duy nhất.
-
-Quy tắc SKU hiện tại:
-
-- Chỉ dùng chữ thường, số và dấu chấm.
-- Không dùng dấu cách, dấu gạch ngang hoặc ký tự đặc biệt.
-- Ví dụ: `2nd.maybo.lenovo.v50t13imb`
-- Model thật có dấu gạch ngang thì bỏ dấu gạch ngang khi tạo SKU.
-- Ví dụ: `V50t-13IMB` -> `v50t13imb`
-
-Chiến lược tương lai:
-
-- SKU vẫn unique và đơn giản.
-- Search nâng cao sẽ nghiên cứu riêng bằng tags/aliases/compatibility.
-- Ví dụ backlog: tìm `gen13th` trả về máy bộ hỗ trợ Intel Gen 13.
-- Compatibility rule backlog: model hỗ trợ Gen13 có thể hỗ trợ Gen12; model chỉ hỗ trợ Gen12 không tự động hỗ trợ Gen13.
-- Không implement `search_tags`, aliases hoặc compatibility database trong phase hiện tại.
-
-## 9. Warranty / Note Group Strategy
-
-Nhóm tồn kho hiện dựa trên transaction note/warranty note.
-
-Ví dụ nhóm:
-
-- `BH 8.27`
-- `BH 12.28`
-- `hbh`
-- `Không ghi chú`
-
-Quy tắc:
-
-- Bán/nhập/kiểm hàng phải tôn trọng SKU + nhóm bảo hành / ghi chú.
-- UI hiện tại không phụ thuộc warranty-batch-first workflow.
-- Bảng warranty batch cũ có thể còn tồn tại trong code/database, nhưng không phải hướng UI chính.
-
-## 10. Public Lookup Role
-
-Public Lookup là phần quan trọng của dự án.
-
-Route: `/`
-
-Quy tắc:
-
-- Không yêu cầu login.
-- Không hiển thị toàn bộ sản phẩm khi ô tìm kiếm rỗng.
-- Hỗ trợ tìm theo tên sản phẩm, SKU và ghi chú bảo hành nếu backend hỗ trợ.
-- Hiển thị tổng tồn và nhóm bảo hành / ghi chú.
-- Mobile-friendly.
-- Không hiển thị giá, khách hàng, nhà cung cấp, lịch sử giao dịch hoặc action admin.
-- Có link đăng nhập quản trị.
-
-Public Lookup phải luôn được bảo vệ khi refactor POS/admin.
-
-## 11. Deployment Philosophy
-
-Hướng triển khai:
-
-- Tự host tại cửa hàng.
-- Ưu tiên offline/local-first trong mạng nội bộ.
-- Không phụ thuộc dịch vụ cloud bên ngoài cho workflow chính.
-- Luôn backup database trước deploy server.
-- Frontend-only change không restart backend nếu không cần.
-- Backend/database change cần cẩn trọng hơn vì đã có dữ liệu thật.
-
-Thông tin server hiện tại theo project memory:
-
-- Ubuntu Server
-- Hostname: `linhkienpc`
-- User: `vitinhphuoctai`
-- IP nội bộ tĩnh: `192.168.1.50`
-- Project path: `/opt/linhkienpc/linhkienpc`
-- Backend: PM2
-- Frontend: Nginx
-- Database: MySQL
-- Branch deploy/dev: `codex-dev`
-
-## 12. Phased Roadmap
-
-### Phase A - POS core and real-world workflow stabilization
-
-Trọng tâm:
-
-- Bán tại quầy full-screen.
-- Product search/dropdown nhanh.
-- Nhóm bảo hành / ghi chú rõ ràng.
-- Cart gọn, chỉnh số lượng trực tiếp.
-- Customer selector gọn.
-- Multi-order local state.
-- Submit an toàn, chống double submit.
-- Public Lookup không bị ảnh hưởng.
-
-### Phase B - Customer/Supplier/Product UX stabilization and voucher history
-
-Trọng tâm:
-
-- Product add/edit Sapo-like.
-- Customer/Supplier form tối giản theo field backend đang lưu.
-- Nhập hàng gọn theo workflow thực tế.
-- Lịch sử giao dịch voucher-first.
-- Chuẩn bị nghiên cứu in phiếu, nhưng chưa thêm invoice.
-
-### Phase C - Long-term real-world stability testing on Ubuntu Server
-
-Trọng tâm:
-
-- Chạy với dữ liệu thật đủ lâu.
-- Theo dõi lỗi thao tác thực tế.
-- Backup/restore ổn định.
-- Giảm rủi ro deploy.
-- Chỉ sửa lỗi workflow hoặc UX gây nhầm.
-
-### Future phase only
-
-Chỉ mở khi hệ thống POS/inventory đã ổn định:
-
-- Giá nhập / giá bán
-- Thanh toán
-- Công nợ khách hàng / nhà cung cấp
-- Kế toán
-- Báo cáo tài chính
-- In phiếu nâng cao
-- Search tags / aliases / compatibility
-
-Không biến dự án thành ERP-style software.
+- Cải thiện luồng Bán & In nếu thực tế cần.
+- Draft persistence cho multi-order.
+- Customer warranty history tốt hơn.
+- Search aliases/compatibility.
+- Báo cáo tồn kho cơ bản.
+
+### Future finance phase
+
+- Giá nhập.
+- Thanh toán.
+- Giảm giá.
+- Công nợ.
+- Báo cáo doanh thu/lợi nhuận.
+
+Mỗi mục tài chính phải có phase và business rules riêng. Không gom chúng thành một cuộc chuyển đổi ERP.

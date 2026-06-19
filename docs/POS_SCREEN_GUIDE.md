@@ -105,10 +105,10 @@ Yêu cầu:
 - Không đẩy layout.
 - Compact, nhiều sản phẩm visible trước khi scroll.
 - Width phù hợp desktop 1920×1080 và 2560×1440.
-- Product row hiển thị: tên sản phẩm, SKU, tổng tồn.
+- Product row hiển thị: tên sản phẩm, SKU, tổng tồn và giá bán mặc định chỉ đọc.
 - Hết hàng phải muted/khó nhầm.
 - Không hiển thị category nếu làm row rối.
-- Không hiển thị giá/payment/debt.
+- Không cho sửa giá và không hiển thị payment/debt.
 
 Dropdown đóng khi:
 
@@ -173,14 +173,18 @@ Cột chính:
 - Sản phẩm
 - SKU
 - Nhóm bảo hành / ghi chú
+- Đơn giá
 - Số lượng
+- Thành tiền
 - Xóa
 
 Yêu cầu:
 
 - Product name là primary.
+- Serial/Ghi chú bán hàng là input compact theo từng dòng, nằm dưới tên sản phẩm.
 - SKU compact, có thể wrap/break khi dài.
 - Nhóm bảo hành / ghi chú dễ thấy.
+- Đơn giá và thành tiền chỉ đọc; giá thiếu hiển thị trạng thái chưa xác định.
 - Quantity controls đủ lớn để click.
 - Không horizontal scroll trên desktop bình thường.
 - Delete action nhanh và rõ.
@@ -210,6 +214,7 @@ Nếu add cùng SKU + cùng nhóm:
 
 - Merge vào dòng hiện có.
 - Tăng quantity thêm 1.
+- Giữ nguyên Serial/Ghi chú người dùng đã nhập.
 - Không vượt tồn.
 
 Nếu cùng SKU nhưng khác nhóm:
@@ -265,6 +270,8 @@ Submit:
 - Payload giữ logic backend hiện có.
 - Backend validate tồn kho.
 - Backend tạo stock voucher.
+- Payload có `sale_note` nullable theo từng dòng nhưng không có `unit_price`, `line_total` hoặc `total_amount`.
+- Backend tự snapshot giá và tính lại tổng tiền.
 - Sau success, clear active order.
 - Other order tabs không bị clear.
 
@@ -324,8 +331,8 @@ Mobile không phải ưu tiên cho POS admin, nhưng không nên crash layout ng
 
 Không thêm vào POS hiện tại:
 
-- Giá bán
 - Giá nhập
+- Sửa giá bán trực tiếp
 - Chiết khấu
 - Thanh toán
 - Công nợ
@@ -359,11 +366,13 @@ Sau mỗi lần sửa POS, test tối thiểu:
 15. Add same SKU + khác note group tạo dòng riêng.
 16. Quantity +/- hoạt động.
 17. Quantity không vượt tồn.
-18. Remove product hoạt động.
-19. Clear all hỏi confirmation.
-20. Customer selector hoạt động.
-21. Multiple order switch không leak state.
-22. Close draft order có confirm.
-23. Submit sale tạo voucher.
-24. Nếu refresh tồn lỗi sau success, UI không báo sale failed.
-25. Public Lookup không bị ảnh hưởng.
+18. Serial/Ghi chú giữ đúng khi đổi quantity, merge dòng và chuyển order.
+19. Đơn giá, thành tiền và tổng tiền hiển thị đúng với giá 0/null/dương.
+20. Remove product hoạt động.
+21. Clear all hỏi confirmation.
+22. Customer selector hoạt động.
+23. Multiple order switch không leak state.
+24. Close draft order có confirm.
+25. Submit sale tạo voucher và payload không có field tiền.
+26. Nếu refresh tồn lỗi sau success, UI không báo sale failed.
+27. Public Lookup không bị ảnh hưởng.

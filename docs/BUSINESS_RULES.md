@@ -14,7 +14,7 @@ Hệ thống phục vụ cửa hàng linh kiện PC:
 - Quản lý khách hàng, nhà cung cấp.
 - Xem lịch sử phiếu nhập / phiếu bán.
 
-Hiện tại admin product API và Product Admin UI đã có `sale_price` optional/nullable để lưu giá bán mặc định của sản phẩm. Backend bulk stock-out snapshot giá này vào phiếu bán, nhưng frontend POS chưa hiển thị/tính tiền và hệ thống chưa có thanh toán, công nợ hoặc báo cáo tài chính.
+Admin product API và Product Admin UI có `sale_price` optional/nullable để lưu giá bán mặc định. POS hiển thị giá, thành tiền và tổng tiền dạng chỉ đọc; backend bulk stock-out luôn tự lấy giá sản phẩm để snapshot và tính lại. Hệ thống chưa có giá nhập, giảm giá, thanh toán, công nợ hoặc báo cáo tài chính.
 
 Hiện tại **không** có:
 
@@ -96,7 +96,7 @@ new.ram.ddr4.8gb
 - Backend snapshot giá bán mặc định vào `stock_voucher_items` cho phiếu bán. Việc snapshot này không thay đổi quy tắc trừ tồn.
 - Serial/Ghi chú bán hàng theo từng dòng là dữ liệu riêng của dòng phiếu, tách khỏi nhóm bảo hành/tồn kho. Từ Task 7C, POS có ô Serial/Ghi chú theo từng dòng cart và backend bulk stock-out lưu optional `sale_note` vào `stock_voucher_items.sale_note_snapshot`.
 - `sale_note` không ảnh hưởng tồn kho, không thay thế `warranty_note_snapshot` và không được ghi vào `stock_transactions.note`.
-- Chi tiết phiếu và mẫu in chưa hiển thị sale note cho đến task sau.
+- Chi tiết phiếu và mẫu in phiếu bán hiển thị sale note riêng dưới tên sản phẩm khi có dữ liệu.
 - Chưa có thanh toán, giảm giá, công nợ, hóa đơn hoặc báo cáo tài chính.
 - Phiếu bán không phải hóa đơn thanh toán.
 
@@ -133,7 +133,7 @@ new.ram.ddr4.8gb
 - UI không hiển thị tất cả sản phẩm khi ô tìm kiếm trống.
 - Public search dùng để tra theo tên sản phẩm, SKU hoặc ghi chú bảo hành.
 - Không hiển thị:
-  - giá,
+  - giá hoặc dữ liệu tiền,
   - admin actions,
   - khách hàng/nhà cung cấp,
   - lịch sử giao dịch nội bộ.
@@ -142,6 +142,7 @@ new.ram.ddr4.8gb
 
 - Admin login bằng username/password.
 - Admin login được giới hạn 10 request trong 15 phút theo IP. Các endpoint refresh/logout và API khác không dùng limiter này.
+- Sau Nginx, Express chỉ tin proxy loopback; rate limiter dùng IP đã được Express chuẩn hóa từ proxy tin cậy.
 - Password lưu bằng bcrypt hash.
 - Access token dùng JWT.
 - Refresh token được hash trong database và rotate khi refresh.
@@ -152,7 +153,7 @@ new.ram.ddr4.8gb
 
 Không thêm các mảng sau nếu chưa có yêu cầu phase riêng:
 
-- price/pricing,
+- giá nhập hoặc sửa giá trực tiếp tại POS,
 - payment,
 - debt/công nợ,
 - invoice,

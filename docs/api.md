@@ -66,7 +66,7 @@ GET /public/products/:sku/inventory
 GET /public/categories
 ```
 
-Public lookup không yêu cầu login và không trả price/payment/debt/admin actions.
+Public lookup không yêu cầu login và không trả `sale_price`, `unit_price`, `line_total`, `total_amount`, `sale_note`, payment/debt hoặc admin actions.
 
 ## 3. Auth admin
 
@@ -81,6 +81,8 @@ Ghi chú:
 
 - Login bằng username/password.
 - `POST /admin/auth/login` giới hạn 10 request trong 15 phút theo IP; request thứ 11 trong cùng cửa sổ trả HTTP 429.
+- Lỗi giới hạn dùng code `AUTH_LOGIN_RATE_LIMITED` và không lộ stack trace/secret.
+- Production nhận IP client qua Nginx với Express `trust proxy` đặt là `loopback`.
 - Rate limit chỉ áp dụng cho login, không áp dụng cho refresh/logout hoặc API khác.
 - Refresh token được rotate.
 - Logout revoke refresh token.
@@ -292,7 +294,7 @@ Không dùng các route batch làm workflow chính cho POS/stock-in hiện tại
 ## 15. Nguyên tắc thay đổi API
 
 - Không đổi payload nhập/xuất tồn nếu chưa có phase riêng.
-- Public lookup không trả price/payment/debt/invoice/admin actions.
+- Public lookup không trả giá, dữ liệu tiền, sale note, payment/debt/invoice hoặc admin actions.
 - Stock-in không có giá nhập trong Phase 2A.
 - Stock-out/voucher APIs chỉ snapshot giá bán mặc định theo Phase 2A; không thêm payment/debt/discount/invoice nếu chưa có task được duyệt rõ.
 - Admin product API được phép lưu giá bán mặc định qua `sale_price`.

@@ -1,320 +1,188 @@
-﻿# PROJECT_STATUS.md
-
 # VI TÍNH PHƯỚC TÀI POS - Trạng thái hiện tại
 
-Tài liệu này mô tả trạng thái thực tế của dự án ở thời điểm hiện tại. Dùng để khôi phục context cho Codex, kiểm tra deploy và tránh nhầm giữa tính năng đã có với backlog.
+Cập nhật: **19/06/2026**
 
-## 1. Technology
+## 1. Trạng thái sản phẩm
 
-Frontend:
+Hệ thống đang ở giai đoạn **Production trial / Chạy thử thực tế tại cửa hàng** trên Ubuntu Server tự host.
 
-- React 18
-- Vite
-- React Router
-- TailwindCSS
-- API client có refresh token flow
-- localStorage dùng cho token và recent items
+Trong 1-2 tuần tiếp theo:
 
-Backend:
+- Không mở thêm tính năng lớn.
+- Theo dõi lỗi phát sinh trong thao tác thật.
+- Ưu tiên bán hàng, tồn kho, public lookup, khách hàng, Serial/Ghi chú, phiếu, lịch sử, backup, đăng nhập và bảo mật.
+- Chỉ sửa bug thật hoặc điểm UX gây nhầm.
 
-- Node.js
-- Express
-- MySQL
-- JWT authentication
-- Refresh token
-- bcrypt
-- dotenv
-- cors / helmet / morgan
+Định hướng vẫn là **POS First, Offline First, Self-hosted, Inventory supports sales, Sapo-inspired, Not an ERP**.
 
-Database:
+## 2. Production đã xác nhận
 
-- MySQL
-- Migration scripts trong `database/migrations`
-- Schema trong `database/schema/schema.sql`
-- Seed admin/category qua `backend/scripts/seed.js`
-- Schema Phase 2A, backend snapshot giá phiếu bán và Product Add/Edit UI cho giá bán mặc định đã được chuẩn bị. Backend bulk stock-out đã lưu và đọc `stock_voucher_items.sale_note_snapshot`; POS UI và chi tiết phiếu bán đã hiển thị Serial/Ghi chú bán hàng từng dòng.
+- Domain: `https://vitinhphuoctai.duckdns.org`
+- Server: Ubuntu Server tại cửa hàng
+- Repo: `/opt/linhkienpc/linhkienpc`
+- Branch deploy: `codex-dev`
+- Frontend: Nginx
+- Backend: PM2 process `linhkienpc-api`
+- Backend bind: `127.0.0.1:3000`
+- Database: MySQL localhost
+- HTTPS: Let's Encrypt/Certbot
+- `certbot renew --dry-run`: đã thành công
+- Certbot timer: đang hoạt động
+- DuckDNS: cron cập nhật mỗi 5 phút
 
-## 2. Deployment Status
+Firewall:
 
-Trạng thái theo project memory:
+- SSH chỉ cho phép từ LAN.
+- Cổng 80/443 mở public.
+- Cổng 3000/3306 không mở public.
 
-- Hệ thống đã chạy trên Ubuntu Server với dữ liệu thật.
-- Server dùng cho production/test nội bộ tại cửa hàng.
-- Frontend phục vụ bằng Nginx.
-- Backend chạy bằng PM2.
-- Database là MySQL.
-- Branch deploy/dev chính: `codex-dev`.
-
-Thông tin server:
-
-- Hostname: `linhkienpc`
-- User: `vitinhphuoctai`
-- IP nội bộ tĩnh: `192.168.1.50`
-- Project path: `/opt/linhkienpc/linhkienpc`
-
-Backup database:
+## 3. Backup
 
 - Script: `/home/vitinhphuoctai/backup_linhkienpc.sh`
-- Backup tự động hằng ngày lúc 23:00
-- Thư mục backup: `/home/vitinhphuoctai/backups`
-- Retention hiện tại: 14 ngày
+- Thư mục: `/home/vitinhphuoctai/backups`
+- Log cron: `/home/vitinhphuoctai/backup.log`
+- Lịch: 23:00 hằng ngày
+- Retention: 14 ngày
+- Cron đã tạo được backup có dữ liệu.
 
-Local development:
+Việc tạo backup đã được xác nhận. Quy trình restore hoàn chỉnh chưa được ghi nhận là đã diễn tập thành công, vì vậy không được xem restore là đã kiểm chứng.
 
-- Windows path: `C:\Users\Admin\Documents\Codex\linhkienpc`
-- Frontend dev: `http://localhost:5173`
-- Local dev nên dùng local backend/database trừ khi cố ý trỏ về server thật.
+## 4. Bảo mật đã hoàn thành
 
-## 3. Current Working Routes
+- Đã đổi mật khẩu MySQL sau khi secret cũ từng xuất hiện trong image.
+- Đã đổi mật khẩu Admin.
+- Đã loại bỏ mật khẩu Admin hard-code khỏi source.
+- `DEFAULT_ADMIN_PASSWORD` chỉ lấy từ environment.
+- Seed không reset mật khẩu khi admin đã tồn tại.
+- Nếu chưa có admin và thiếu `DEFAULT_ADMIN_PASSWORD`, seed báo lỗi rõ ràng.
+- Backend hỗ trợ `HOST`; production dùng `HOST=127.0.0.1`.
+- `app.set("trust proxy", "loopback")` để lấy IP qua Nginx loopback.
+- `POST /api/v1/admin/auth/login` giới hạn 10 request/15 phút/IP.
+- Request vượt giới hạn trả HTTP 429 với code `AUTH_LOGIN_RATE_LIMITED`.
+- Limiter không áp dụng cho public lookup, refresh, logout, POS, products hoặc API admin khác.
 
-Public:
+Rate limiter hiện dùng memory store, phù hợp với một PM2 instance. Nếu chuyển sang cluster/nhiều instance cần shared store như Redis.
 
-- `/` - Public Lookup, không cần login
+## 5. Modules đang hoạt động
 
-Admin:
+### Public Lookup
 
-- `/admin/login` - đăng nhập quản trị
-- `/admin` - redirect về `/admin/stock-in`
-- `/admin/products` - danh sách sản phẩm
-- `/admin/products/new` - thêm sản phẩm
-- `/admin/products/:id/edit` - sửa sản phẩm
-- `/admin/stock-in` - nhập hàng bulk
-- `/admin/stock-out` - Bán tại quầy / POS full-screen
-- `/admin/inventory-check` - kiểm hàng / điều chỉnh tồn thực tế
-- `/admin/customers` - khách hàng
-- `/admin/customers/:id` - chi tiết khách hàng
-- `/admin/suppliers` - nhà cung cấp
-- `/admin/transaction-history` - danh sách phiếu
-- `/admin/transaction-history/:voucherId` - chi tiết phiếu
-- `/admin/transaction-history/:voucherId/print` - xem trước mẫu in phiếu bán
+- Route `/`, không cần login.
+- Tìm theo tên, SKU và ghi chú bảo hành.
+- Hiển thị tổng tồn và nhóm bảo hành.
+- Không trả `sale_price`, dữ liệu tiền, `sale_note` hoặc admin actions.
 
-Legacy/redirect:
+### Product Admin
 
-- `/admin/inventory-workbench` redirect về `/admin/stock-in`
-- `/admin/stock-out-bulk` redirect về `/admin/stock-out`
-- `/admin/stock-in-single` và `/admin/stock-out-single` vẫn còn page cũ, không phải hướng UI chính.
+- List, search, filter, pagination.
+- Add/edit, activate/deactivate.
+- SKU validation và duplicate handling.
+- Giá bán mặc định `sale_price` optional/nullable.
+- Product list và form hiển thị/quản lý giá bán.
 
-## 4. Completed / Working Modules
+### Stock In
 
-### Public Lookup - Working and polished
+- Bulk nhập hàng.
+- Nhà cung cấp optional.
+- Số lượng và nhóm bảo hành/ghi chú.
+- Tồn tăng và tạo phiếu nhập.
+- Chưa có giá nhập, thanh toán hoặc công nợ.
 
-- Route `/`
-- Không yêu cầu login
-- Search theo tên sản phẩm, SKU và ghi chú bảo hành nếu backend hỗ trợ
-- Empty search không show toàn bộ sản phẩm
-- Có search history localStorage
-- Result card hiển thị total quantity
-- Nhóm bảo hành / ghi chú expandable
-- Single result auto-expand
-- Copy product name
-- Mobile-friendly
-- Không có giá/payment/debt/admin actions
+### POS / Stock Out
 
-### Admin Authentication - Working
+- Full-screen `/admin/stock-out`.
+- Search, recent products, customer selector và multi-order.
+- Merge theo SKU + nhóm bảo hành.
+- Giá bán, đơn giá, thành tiền và tổng tiền chỉ đọc.
+- Serial/Ghi chú riêng theo từng dòng.
+- Backend tự lấy `products.sale_price`, snapshot tiền và sale note.
+- Submit không gửi `unit_price`, `line_total` hoặc `total_amount`.
+- Trừ tồn và rollback vẫn theo logic inventory hiện có.
 
-- Route `/admin/login`
-- Protected admin routes
-- JWT access token + refresh token
-- Token lưu trong localStorage
-- Sai mật khẩu có thông báo rõ
-- Backend giới hạn riêng Admin login ở mức 10 request / 15 phút / IP; refresh, logout và API khác không bị giới hạn này
+### Inventory Check
 
-### Products - Working and polished
+- Tìm sản phẩm, xem tồn theo nhóm.
+- Chuyển nhóm ghi chú và điều chỉnh số lượng có lý do.
+- Chưa phải workflow phiếu kiểm kê ERP đầy đủ.
 
-- Danh sách sản phẩm
-- Search/filter/pagination
-- Product list hiển thị giá bán mặc định nếu đã thiết lập
-- Add product page
-- Edit product page
-- Product Add/Edit UI hỗ trợ nhập `sale_price` optional/nullable cho giá bán mặc định
-- Activate/deactivate/restore
-- SKU validation
-- Duplicate SKU error handling
-- Backend admin product API đã hỗ trợ `sale_price` nullable cho giá bán mặc định
-- UI Sapo-inspired full page
-- Wording visible: `Thêm sản phẩm`, `Sửa sản phẩm`, `Loại sản phẩm`
-- API/database nội bộ vẫn dùng `category` / `category_id`
-- SKU helper ngắn, auto lowercase khi nhập
+### Customers / Suppliers
 
-### Stock In / Nhập hàng - Working and polished
+- List, search, add/edit, activate/deactivate.
+- Các field thực tế: tên, số điện thoại, địa chỉ.
+- Không có công nợ.
 
-- Route `/admin/stock-in`
-- Bulk stock-in
-- Chọn nhà cung cấp
-- Search/add nhiều sản phẩm
-- Mỗi dòng có số lượng và nhóm bảo hành / ghi chú
-- Product dropdown có `+ Thêm mới sản phẩm`
-- Submit gọi backend bulk stock-in hiện có
-- Tạo stock voucher theo logic backend
-- Không có giá nhập, thanh toán, công nợ, tổng tiền
+### Voucher History / Detail / Print
 
-### Stock Out / POS / Bán tại quầy - Working and under real-world testing
+- Danh sách phiếu nhập và phiếu bán.
+- Detail phiếu bán dùng snapshot tên, SKU, nhóm bảo hành, sale note và tiền.
+- Phiếu cũ thiếu snapshot vẫn mở được.
+- Mẫu in A4 chỉ hỗ trợ phiếu OUT/Bán hàng.
+- Nút `In phiếu` dùng `window.print()`, không tạo hoặc lưu PDF.
+- Chưa có nút Bán & In tại POS và chưa có cấu hình logo/mẫu.
 
-- Route `/admin/stock-out`
-- Full-screen POS, không dùng AdminLayout
-- Home button về `/admin`
-- Product search trên top bar
-- Recent products
-- Product dropdown compact
-- Chọn nhóm bảo hành / ghi chú trước khi thêm
-- Add vào cart với quantity mặc định 1
-- Same SKU + same note group merge/increase quantity
-- Cart table compact
-- Chỉnh quantity trực tiếp trong cart
-- Customer selector bên phải
-- Multi-order local state
-- Close order có confirm nếu đơn chưa lưu
-- Submit gọi bulk stock-out hiện có
-- Backend tạo voucher
-- Backend snapshot `products.sale_price` vào `stock_voucher_items` và `stock_vouchers.total_amount`
-- POS đã có ô Serial/Ghi chú theo từng dòng cart, gửi `sale_note` nullable cho backend; backend lưu vào `stock_voucher_items.sale_note_snapshot` và voucher detail API trả `sale_note` nullable.
-- Chi tiết phiếu bán và mẫu in phiếu bán đã hiển thị sale note dưới tên sản phẩm khi dòng phiếu có dữ liệu.
-- POS hiển thị giá bán mặc định trong dropdown, đơn giá trong cart, thành tiền từng dòng và tổng tiền đơn hiện tại
-- Giá trong POS vẫn chỉ đọc; backend vẫn tự snapshot và tính lại tiền khi submit
-- Chi tiết phiếu bán hiển thị đơn giá, thành tiền và tổng tiền từ snapshot backend
-- Có double-submit guard
-- Nếu sale thành công nhưng reload tồn kho lỗi, UI không báo “bán thất bại” sai
-- Phiếu nhập chưa có giá nhập; POS chưa có sửa giá trực tiếp, giảm giá, thanh toán, công nợ hoặc hóa đơn
+## 6. Kiểm thử production đã xác nhận
 
-### Inventory Check / Kiểm hàng - Working
+- Admin login.
+- Public Lookup qua HTTPS.
+- Public categories trả HTTP 200.
+- Bán nhiều sản phẩm và tồn giảm đúng.
+- Public Lookup phản ánh tồn mới.
+- History, detail và print voucher.
+- Serial/Ghi chú bán hàng.
+- Phase 2A sale price snapshot.
+- Nginx reverse proxy API.
+- PM2 restart.
+- Backend vẫn chỉ nghe localhost sau restart.
+- Certbot renewal dry run.
+- Backup cron tạo file backup có dữ liệu lúc 23:00.
 
-- Route `/admin/inventory-check`
-- Search/select product
-- Xem total stock
-- Xem nhóm bảo hành / ghi chú
-- Tăng/giảm số lượng theo nhóm
-- Lý do điều chỉnh
-- Quantity adjustment history
-- Missing product action: `+ Thêm sản phẩm mới`
-- Đây là direct inventory adjustment hiện tại, chưa phải hệ thống phiếu kiểm kê/draft/cân bằng đầy đủ.
+## 7. Routes chính
 
-### Customers / Khách hàng - Working and simplified
+```text
+/
+/admin/login
+/admin/products
+/admin/products/new
+/admin/products/:id/edit
+/admin/stock-in
+/admin/stock-out
+/admin/inventory-check
+/admin/customers
+/admin/customers/:id
+/admin/suppliers
+/admin/transaction-history
+/admin/transaction-history/:voucherId
+/admin/transaction-history/:voucherId/print
+```
 
-- Customer list
-- Search
-- Add/edit
-- Activate/deactivate/restore
-- Fields đang dùng/lưu: name, phone, address
-- POS customer selector
-- Recent customers
-- Inactive customers không nên xuất hiện trong selector/recent
-- Không document fake fields như nhóm khách hàng, tags, công nợ, province/ward, tax nếu chưa implement.
+## 8. Chưa có / đang hoãn
 
-### Suppliers / Nhà cung cấp - Working and simplified
+- Giá nhập.
+- Sửa giá trực tiếp tại POS.
+- Giảm giá.
+- Luồng thanh toán đầy đủ.
+- Khách đưa/tiền thừa.
+- Công nợ khách hàng/nhà cung cấp.
+- Hóa đơn/invoice.
+- Báo cáo doanh thu, lợi nhuận và báo cáo tài chính.
+- Quản lý serial riêng từng thiết bị.
+- Draft persistence cho multi-order.
+- Mẫu in phiếu nhập.
+- Cấu hình logo và mẫu in.
 
-- Supplier list
-- Search
-- Add/edit
-- Activate/deactivate/restore
-- Fields đang dùng/lưu: name, phone, address
-- Stock In supplier selector
-- Recent suppliers
-- Inactive suppliers không nên xuất hiện trong selector/recent
-- Không document fake fields.
+## 9. Rủi ro cần theo dõi
 
-### Transaction History / Stock Vouchers - Working and polished
+- Rate limiter memory store chỉ phù hợp một backend instance.
+- Server tự host phụ thuộc điện và Internet tại cửa hàng.
+- Cần theo dõi `backup.log`, dung lượng backup và log ứng dụng.
+- Restore database chưa được xác nhận bằng một buổi diễn tập hoàn chỉnh.
+- Cần kiểm tra dung lượng đĩa định kỳ.
+- Cần tiếp tục xác nhận PM2, Nginx, MySQL, Certbot timer và cron tự lên sau reboot.
 
-- Route `/admin/transaction-history`
-- Voucher-first list
-- Search theo mã phiếu, sản phẩm, khách hàng, nhà cung cấp
-- Filter theo loại phiếu: tất cả / nhập hàng / bán hàng
-- Detail route riêng: `/admin/transaction-history/:voucherId`
-- Detail page không còn modal
-- Back link: `← Quay lại danh sách phiếu`
-- Print route riêng: `/admin/transaction-history/:voucherId/print`
-- Hiển thị voucher code, loại phiếu, ngày tạo, người tạo, đối tác, tổng số lượng, số dòng, ghi chú và dòng sản phẩm
-- Chi tiết phiếu bán và mẫu in A4 dùng snapshot giá từ backend nếu có
-- Mẫu in A4 hiện chỉ hỗ trợ phiếu OUT/Bán hàng; nút `In phiếu` gọi hộp thoại in trình duyệt nhưng không lưu PDF/file
-- Chưa có nút Bán & In trong POS và chưa có cấu hình logo/mẫu in
-- Không có payment/debt fields
-- Stock voucher không phải invoice
+## 10. Ưu tiên thực tế tiếp theo
 
-## 5. Current UI Status
-
-Đã polish theo hướng Sapo-inspired:
-
-- Product list/add/edit
-- Stock In
-- POS / Stock Out
-- Inventory Check
-- Customer/Supplier list/forms
-- Transaction History list/detail
-- Public Lookup
-
-Mục tiêu UI hiện tại là gọn, nhanh, ít trường giả, không ERP-style.
-
-## 6. Current Business Rules
-
-- SKU phải unique.
-- SKU nên dùng chữ thường, số và dấu chấm.
-- Không cho duplicate SKU.
-- Product inactive không xuất hiện trong selector mặc định.
-- Customer/Supplier inactive không xuất hiện trong selector/recent.
-- Không sửa tồn kho trực tiếp ngoài flow stock-in, stock-out hoặc inventory-check adjustment.
-- Stock operation dựa trên SKU + nhóm bảo hành / ghi chú.
-- Public Lookup không login.
-- Public Lookup không show all products khi input rỗng.
-- POS là `Bán tại quầy`, không gọi là `Xuất & Giao hàng`.
-- Không thêm price/payment/debt/invoice khi chưa được duyệt.
-
-## 7. Current Limitations
-
-- Product Add/Edit UI đã cho quản lý giá bán mặc định; frontend POS chưa hiển thị hoặc cho sửa giá khi bán.
-- Chưa có giá nhập.
-- Chưa có thanh toán.
-- Chưa có công nợ khách hàng/nhà cung cấp.
-- Chưa có invoice/hóa đơn.
-- Chưa có báo cáo tài chính.
-- Chưa có tags/aliases/compatibility search.
-- Inventory Check chưa phải hệ thống phiếu kiểm kê đầy đủ.
-- Mẫu in A4 phiếu bán đã có route riêng và nút `In phiếu`; chưa có nút Bán & In tại POS, chưa có cấu hình logo/mẫu và chưa hỗ trợ mẫu in phiếu nhập.
-- Serial/Ghi chú bán hàng từng dòng đã có schema snapshot, backend/API, POS input, hiển thị trong chi tiết phiếu bán và mẫu in phiếu bán.
-- POS warranty group vẫn chọn trước khi thêm vào cart; chuyển warranty selection vào cart là future work.
-- Không có draft persistence/localStorage cho multi-order.
-
-## 8. Known Backlog
-
-Backlog sau khi chạy ổn định:
-
-- Dùng giá bán mặc định `sale_price` trong POS.
-- Hoàn thiện luồng in phiếu bán từ voucher nếu thực tế cần, bao gồm nút điều hướng/in sau khi bán.
-- Nghiên cứu địa chỉ khách hàng kiểu Province/District/Ward/Detailed address.
-- Customer warranty tracking/history view tốt hơn.
-- Search tags / aliases / compatibility.
-- Draft persistence cho multi-order nếu thực tế cần.
-- Báo cáo tồn kho cơ bản.
-
-Backlog tài chính chỉ làm sau:
-
-- Giá nhập
-- Sửa giá trực tiếp trong POS
-- Thanh toán
-- Công nợ
-- Sổ quỹ/kế toán
-- Báo cáo doanh thu/lợi nhuận
-
-## 9. Production/Test Workflow
-
-Quy trình deploy an toàn:
-
-1. Develop và test trên Windows.
-2. Commit và push branch `codex-dev`.
-3. Backup database server.
-4. SSH vào Ubuntu server.
-5. Kiểm tra `git status`.
-6. `git pull`.
-7. Build frontend.
-8. Restart Nginx.
-9. Restart PM2 chỉ khi backend thay đổi.
-10. Test các route quan trọng: `/`, `/admin/login`, `/admin/stock-in`, `/admin/stock-out`, `/admin/products`, `/admin/inventory-check`, `/admin/transaction-history`.
-
-## 10. Next Practical Priorities
-
-Ưu tiên gần nhất:
-
-1. Deploy frontend polish lên Ubuntu sau khi backup.
-2. Test POS với dữ liệu thật tại cửa hàng.
-3. Theo dõi lỗi thao tác nhanh: search, add, quantity, customer, submit.
-4. Xác nhận Stock In và Public Lookup không bị ảnh hưởng.
-5. Nghiên cứu in phiếu dựa trên stock voucher hiện có.
-6. Chỉ sửa UI/UX hoặc bug thật trước khi mở thêm feature lớn.
+1. Chạy thử ổn định 1-2 tuần.
+2. Ghi lại lỗi theo bước tái hiện và voucher/SKU liên quan.
+3. Kiểm tra backup hằng ngày và dung lượng đĩa.
+4. Theo dõi PM2/Nginx/MySQL sau reboot hoặc mất điện.
+5. Chỉ mở phase mới sau khi các flow bán, tồn và khôi phục vận hành đủ tin cậy.

@@ -1,8 +1,39 @@
-﻿# CHANGELOG_POS.md
-
 # VI TÍNH PHƯỚC TÀI POS - Changelog theo milestone
 
 Tài liệu này ghi lại các mốc thay đổi lớn của hướng POS-first. Không invent ngày nếu không có trong repo/history; các mục được tổ chức theo milestone.
+
+## 2026-06-19 - Production trial tại cửa hàng
+
+Hệ thống đã được đưa vào chạy thử thực tế:
+
+- Production domain: `https://vitinhphuoctai.duckdns.org`.
+- Ubuntu Server tự host tại cửa hàng.
+- Nginx phục vụ frontend và reverse proxy API.
+- HTTPS Let's Encrypt hoạt động; renewal dry run thành công và Certbot timer active.
+- Backend chạy bằng PM2 process `linhkienpc-api`, chỉ bind `127.0.0.1:3000`.
+- MySQL chỉ truy cập localhost; UFW không mở public cổng 3000/3306.
+- DuckDNS cron cập nhật mỗi 5 phút.
+- Backup MySQL chạy 23:00 hằng ngày, giữ 14 ngày và ghi log vào `/home/vitinhphuoctai/backup.log`.
+- Backup cron đã tạo file có dữ liệu; restore end-to-end chưa được xác nhận là đã diễn tập.
+
+Bảo mật:
+
+- Đã đổi mật khẩu MySQL và Admin sau khi secret cũ bị lộ trong image.
+- Đã bỏ mật khẩu Admin hard-code.
+- Seed chỉ tạo admin mới khi có `DEFAULT_ADMIN_PASSWORD` và không reset admin hiện có.
+- Admin login có rate limit 10 request/15 phút/IP; request vượt giới hạn trả HTTP 429.
+- Express trust proxy giới hạn `loopback` để nhận IP thật qua Nginx.
+
+Production smoke test đã pass:
+
+- Admin login và public lookup qua HTTPS.
+- Public categories.
+- Bán nhiều sản phẩm, trừ tồn và public lookup phản ánh tồn mới.
+- Snapshot giá Phase 2A và Serial/Ghi chú theo dòng.
+- Voucher history, detail và print A4.
+- Nginx API proxy, PM2 restart, Certbot renewal dry run và backup cron.
+
+Trạng thái tiếp theo: giữ ổn định 1-2 tuần, không mở tính năng tài chính lớn.
 
 ## 1. Direction Reset: Inventory First -> POS First
 
@@ -13,7 +44,7 @@ Quyết định chính:
 - Inventory hỗ trợ bán hàng, không dẫn dắt workflow.
 - `/admin/stock-out` trở thành **Bán tại quầy**.
 - Public Lookup vẫn là tính năng cốt lõi, không login.
-- Không thêm price/payment/debt/invoice trong giai đoạn ổn định POS.
+- Không mở rộng payment/debt/invoice trong giai đoạn ổn định POS.
 - Không biến dự án thành ERP.
 
 ## 2. Admin Authentication and Public Lookup
@@ -70,7 +101,7 @@ Các đợt polish đã làm dropdown giống POS autocomplete hơn:
 Quyết định quan trọng:
 
 - Không thêm keyboard shortcut UI kiểu Sapo nếu chưa support thật.
-- Không hiện price/payment trong dropdown.
+- Dropdown chỉ hiển thị giá bán mặc định dạng chỉ đọc; không có payment/debt.
 
 ## 5. Warranty / Note Group Workflow
 
@@ -126,7 +157,7 @@ Thay đổi chính:
 Quyết định:
 
 - Quantity chỉnh trong cart, không chỉnh trong dropdown.
-- Line note/serial UI bị ẩn trước deploy vì backend chưa persist.
+- Serial/Ghi chú theo dòng hiện đã được khôi phục và persist bằng `sale_note_snapshot`.
 
 ## 7. Customer Selector
 
@@ -338,7 +369,7 @@ Thay đổi chính:
 Quyết định:
 
 - Stock voucher không phải hóa đơn.
-- Không hiển thị price/payment/debt.
+- Phiếu OUT hiện hiển thị snapshot giá và sale note; vẫn không có payment/debt.
 
 ## 15. Public Lookup Polish
 
@@ -362,15 +393,15 @@ Không hiển thị:
 
 ## 16. Ubuntu Server Deployment
 
-Dự án đã được đưa lên Ubuntu Server để test với dữ liệu thật.
+Dự án đã được đưa lên Ubuntu Server để chạy thử production với dữ liệu thật.
 
 Thông tin theo project memory:
 
 - Hostname: `linhkienpc`
 - User: `vitinhphuoctai`
-- IP: `192.168.1.50`
+- Domain: `https://vitinhphuoctai.duckdns.org`
 - Project path: `/opt/linhkienpc/linhkienpc`
-- Backend: PM2
+- Backend: PM2 process `linhkienpc-api`, bind `127.0.0.1:3000`
 - Frontend: Nginx
 - Database: MySQL
 - Branch: `codex-dev`
@@ -385,6 +416,7 @@ Deploy cần cẩn trọng vì database đã có dữ liệu thật.
 - Lịch: mỗi ngày 23:00
 - Thư mục: `/home/vitinhphuoctai/backups`
 - Retention: 14 ngày
+- Log: `/home/vitinhphuoctai/backup.log`
 
 Trước khi deploy thay đổi lớn, vẫn nên backup thủ công.
 
@@ -392,7 +424,8 @@ Trước khi deploy thay đổi lớn, vẫn nên backup thủ công.
 
 Deferred/backlog, không xem là completed:
 
-- Giá nhập / giá bán
+- Giá nhập
+- Sửa giá trực tiếp tại POS
 - Thanh toán
 - Công nợ khách hàng / nhà cung cấp
 - Hóa đơn / invoice

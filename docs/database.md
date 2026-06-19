@@ -63,7 +63,7 @@ Trường chính:
 - `name`.
 - `category_id`.
 - `spec_summary`.
-- `sale_price` nullable, chuẩn bị Phase 2A cho giá bán mặc định.
+- `sale_price` nullable, lưu giá bán mặc định dùng trong Phase 2A.
 - `is_active`.
 
 Quy tắc SKU hiện tại:
@@ -210,17 +210,24 @@ Không xóa các bảng legacy nếu chưa có migration/phase dọn riêng.
 016_create_stock_voucher_history.sql
 017_create_inventory_quantity_adjustments.sql
 018_add_phase_2a_sale_price_snapshot_schema.sql
+019_add_sale_note_snapshot_to_stock_voucher_items.sql
 ```
 
 ## 8. Backup/restore
 
 Trước khi deploy hoặc chạy migration trên server thật, luôn backup MySQL.
 
-Ví dụ backup server đã từng được tạo:
+Production hiện dùng:
 
 ```text
-~/backups/linhkienpc_before_codex_20260611_1546.sql
+Script:    /home/vitinhphuoctai/backup_linhkienpc.sh
+Directory: /home/vitinhphuoctai/backups
+Log:       /home/vitinhphuoctai/backup.log
+Schedule:  23:00 daily
+Retention: 14 days
 ```
+
+Backup cron đã tạo file có dữ liệu. Restore end-to-end chưa được xác nhận là đã diễn tập thành công.
 
 Không commit file backup chứa dữ liệu thật vào repo.
 
@@ -231,7 +238,7 @@ Schema đã chuẩn bị cho Phase 2A:
 - giá bán mặc định trên `products.sale_price`,
 - snapshot giá bán/tổng tiền phiếu bán qua `stock_vouchers.total_amount` và `stock_voucher_items`.
 
-Backend bulk stock-out đã sử dụng các field này để snapshot giá bán vào phiếu bán. Frontend POS chưa hiển thị hoặc cho sửa giá, và hệ thống chưa có thanh toán/công nợ/hóa đơn.
+Backend bulk stock-out sử dụng các field này để snapshot giá bán vào phiếu bán. POS hiển thị giá, thành tiền và tổng tiền dạng chỉ đọc nhưng không cho sửa giá. Hệ thống chưa có thanh toán/công nợ/hóa đơn.
 
 Chưa có schema cho:
 
