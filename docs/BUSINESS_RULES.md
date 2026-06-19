@@ -141,6 +141,7 @@ new.ram.ddr4.8gb
 ## 12. Auth admin
 
 - Admin login bằng username/password.
+- Admin login được giới hạn 10 request trong 15 phút theo IP. Các endpoint refresh/logout và API khác không dùng limiter này.
 - Password lưu bằng bcrypt hash.
 - Access token dùng JWT.
 - Refresh token được hash trong database và rotate khi refresh.

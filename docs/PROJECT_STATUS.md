@@ -117,6 +117,7 @@ Legacy/redirect:
 - JWT access token + refresh token
 - Token lưu trong localStorage
 - Sai mật khẩu có thông báo rõ
+- Backend giới hạn riêng Admin login ở mức 10 request / 15 phút / IP; refresh, logout và API khác không bị giới hạn này
 
 ### Products - Working and polished
 

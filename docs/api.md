@@ -80,6 +80,8 @@ GET  /admin/auth/me
 Ghi chú:
 
 - Login bằng username/password.
+- `POST /admin/auth/login` giới hạn 10 request trong 15 phút theo IP; request thứ 11 trong cùng cửa sổ trả HTTP 429.
+- Rate limit chỉ áp dụng cho login, không áp dụng cho refresh/logout hoặc API khác.
 - Refresh token được rotate.
 - Logout revoke refresh token.
 - `/admin/auth/me` cần access token.

@@ -8,6 +8,9 @@ const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
 
+// Nginx proxies to the backend over loopback and supplies X-Forwarded-For.
+app.set('trust proxy', 'loopback');
+
 app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
