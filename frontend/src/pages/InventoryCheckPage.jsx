@@ -4,6 +4,7 @@ import {
   adjustInventoryQuantity,
   getInventoryCheckProduct,
   listActiveProducts,
+  moveInventoryNoteGroup,
   searchInventoryCheckProducts
 } from "../services/inventoryOperations.service";
 import { RECENT_PRODUCTS_KEY, filterRecentItemsByAvailable, readRecentItems, saveRecentItem } from "../utils/recentItems";
@@ -37,6 +38,11 @@ function getQuantityAdjustBadgeClass(type) {
     : "bg-emerald-50 text-emerald-700 ring-emerald-100";
 }
 
+function normalizeNoteValue(value) {
+  if (value === NO_NOTE_VALUE) return "";
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
 export function InventoryCheckPage() {
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef(null);
@@ -52,6 +58,8 @@ export function InventoryCheckPage() {
   const [adjustQuantity, setAdjustQuantity] = useState("");
   const [adjustNoteGroup, setAdjustNoteGroup] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
+  const [moveToNote, setMoveToNote] = useState("");
+  const [moveFieldErrors, setMoveFieldErrors] = useState({});
 
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -127,6 +135,9 @@ export function InventoryCheckPage() {
   function resetQuantityForm() {
     setAdjustQuantity("");
     setAdjustReason("");
+    setAdjustNoteGroup("");
+    setMoveToNote("");
+    setMoveFieldErrors({});
   }
 
   async function loadProductDetail(sku, options = {}) {
@@ -177,6 +188,90 @@ export function InventoryCheckPage() {
     [noteGroups, adjustNoteGroup]
   );
 
+  function clearMoveFieldError(field) {
+    setMoveFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      return { ...prev, [field]: "" };
+    });
+  }
+
+  async function handleNoteMoveSubmit() {
+    const fieldErrors = {};
+    const numericQuantity = Number(adjustQuantity);
+
+    if (!selectedAdjustGroup) {
+      fieldErrors.source = "Vui lòng chọn nhóm hiện tại.";
+    }
+    if (!Number.isInteger(numericQuantity) || numericQuantity <= 0) {
+      fieldErrors.quantity = "Số lượng chuyển phải là số nguyên dương.";
+    } else if (selectedAdjustGroup && numericQuantity > Number(selectedAdjustGroup.quantity || 0)) {
+      fieldErrors.quantity = `Số lượng chuyển không được vượt quá ${selectedAdjustGroup.quantity}.`;
+    }
+
+    const fromNote = selectedAdjustGroup?.is_no_note ? "" : selectedAdjustGroup?.note || "";
+    const toNote = moveToNote.trim();
+    if (selectedAdjustGroup && normalizeNoteValue(fromNote) === normalizeNoteValue(toNote)) {
+      fieldErrors.destination = "Ghi chú mới phải khác nhóm hiện tại.";
+    }
+
+    if (Object.keys(fieldErrors).length) {
+      setMoveFieldErrors(fieldErrors);
+      return;
+    }
+
+    const sku = detail.product.sku;
+    const previousTotal = Number(detail.product.total_quantity || 0);
+    setIsSubmitting(true);
+    try {
+      const result = await moveInventoryNoteGroup({
+        sku,
+        from_note: fromNote,
+        to_note: toNote,
+        quantity: numericQuantity,
+        reason: adjustReason.trim() || undefined
+      });
+
+      setAdjustNoteGroup("");
+      setMoveToNote("");
+      setAdjustQuantity("");
+      setAdjustReason("");
+      setMoveFieldErrors({});
+
+      try {
+        const refreshed = await getInventoryCheckProduct(result?.product?.sku || sku);
+        setDetail(refreshed);
+        setSelectedSku(refreshed?.product?.sku || sku);
+        const currentTotal = Number(refreshed?.product?.total_quantity || previousTotal);
+        setSuccess(
+          `Đã chuyển ${numericQuantity} sản phẩm từ ${getGroupLabel(selectedAdjustGroup)} sang ${
+            toNote || "Không ghi chú"
+          }. Tổng tồn: ${currentTotal}.`
+        );
+      } catch {
+        setDetail(result || detail);
+        setSuccess(
+          `Đã chuyển nhóm ghi chú thành công nhưng chưa thể làm mới dữ liệu. Tổng tồn trước thao tác: ${previousTotal}.`
+        );
+      }
+    } catch (err) {
+      const code = err?.payload?.error?.code;
+      if (code === "SAME_NOTE_GROUP") {
+        setMoveFieldErrors((prev) => ({ ...prev, destination: "Ghi chú mới phải khác nhóm hiện tại." }));
+      } else if (code === "INSUFFICIENT_NOTE_GROUP_STOCK") {
+        setMoveFieldErrors((prev) => ({
+          ...prev,
+          quantity: "Số lượng chuyển vượt quá tồn của nhóm hiện tại."
+        }));
+      } else if (code === "SOURCE_NOTE_GROUP_NOT_FOUND") {
+        setMoveFieldErrors((prev) => ({ ...prev, source: "Nhóm hiện tại không còn tồn hoặc không tồn tại." }));
+      } else {
+        setError(err?.message || "Chuyển nhóm ghi chú thất bại.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleQuantitySubmit(event) {
     event.preventDefault();
     setError("");
@@ -184,6 +279,11 @@ export function InventoryCheckPage() {
 
     if (!detail?.product?.sku) {
       setError("Vui lòng chọn sản phẩm trước.");
+      return;
+    }
+
+    if (adjustmentType === "MOVE_NOTE") {
+      await handleNoteMoveSubmit();
       return;
     }
 
@@ -245,6 +345,7 @@ export function InventoryCheckPage() {
   }
 
   const recentQuantityAdjustments = detail?.recent_quantity_adjustments || [];
+  const recentNoteAdjustments = detail?.recent_adjustments || [];
 
   return (
     <section className="space-y-4">
@@ -372,7 +473,9 @@ export function InventoryCheckPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-semibold text-slate-900">Nhóm bảo hành / ghi chú</h3>
-                      <p className="mt-0.5 text-xs text-slate-500">Dùng để chọn đúng nhóm khi giảm tồn.</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Dùng để chọn đúng nhóm khi giảm tồn hoặc đổi ghi chú bảo hành.
+                      </p>
                     </div>
                     {/* TODO: hiển thị cảnh báo lệch tổng nhóm/tồn kho khi backend expose inventory_warning sau. */}
                   </div>
@@ -395,7 +498,11 @@ export function InventoryCheckPage() {
                   )}
                 </div>
 
-                <form className="space-y-3 border-t border-slate-200 px-4 py-4" onSubmit={handleQuantitySubmit}>
+                <form
+                  className="space-y-3 border-t border-slate-200 px-4 py-4"
+                  onSubmit={handleQuantitySubmit}
+                  noValidate
+                >
                   <div>
                     <h3 className="text-sm font-semibold text-slate-900">Điều chỉnh số lượng</h3>
                     <p className="mt-0.5 text-xs text-slate-500">Chọn loại điều chỉnh, nhập số lượng và nhóm bảo hành liên quan.</p>
@@ -412,10 +519,13 @@ export function InventoryCheckPage() {
                           setAdjustNoteGroup("");
                           setAdjustQuantity("");
                           setAdjustReason("");
+                          setMoveToNote("");
+                          setMoveFieldErrors({});
                         }}
                       >
                         <option value="INCREASE">Tăng tồn</option>
                         <option value="DECREASE">Giảm tồn</option>
+                        <option value="MOVE_NOTE">Đổi ghi chú bảo hành</option>
                       </select>
                     </div>
 
@@ -425,16 +535,27 @@ export function InventoryCheckPage() {
                         type="number"
                         min={1}
                         max={
-                          adjustmentType === "DECREASE" && selectedAdjustGroup
+                          ["DECREASE", "MOVE_NOTE"].includes(adjustmentType) && selectedAdjustGroup
                             ? selectedAdjustGroup.quantity
                             : undefined
                         }
                         step={1}
-                        className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-semibold tabular-nums outline-none focus:ring-2 focus:ring-brand-500"
+                        className={[
+                          "h-10 w-full rounded-md border px-3 text-sm font-semibold tabular-nums outline-none focus:ring-2",
+                          moveFieldErrors.quantity
+                            ? "border-red-400 focus:ring-red-500"
+                            : "border-slate-300 focus:ring-brand-500"
+                        ].join(" ")}
                         value={adjustQuantity}
-                        onChange={(event) => setAdjustQuantity(event.target.value)}
+                        onChange={(event) => {
+                          setAdjustQuantity(event.target.value);
+                          clearMoveFieldError("quantity");
+                        }}
                         placeholder="Nhập số lượng"
                       />
+                      {moveFieldErrors.quantity && (
+                        <p className="mt-1 text-xs font-medium text-red-600">{moveFieldErrors.quantity}</p>
+                      )}
                     </div>
                   </div>
 
@@ -455,7 +576,7 @@ export function InventoryCheckPage() {
                       />
                       <p className="mt-1 text-xs text-slate-500">Để trống nếu tăng vào nhóm Không ghi chú.</p>
                     </div>
-                  ) : (
+                  ) : adjustmentType === "DECREASE" ? (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">
                         Nhóm bảo hành / ghi chú *
@@ -473,6 +594,74 @@ export function InventoryCheckPage() {
                         ))}
                       </select>
                     </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">Nhóm hiện tại *</label>
+                        <select
+                          className={[
+                            "h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2",
+                            moveFieldErrors.source
+                              ? "border-red-400 focus:ring-red-500"
+                              : "border-slate-300 focus:ring-brand-500"
+                          ].join(" ")}
+                          value={adjustNoteGroup}
+                          onChange={(event) => {
+                            setAdjustNoteGroup(event.target.value);
+                            clearMoveFieldError("source");
+                            clearMoveFieldError("destination");
+                          }}
+                        >
+                          <option value="">-- Chọn nhóm nguồn --</option>
+                          {noteGroups.map((group) => (
+                            <option key={toGroupValue(group)} value={toGroupValue(group)}>
+                              {getGroupLabel(group)} - còn {group.quantity}
+                            </option>
+                          ))}
+                        </select>
+                        {moveFieldErrors.source && (
+                          <p className="mt-1 text-xs font-medium text-red-600">{moveFieldErrors.source}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">Ghi chú mới</label>
+                        <input
+                          list="inventory-note-group-options"
+                          className={[
+                            "h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2",
+                            moveFieldErrors.destination
+                              ? "border-red-400 focus:ring-red-500"
+                              : "border-slate-300 focus:ring-brand-500"
+                          ].join(" ")}
+                          value={moveToNote}
+                          onChange={(event) => {
+                            setMoveToNote(event.target.value);
+                            clearMoveFieldError("destination");
+                          }}
+                          autoCapitalize="off"
+                          autoCorrect="off"
+                          autoComplete="off"
+                          spellCheck={false}
+                          maxLength={500}
+                          placeholder="Ví dụ: BH 06/2027"
+                        />
+                        <datalist id="inventory-note-group-options">
+                          {noteGroups
+                            .filter((group) => !group.is_no_note && group.note)
+                            .map((group) => (
+                              <option key={toGroupValue(group)} value={group.note} />
+                            ))}
+                        </datalist>
+                        {moveFieldErrors.destination ? (
+                          <p className="mt-1 text-xs font-medium text-red-600">{moveFieldErrors.destination}</p>
+                        ) : (
+                          <p className="mt-1 text-xs text-slate-500">
+                            Có thể chọn nhóm hiện có, nhập ghi chú mới hoặc để trống để chuyển sang Không ghi chú.
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   )}
 
                   <div>
@@ -481,6 +670,7 @@ export function InventoryCheckPage() {
                       className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                       value={adjustReason}
                       onChange={(event) => setAdjustReason(event.target.value)}
+                      maxLength={500}
                       placeholder="Ví dụ: Tồn đầu kỳ, kiểm kho thiếu"
                     />
                   </div>
@@ -493,11 +683,15 @@ export function InventoryCheckPage() {
                     disabled={
                       isSubmitting ||
                       isLoadingDetail ||
-                      (adjustmentType === "DECREASE" && noteGroups.length === 0)
+                      (["DECREASE", "MOVE_NOTE"].includes(adjustmentType) && noteGroups.length === 0)
                     }
                     className="h-10 w-full rounded-md bg-brand-700 px-5 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSubmitting ? "Đang xử lý..." : "Lưu điều chỉnh"}
+                    {isSubmitting
+                      ? "Đang xử lý..."
+                      : adjustmentType === "MOVE_NOTE"
+                        ? "Xác nhận chuyển nhóm"
+                        : "Lưu điều chỉnh"}
                   </button>
                 </form>
               </>
@@ -505,6 +699,38 @@ export function InventoryCheckPage() {
           </div>
         </aside>
       </div>
+
+      {recentNoteAdjustments.length > 0 && (
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-900">Lịch sử chuyển nhóm ghi chú gần đây</h3>
+          <div className="mt-3 overflow-x-auto rounded-md border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <thead className="bg-slate-50 text-left text-slate-600">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Ngày giờ</th>
+                  <th className="px-3 py-2 font-medium">Từ nhóm</th>
+                  <th className="px-3 py-2 font-medium">Sang nhóm</th>
+                  <th className="px-3 py-2 font-medium">Số lượng</th>
+                  <th className="px-3 py-2 font-medium">Lý do</th>
+                  <th className="px-3 py-2 font-medium">Admin</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {recentNoteAdjustments.map((item) => (
+                  <tr key={item.id}>
+                    <td className="px-3 py-2 text-slate-700">{formatDateTime(item.occurred_at)}</td>
+                    <td className="px-3 py-2 text-slate-700">{formatWarrantyNote(item.from_note || "")}</td>
+                    <td className="px-3 py-2 text-slate-700">{formatWarrantyNote(item.to_note || "")}</td>
+                    <td className="px-3 py-2 font-semibold text-slate-800">{item.quantity}</td>
+                    <td className="px-3 py-2 text-slate-700">{item.reason || "-"}</td>
+                    <td className="px-3 py-2 text-slate-700">{item.created_by_admin?.username || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {recentQuantityAdjustments.length > 0 && (
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">

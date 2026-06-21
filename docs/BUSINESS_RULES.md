@@ -104,6 +104,7 @@ new.ram.ddr4.8gb
 
 - Route UI: `/admin/inventory-check`.
 - Dùng để tìm sản phẩm, xem tồn, tăng/giảm tồn theo nhóm ghi chú và ghi lý do.
+- Có thể chuyển một phần hoặc toàn bộ tồn từ nhóm ghi chú hiện tại sang nhóm khác bằng một thao tác. Đây là adjustment mới, không sửa lịch sử giao dịch cũ và không làm thay đổi tổng tồn sản phẩm.
 - Nếu tìm không thấy sản phẩm, UI có hành động “+ Thêm sản phẩm mới”.
 - Đây chưa phải hệ thống phiếu kiểm hàng đầy đủ theo kiểu ERP.
 

@@ -104,6 +104,7 @@ Rate limiter hiện dùng memory store, phù hợp với một PM2 instance. N�
 
 - Tìm sản phẩm, xem tồn theo nhóm.
 - Chuyển nhóm ghi chú và điều chỉnh số lượng có lý do.
+- UI hỗ trợ đổi ghi chú bảo hành trong một thao tác qua `inventory-check/note-move`; tổng tồn không đổi và lịch sử chuyển nhóm được lưu riêng.
 - Chưa phải workflow phiếu kiểm kê ERP đầy đủ.
 
 ### Customers / Suppliers
