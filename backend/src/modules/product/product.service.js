@@ -3,6 +3,66 @@ const AppError = require('../../utils/AppError');
 const { parsePagination, parseNullableInt, parseBooleanQuery, escapeLike } = require('../../utils/parsers');
 const { buildAdjustedNoteGroupMap } = require('../../utils/inventoryNoteGroups');
 
+const MAX_SEARCH_TOKENS = 8;
+const COMPACT_SKU_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.sku), '.', ''), '-', ''), ' ', '')";
+const COMPACT_NAME_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.name), '.', ''), '-', ''), ' ', '')";
+
+function getSearchTokens(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, MAX_SEARCH_TOKENS);
+}
+
+function compactSearchToken(value) {
+  return value.replace(/[.\-\s]/g, '');
+}
+
+function buildProductTokenSearch(tokens, { includeCategory = false, includeWarrantyNote = false } = {}) {
+  const clauses = [];
+  const params = [];
+
+  for (const token of tokens) {
+    const escapedToken = escapeLike(token);
+    const rawPattern = `%${escapedToken}%`;
+    const compactToken = compactSearchToken(token);
+    const tokenClauses = [
+      'LOWER(p.sku) LIKE ?',
+      'LOWER(p.name) LIKE ?'
+    ];
+    const tokenParams = [rawPattern, rawPattern];
+
+    if (compactToken) {
+      const compactPattern = `%${escapeLike(compactToken)}%`;
+      tokenClauses.push(`${COMPACT_SKU_SQL} LIKE ?`, `${COMPACT_NAME_SQL} LIKE ?`);
+      tokenParams.push(compactPattern, compactPattern);
+    }
+
+    if (includeCategory) {
+      tokenClauses.push('LOWER(c.name) LIKE ?');
+      tokenParams.push(rawPattern);
+    }
+
+    if (includeWarrantyNote) {
+      tokenClauses.push(`EXISTS (
+        SELECT 1
+        FROM stock_transactions stx
+        WHERE stx.product_id = p.id
+          AND stx.txn_type = 'IN'
+          AND LOWER(stx.note) LIKE ?
+      )`);
+      tokenParams.push(rawPattern);
+    }
+
+    clauses.push(`(${tokenClauses.join(' OR ')})`);
+    params.push(...tokenParams);
+  }
+
+  return { clauses, params };
+}
+
 function mapSalePrice(value) {
   if (value === null || value === undefined) {
     return null;
@@ -63,7 +123,7 @@ async function ensureCategoryExists(categoryId) {
 
 async function listAdminProducts(query) {
   const { page, limit, offset } = parsePagination(query);
-  const q = (query.q || '').trim();
+  const searchTokens = getSearchTokens(query.q);
   const categoryId = parseNullableInt(query.category_id, 'category_id');
   const isActive = parseBooleanQuery(query.is_active, true);
 
@@ -78,10 +138,10 @@ async function listAdminProducts(query) {
     whereParts.push('p.category_id = ?');
     params.push(categoryId);
   }
-  if (q) {
-    const pattern = `%${escapeLike(q)}%`;
-    whereParts.push('(p.sku LIKE ? OR p.name LIKE ? OR c.name LIKE ?)');
-    params.push(pattern, pattern, pattern);
+  if (searchTokens.length) {
+    const search = buildProductTokenSearch(searchTokens, { includeCategory: true });
+    whereParts.push(...search.clauses);
+    params.push(...search.params);
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -223,25 +283,25 @@ async function setProductActive(id, isActive) {
 
 async function searchPublicProducts(query) {
   const { page, limit, offset } = parsePagination(query);
-  const q = (query.q || '').trim();
+  const searchTokens = getSearchTokens(query.q);
+
+  if (!searchTokens.length) {
+    return {
+      items: [],
+      page,
+      limit,
+      total: 0,
+      searchMode: 'fuzzy_contains'
+    };
+  }
 
   const whereParts = ['p.is_active = 1'];
   const params = [];
 
-  if (q) {
-    const pattern = `%${escapeLike(q)}%`;
-    whereParts.push(`(
-      p.sku LIKE ?
-      OR p.name LIKE ?
-      OR EXISTS (
-        SELECT 1
-        FROM stock_transactions stx
-        WHERE stx.product_id = p.id
-          AND stx.txn_type = 'IN'
-          AND stx.note LIKE ?
-      )
-    )`);
-    params.push(pattern, pattern, pattern);
+  if (searchTokens.length) {
+    const search = buildProductTokenSearch(searchTokens, { includeWarrantyNote: true });
+    whereParts.push(...search.clauses);
+    params.push(...search.params);
   }
 
   const whereSql = `WHERE ${whereParts.join(' AND ')}`;

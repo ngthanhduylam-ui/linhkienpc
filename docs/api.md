@@ -68,6 +68,8 @@ GET /public/categories
 
 Public lookup không yêu cầu login và không trả `sale_price`, `unit_price`, `line_total`, `total_amount`, `sale_note`, payment/debt hoặc admin actions.
 
+Product search qua `q` hỗ trợ tối đa 8 token theo logic AND. Các token không cần liền nhau hoặc đúng thứ tự; mỗi token có thể match tên, SKU, và với Public Lookup là ghi chú bảo hành. Đây là substring search có normalize cơ bản, chưa phải alias/compatibility/fuzzy search đầy đủ.
+
 ## 3. Auth admin
 
 ```text

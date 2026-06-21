@@ -69,6 +69,7 @@ Rate limiter hiện dùng memory store, phù hợp với một PM2 instance. N�
 
 - Route `/`, không cần login.
 - Tìm theo tên, SKU và ghi chú bảo hành.
+- Search nhiều token theo AND, không yêu cầu các từ liền nhau hoặc đúng thứ tự.
 - Hiển thị tổng tồn và nhóm bảo hành.
 - Không trả `sale_price`, dữ liệu tiền, `sale_note` hoặc admin actions.
 

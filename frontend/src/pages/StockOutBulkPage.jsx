@@ -24,6 +24,25 @@ function normalizeText(value) {
   return stripDiacritics(value).trim().toLowerCase();
 }
 
+function getSearchTokens(value) {
+  return normalizeText(value).split(/\s+/).filter(Boolean).slice(0, 8);
+}
+
+function compactSearchText(value) {
+  return value.replace(/[.\-\s]/g, "");
+}
+
+function matchesSearchTokens(values, tokens) {
+  const normalizedValues = values.map(normalizeText);
+  const compactValues = normalizedValues.map(compactSearchText);
+
+  return tokens.every((token) => {
+    const compactToken = compactSearchText(token);
+    return normalizedValues.some((value) => value.includes(token)) ||
+      (compactToken && compactValues.some((value) => value.includes(compactToken)));
+  });
+}
+
 function normalizeWarrantyValue(value) {
   if (value === NO_NOTE_WARRANTY_VALUE) return NO_NOTE_WARRANTY_VALUE;
   return (value || "").trim().toUpperCase().replace(/\s+/g, "");
@@ -288,17 +307,21 @@ export function StockOutBulkPage() {
   }, []);
 
   const filteredProducts = useMemo(() => {
-    const keyword = normalizeText(debouncedSearch);
-    if (!keyword) return [];
+    const tokens = getSearchTokens(debouncedSearch);
+    if (!tokens.length) return [];
 
-    return sortAvailableProductsFirst(products
-      .filter((item) => {
-        const sku = normalizeText(item.sku);
-        const name = normalizeText(item.name);
-        const categoryName = normalizeText(getCategoryName(item, categories));
-        return sku.includes(keyword) || name.includes(keyword) || categoryName.includes(keyword);
-      }))
-      .slice(0, 12);
+    return sortAvailableProductsFirst(
+      products.filter((item) =>
+        matchesSearchTokens(
+          [
+            item.sku,
+            item.name,
+            getCategoryName(item, categories)
+          ],
+          tokens
+        )
+      )
+    ).slice(0, 12);
   }, [products, categories, debouncedSearch]);
 
   const displayProducts = useMemo(() => {

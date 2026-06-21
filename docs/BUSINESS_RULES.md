@@ -132,6 +132,8 @@ new.ram.ddr4.8gb
 - Public route `/` không yêu cầu login.
 - UI không hiển thị tất cả sản phẩm khi ô tìm kiếm trống.
 - Public search dùng để tra theo tên sản phẩm, SKU hoặc ghi chú bảo hành.
+- Search hỗ trợ tối đa 8 từ theo logic AND: các từ không cần liền nhau hoặc đúng thứ tự và có thể match ở các field khác nhau.
+- Search này chưa phải hệ thống alias, compatibility hoặc fuzzy matching nâng cao.
 - Không hiển thị:
   - giá hoặc dữ liệu tiền,
   - admin actions,
