@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   createCategoryRequest,
@@ -15,6 +15,7 @@ const SKU_HELPER_TEXT = "SKU chỉ dùng chữ thường, số và dấu chấm.
 const MAX_SALE_PRICE = 999999999999999;
 const SALE_PRICE_INTEGER_MESSAGE = "Giá bán phải là số nguyên không âm.";
 const SALE_PRICE_MAX_MESSAGE = "Giá bán vượt quá giới hạn cho phép.";
+const CATEGORY_REQUIRED_MESSAGE = "Vui lòng chọn loại sản phẩm.";
 
 function stripDiacritics(value) {
   return (value || "")
@@ -72,6 +73,22 @@ function getProductErrorMessage(error, fallbackMessage) {
   return message || fallbackMessage;
 }
 
+function hasCategoryValidationError(error) {
+  const code = error?.payload?.error?.code;
+  const details = error?.payload?.error?.details || [];
+  const normalizedMessage = String(error?.message || "").toLowerCase();
+  const hasCategoryDetail = details.some((detail) => {
+    const field = String(detail?.field || "").toLowerCase();
+    const issue = String(detail?.issue || "").toLowerCase();
+    return field.includes("category_id") || issue.includes("category_id");
+  });
+
+  return (
+    (code === "VALIDATION_ERROR" && hasCategoryDetail) ||
+    (code === "RESOURCE_NOT_FOUND" && normalizedMessage.includes("category"))
+  );
+}
+
 function replaceSkuConditionPrefix(sku, nextCondition) {
   const value = String(sku || "").trim().toLowerCase();
   if (value.startsWith("new.")) return `${nextCondition}.${value.slice(4)}`;
@@ -118,6 +135,7 @@ export function ProductFormPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
+  const categorySelectRef = useRef(null);
 
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
@@ -138,6 +156,7 @@ export function ProductFormPage() {
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const selectedCategory = useMemo(
     () => getCategoryById(categories, form.category_id),
@@ -209,6 +228,32 @@ export function ProductFormPage() {
     setSuccess("");
   }
 
+  function clearFieldError(field) {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      return { ...prev, [field]: "" };
+    });
+  }
+
+  function focusCategoryField() {
+    window.requestAnimationFrame(() => {
+      const control = categorySelectRef.current;
+      if (!control) return;
+      control.focus({ preventScroll: true });
+      control.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  function showCategoryError() {
+    setFieldErrors((prev) => ({ ...prev, category_id: CATEGORY_REQUIRED_MESSAGE }));
+    focusCategoryField();
+  }
+
+  function handleCategoryChange(event) {
+    updateForm({ category_id: event.target.value });
+    clearFieldError("category_id");
+  }
+
   function handleConditionChange(event) {
     const nextCondition = event.target.value;
     setForm((prev) => ({
@@ -253,6 +298,7 @@ export function ProductFormPage() {
       }
 
       setForm((prev) => ({ ...prev, category_id: String(matched.id) }));
+      clearFieldError("category_id");
       setShowCategoryCreateForm(false);
       setNewCategoryName("");
       setCategoryInlineInfo(`Đã chọn loại sản phẩm ${matched.name}`);
@@ -267,6 +313,7 @@ export function ProductFormPage() {
         const existed = nextCategories.find((item) => normalizeText(item.name) === normalizeText(name));
         if (existed) {
           setForm((prev) => ({ ...prev, category_id: String(existed.id) }));
+          clearFieldError("category_id");
           setShowCategoryCreateForm(false);
           setNewCategoryName("");
           setCategoryInlineInfo("Loại sản phẩm đã tồn tại, đã tự động chọn.");
@@ -289,6 +336,7 @@ export function ProductFormPage() {
     const name = form.name.trim();
     const sku = form.sku.trim().toLowerCase();
     const categoryId = form.category_id;
+    const validCategory = getCategoryById(categories, categoryId);
 
     if (!name) {
       setError("Vui lòng nhập tên sản phẩm.");
@@ -302,8 +350,8 @@ export function ProductFormPage() {
       setError(SKU_FORMAT_MESSAGE);
       return;
     }
-    if (!categoryId) {
-      setError("Vui lòng chọn loại sản phẩm.");
+    if (!categoryId || !validCategory) {
+      showCategoryError();
       return;
     }
     const salePrice = normalizeSalePriceInput(form.sale_price);
@@ -334,7 +382,13 @@ export function ProductFormPage() {
       }
       navigate("/admin/products");
     } catch (err) {
-      setError(getProductErrorMessage(err, isEditMode ? "Cập nhật sản phẩm thất bại." : "Thêm sản phẩm thất bại."));
+      if (hasCategoryValidationError(err)) {
+        showCategoryError();
+      } else {
+        setError(
+          getProductErrorMessage(err, isEditMode ? "Cập nhật sản phẩm thất bại." : "Thêm sản phẩm thất bại.")
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -408,9 +462,17 @@ export function ProductFormPage() {
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">Loại sản phẩm *</label>
                       <select
-                        className="h-10 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                        ref={categorySelectRef}
+                        className={[
+                          "h-10 w-full rounded border px-3 text-sm outline-none focus:ring-1",
+                          fieldErrors.category_id
+                            ? "border-red-400 focus:border-red-500 focus:ring-red-500"
+                            : "border-slate-300 focus:border-brand-500 focus:ring-brand-500"
+                        ].join(" ")}
                         value={form.category_id}
-                        onChange={(event) => updateForm({ category_id: event.target.value })}
+                        onChange={handleCategoryChange}
+                        aria-invalid={Boolean(fieldErrors.category_id)}
+                        aria-describedby={fieldErrors.category_id ? "product-category-error" : undefined}
                       >
                         <option value="">Chọn loại sản phẩm</option>
                         {categories.map((category) => (
@@ -419,6 +481,11 @@ export function ProductFormPage() {
                           </option>
                         ))}
                       </select>
+                      {fieldErrors.category_id && (
+                        <p id="product-category-error" className="mt-1 text-xs font-medium text-red-600">
+                          {fieldErrors.category_id}
+                        </p>
+                      )}
                       <button
                         type="button"
                         className="mt-1.5 text-xs font-medium text-brand-700 hover:underline"
