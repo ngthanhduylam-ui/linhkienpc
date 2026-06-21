@@ -16,6 +16,9 @@ const MAX_SALE_PRICE = 999999999999999;
 const SALE_PRICE_INTEGER_MESSAGE = "Giá bán phải là số nguyên không âm.";
 const SALE_PRICE_MAX_MESSAGE = "Giá bán vượt quá giới hạn cho phép.";
 const CATEGORY_REQUIRED_MESSAGE = "Vui lòng chọn loại sản phẩm.";
+const CATEGORY_CODE_ALIASES = {
+  main: "mainboard"
+};
 
 function stripDiacritics(value) {
   return (value || "")
@@ -46,6 +49,17 @@ function buildSuggestedSku(productName, category, condition) {
 
 function getCategoryById(categories, categoryId) {
   return categories.find((item) => Number(item.id) === Number(categoryId)) || null;
+}
+
+function getCategoryCodeFromSku(sku) {
+  const parts = String(sku || "").trim().toLowerCase().split(".");
+  const token = parts[1]?.trim() || "";
+  return CATEGORY_CODE_ALIASES[token] || token;
+}
+
+function getCategoryByCode(categories, code) {
+  if (!code) return null;
+  return categories.find((item) => String(item.code || "").trim().toLowerCase() === code) || null;
 }
 
 function getConditionFromSku(sku) {
@@ -136,6 +150,7 @@ export function ProductFormPage() {
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
   const categorySelectRef = useRef(null);
+  const hasUserEditedSkuRef = useRef(false);
 
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
@@ -148,6 +163,7 @@ export function ProductFormPage() {
     sale_price: ""
   });
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(false);
+  const [categorySelectionSource, setCategorySelectionSource] = useState(isEditMode ? "manual" : "empty");
   const [showCategoryCreateForm, setShowCategoryCreateForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryInlineInfo, setCategoryInlineInfo] = useState("");
@@ -201,6 +217,7 @@ export function ProductFormPage() {
           sale_price: salePriceToInput(product?.sale_price)
         });
         setIsSkuManuallyEdited(true);
+        setCategorySelectionSource(product?.category_id ? "manual" : "empty");
       } catch (err) {
         if (active) setError(err?.message || "Không thể tải sản phẩm.");
       } finally {
@@ -221,6 +238,23 @@ export function ProductFormPage() {
       setForm((prev) => ({ ...prev, sku: suggestedSku }));
     }
   }, [form.condition, form.name, isEditMode, isSkuManuallyEdited, selectedCategory]);
+
+  useEffect(() => {
+    if (!categories.length || categorySelectionSource === "manual") return;
+    if (isEditMode && !hasUserEditedSkuRef.current) return;
+
+    const categoryCode = getCategoryCodeFromSku(form.sku);
+    const matchedCategory = getCategoryByCode(categories, categoryCode);
+    if (!matchedCategory) return;
+
+    const matchedCategoryId = String(matchedCategory.id);
+    if (form.category_id === matchedCategoryId && categorySelectionSource === "suggested") return;
+
+    setForm((prev) => ({ ...prev, category_id: matchedCategoryId }));
+    setCategorySelectionSource("suggested");
+    setCategoryInlineInfo("Đã gợi ý từ SKU");
+    clearFieldError("category_id");
+  }, [categories, categorySelectionSource, form.category_id, form.sku, isEditMode]);
 
   function updateForm(patch) {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -250,7 +284,10 @@ export function ProductFormPage() {
   }
 
   function handleCategoryChange(event) {
-    updateForm({ category_id: event.target.value });
+    const nextCategoryId = event.target.value;
+    updateForm({ category_id: nextCategoryId });
+    setCategorySelectionSource(nextCategoryId ? "manual" : "empty");
+    setCategoryInlineInfo("");
     clearFieldError("category_id");
   }
 
@@ -298,6 +335,7 @@ export function ProductFormPage() {
       }
 
       setForm((prev) => ({ ...prev, category_id: String(matched.id) }));
+      setCategorySelectionSource("manual");
       clearFieldError("category_id");
       setShowCategoryCreateForm(false);
       setNewCategoryName("");
@@ -313,6 +351,7 @@ export function ProductFormPage() {
         const existed = nextCategories.find((item) => normalizeText(item.name) === normalizeText(name));
         if (existed) {
           setForm((prev) => ({ ...prev, category_id: String(existed.id) }));
+          setCategorySelectionSource("manual");
           clearFieldError("category_id");
           setShowCategoryCreateForm(false);
           setNewCategoryName("");
@@ -452,6 +491,7 @@ export function ProductFormPage() {
                         className="h-10 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                         value={form.sku}
                         onChange={(event) => {
+                          hasUserEditedSkuRef.current = true;
                           updateForm({ sku: event.target.value.toLowerCase() });
                           setIsSkuManuallyEdited(true);
                         }}
