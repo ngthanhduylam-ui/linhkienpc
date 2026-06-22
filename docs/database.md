@@ -66,6 +66,18 @@ Trường chính:
 - `sale_price` nullable, lưu giá bán mặc định dùng trong Phase 2A.
 - `is_active`.
 
+### `product_images`
+
+Lưu metadata tối đa 3 ảnh cho mỗi sản phẩm; nội dung file nằm trên filesystem, không lưu BLOB trong MySQL.
+
+- `product_id`: liên kết `products.id`.
+- `original_path`: đường dẫn tương đối tới file gốc.
+- `thumbnail_path`: đường dẫn tương đối tới thumbnail WebP.
+- `original_name`, `mime_type`, `file_size`.
+- `sort_order`: từ 1 đến 3; ảnh có `sort_order = 1` là ảnh chính.
+
+Unique `(product_id, sort_order)` giữ thứ tự ổn định. FK cascade xóa metadata nếu sản phẩm bị hard-delete; workflow ứng dụng phải dọn file gốc và thumbnail tương ứng. Product Admin hiện chỉ activate/deactivate, không có hard-delete từ UI.
+
 Quy tắc SKU hiện tại:
 
 - chữ thường,
@@ -211,6 +223,7 @@ Không xóa các bảng legacy nếu chưa có migration/phase dọn riêng.
 017_create_inventory_quantity_adjustments.sql
 018_add_phase_2a_sale_price_snapshot_schema.sql
 019_add_sale_note_snapshot_to_stock_voucher_items.sql
+020_create_product_images.sql
 ```
 
 ## 8. Backup/restore

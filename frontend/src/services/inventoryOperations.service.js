@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from "../api/apiClient";
+import { apiDelete, apiGet, apiGetBlob, apiPatch, apiPost } from "../api/apiClient";
 
 export async function listActiveProducts() {
   const response = await apiGet("/admin/products", { page: 1, limit: 100 });
@@ -135,6 +135,56 @@ export async function getProductRequest(id) {
 export async function updateProductRequest(id, payload) {
   const response = await apiPatch(`/admin/products/${encodeURIComponent(id)}`, payload);
   return response?.data;
+}
+
+export async function listProductImages(id) {
+  const response = await apiGet(`/admin/products/${encodeURIComponent(id)}/images`);
+  return response?.data || [];
+}
+
+export async function uploadProductImages(id, files) {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("images", file));
+  const response = await apiPost(`/admin/products/${encodeURIComponent(id)}/images`, formData);
+  return response?.data || [];
+}
+
+export async function replaceProductImage(id, imageId, file) {
+  const formData = new FormData();
+  formData.append("images", file);
+  const response = await apiPost(
+    `/admin/products/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}/replace`,
+    formData
+  );
+  return response?.data || [];
+}
+
+export async function reorderProductImages(id, imageIds) {
+  const response = await apiPatch(`/admin/products/${encodeURIComponent(id)}/images/reorder`, {
+    image_ids: imageIds
+  });
+  return response?.data || [];
+}
+
+export async function deleteProductImage(id, imageId) {
+  const response = await apiDelete(
+    `/admin/products/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`
+  );
+  return response?.data;
+}
+
+export async function downloadProductImage(id, image) {
+  const blob = await apiGetBlob(
+    `/admin/products/${encodeURIComponent(id)}/images/${encodeURIComponent(image.id)}/download`
+  );
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = image.original_name || "product-image";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
 export async function deactivateProductRequest(id) {

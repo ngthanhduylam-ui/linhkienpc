@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import {
   activateProductRequest,
   createCategoryRequest,
@@ -567,7 +568,8 @@ export function ProductManagementPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="hidden border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3">
+        <div className="hidden border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[56px_minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3">
+          <span>Ảnh</span>
           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">Tên sản phẩm</span>
           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">SKU</span>
           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">Loại sản phẩm</span>
@@ -584,8 +586,13 @@ export function ProductManagementPage() {
             {products.map((product) => (
               <div
                 key={product.id}
-                className="grid gap-2 px-4 py-4 md:grid-cols-[minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3"
+                className="grid gap-2 px-4 py-4 md:grid-cols-[56px_minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3"
               >
+                <AuthenticatedImage
+                  path={product.primary_image ? `/admin/products/${product.id}/images/${product.primary_image.id}/thumbnail` : ""}
+                  alt={product.name}
+                  className="h-14 w-14 rounded border border-slate-200 object-contain"
+                />
                 <div className="min-w-0">
                   <p
                     title={product.name}

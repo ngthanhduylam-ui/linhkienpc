@@ -72,6 +72,7 @@ Rate limiter hiện dùng memory store, phù hợp với một PM2 instance. N�
 - Search nhiều token theo AND, không yêu cầu các từ liền nhau hoặc đúng thứ tự.
 - Hiển thị tổng tồn và nhóm bảo hành.
 - Không trả `sale_price`, dữ liệu tiền, `sale_note` hoặc admin actions.
+- Hiển thị ảnh chính và gallery ảnh của sản phẩm active; cho tải file gốc qua endpoint có kiểm soát.
 
 ### Product Admin
 
@@ -80,6 +81,8 @@ Rate limiter hiện dùng memory store, phù hợp với một PM2 instance. N�
 - SKU validation và duplicate handling.
 - Giá bán mặc định `sale_price` optional/nullable.
 - Product list và form hiển thị/quản lý giá bán.
+- Quản lý tối đa 3 ảnh, đổi ảnh chính bằng thứ tự, xóa và tải file gốc.
+- Product list hiển thị thumbnail ảnh chính; sản phẩm chưa có ảnh dùng placeholder.
 
 ### Stock In
 
@@ -96,6 +99,7 @@ Rate limiter hiện dùng memory store, phù hợp với một PM2 instance. N�
 - Merge theo SKU + nhóm bảo hành.
 - Giá bán, đơn giá, thành tiền và tổng tiền chỉ đọc.
 - Serial/Ghi chú riêng theo từng dòng.
+- Search dropdown và cart hiển thị thumbnail ảnh chính khi có.
 - Backend tự lấy `products.sale_price`, snapshot tiền và sale note.
 - Submit không gửi `unit_price`, `line_total` hoặc `total_amount`.
 - Trừ tồn và rollback vẫn theo logic inventory hiện có.

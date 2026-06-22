@@ -182,6 +182,10 @@ DuckDNS được cập nhật bằng cron mỗi 5 phút. Chi tiết deploy, ki�
 
 ## Tài liệu
 
+Ảnh sản phẩm hỗ trợ tối đa 3 ảnh cho mỗi sản phẩm, tối đa 15 MB/ảnh. Backend giữ file gốc trên filesystem, tạo thumbnail WebP riêng và chỉ lưu metadata trong MySQL. Public Lookup được xem gallery và tải ảnh gốc của sản phẩm đang active.
+
+Database backup không chứa file ảnh. `PRODUCT_UPLOAD_ROOT` phải được backup riêng; backup ảnh sang HDD chưa được triển khai trong phase này.
+
 - [Project Direction](docs/PROJECT_DIRECTION.md)
 - [Project Status](docs/PROJECT_STATUS.md)
 - [POS Screen Guide](docs/POS_SCREEN_GUIDE.md)

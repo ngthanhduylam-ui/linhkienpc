@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import {
   createCategoryRequest,
   createProductRequest,
+  deleteProductImage,
+  downloadProductImage,
   getProductRequest,
   listActiveCategories,
+  listProductImages,
+  replaceProductImage,
+  reorderProductImages,
+  uploadProductImages,
   updateProductRequest
 } from "../services/inventoryOperations.service";
 
@@ -19,6 +26,19 @@ const CATEGORY_REQUIRED_MESSAGE = "Vui lòng chọn loại sản phẩm.";
 const CATEGORY_CODE_ALIASES = {
   main: "mainboard"
 };
+const MAX_PRODUCT_IMAGES = 3;
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function getImageFileError(file) {
+  if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+    return `${file.name}: chỉ chấp nhận JPEG, PNG hoặc WebP.`;
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return `${file.name}: vượt quá 15 MB.`;
+  }
+  return "";
+}
 
 function stripDiacritics(value) {
   return (value || "")
@@ -148,9 +168,11 @@ export function ProductFormPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEditMode = Boolean(id);
   const categorySelectRef = useRef(null);
   const hasUserEditedSkuRef = useRef(false);
+  const pendingImagesRef = useRef([]);
 
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
@@ -173,6 +195,27 @@ export function ProductFormPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [productImages, setProductImages] = useState([]);
+  const [pendingImages, setPendingImages] = useState([]);
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [imageErrors, setImageErrors] = useState([]);
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.imageUploadError) {
+      setError(`Sản phẩm đã được tạo nhưng tải ảnh thất bại: ${location.state.imageUploadError}`);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    pendingImagesRef.current = pendingImages;
+  }, [pendingImages]);
+
+  useEffect(() => () => {
+    pendingImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  }, []);
 
   const selectedCategory = useMemo(
     () => getCategoryById(categories, form.category_id),
@@ -229,6 +272,25 @@ export function ProductFormPage() {
     return () => {
       active = false;
     };
+  }, [id, isEditMode]);
+
+  async function reloadProductImages(productId = id) {
+    if (!productId) return [];
+    setIsLoadingImages(true);
+    try {
+      const images = await listProductImages(productId);
+      setProductImages(images);
+      return images;
+    } finally {
+      setIsLoadingImages(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    reloadProductImages().catch((err) => {
+      setError(err?.message || "Không thể tải ảnh sản phẩm.");
+    });
   }, [id, isEditMode]);
 
   useEffect(() => {
@@ -367,6 +429,151 @@ export function ProductFormPage() {
     }
   }
 
+  function addPendingImages(files) {
+    setPendingImages((current) => [
+      ...current,
+      ...files.map((file) => ({
+        key: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        file,
+        previewUrl: URL.createObjectURL(file)
+      }))
+    ]);
+  }
+
+  async function processSelectedImages(files) {
+    if (!files.length) return;
+
+    const remainingSlots = MAX_PRODUCT_IMAGES - productImages.length - pendingImages.length;
+    if (files.length > remainingSlots) {
+      setImageErrors([`Chỉ còn ${remainingSlots} vị trí ảnh. Mỗi sản phẩm tối đa ${MAX_PRODUCT_IMAGES} ảnh.`]);
+      return;
+    }
+
+    const validationErrors = files.map(getImageFileError).filter(Boolean);
+    const validFiles = files.filter((file) => !getImageFileError(file));
+    setImageErrors(validationErrors);
+    if (!validFiles.length) return;
+
+    setError("");
+    if (!isEditMode) {
+      addPendingImages(validFiles);
+      return;
+    }
+
+    setIsUploadingImages(true);
+    const failedFiles = [...validationErrors];
+    for (const file of validFiles) {
+      try {
+        await uploadProductImages(id, [file]);
+      } catch (err) {
+        failedFiles.push(`${file.name}: ${err?.message || "Tải ảnh thất bại."}`);
+      }
+    }
+    try {
+      await reloadProductImages();
+    } catch (err) {
+      setError(`Ảnh đã tải lên nhưng chưa thể làm mới danh sách: ${err?.message || "Vui lòng tải lại trang."}`);
+    } finally {
+      setIsUploadingImages(false);
+    }
+    setImageErrors(failedFiles);
+  }
+
+  async function handleImageSelection(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    await processSelectedImages(files);
+  }
+
+  async function handleImageDrop(event) {
+    event.preventDefault();
+    setIsDraggingImages(false);
+    await processSelectedImages(Array.from(event.dataTransfer.files || []));
+  }
+
+  function removePendingImage(key) {
+    setPendingImages((current) => {
+      const target = current.find((image) => image.key === key);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((image) => image.key !== key);
+    });
+  }
+
+  function movePendingImage(index, direction) {
+    setPendingImages((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  }
+
+  function replacePendingImage(key, file) {
+    const issue = getImageFileError(file);
+    if (issue) {
+      setImageErrors([issue]);
+      return;
+    }
+    setImageErrors([]);
+    setPendingImages((current) => current.map((image) => {
+      if (image.key !== key) return image;
+      URL.revokeObjectURL(image.previewUrl);
+      return {
+        ...image,
+        file,
+        key: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        previewUrl: URL.createObjectURL(file)
+      };
+    }));
+  }
+
+  async function handleReplaceStoredImage(image, file) {
+    const issue = getImageFileError(file);
+    if (issue) {
+      setImageErrors([issue]);
+      return;
+    }
+    setImageErrors([]);
+    setIsUploadingImages(true);
+    try {
+      setProductImages(await replaceProductImage(id, image.id, file));
+    } catch (err) {
+      setImageErrors([`${file.name}: ${err?.message || "Thay ảnh thất bại."}`]);
+    } finally {
+      setIsUploadingImages(false);
+    }
+  }
+
+  async function moveStoredImage(index, direction) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= productImages.length) return;
+    const next = [...productImages];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    setIsUploadingImages(true);
+    setError("");
+    try {
+      setProductImages(await reorderProductImages(id, next.map((image) => image.id)));
+    } catch (err) {
+      setError(err?.message || "Không thể đổi thứ tự ảnh.");
+    } finally {
+      setIsUploadingImages(false);
+    }
+  }
+
+  async function handleDeleteStoredImage(image) {
+    setIsUploadingImages(true);
+    setError("");
+    try {
+      await deleteProductImage(id, image.id);
+      await reloadProductImages();
+    } catch (err) {
+      setError(err?.message || "Không thể xóa ảnh.");
+    } finally {
+      setIsUploadingImages(false);
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -411,12 +618,29 @@ export function ProductFormPage() {
         });
         setSuccess("Đã lưu sản phẩm.");
       } else {
-        await createProductRequest({
+        const created = await createProductRequest({
           name,
           sku,
           category_id: Number(categoryId),
           sale_price: salePrice.value
         });
+        if (pendingImages.length > 0) {
+          const failedImages = [];
+          for (const image of pendingImages) {
+            try {
+              await uploadProductImages(created.id, [image.file]);
+            } catch (imageError) {
+              failedImages.push(`${image.file.name}: ${imageError?.message || "Tải ảnh thất bại"}`);
+            }
+          }
+          if (failedImages.length > 0) {
+            navigate(`/admin/products/${created.id}/edit`, {
+              replace: true,
+              state: { imageUploadError: failedImages.join("; ") }
+            });
+            return;
+          }
+        }
         setSuccess("Đã thêm sản phẩm.");
       }
       navigate("/admin/products");
@@ -450,7 +674,7 @@ export function ProductFormPage() {
               </Link>
               <button
                 type="submit"
-                disabled={isSubmitting || isLoading}
+                disabled={isSubmitting || isLoading || isUploadingImages}
                 className="h-10 rounded-md bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? "Đang lưu..." : "Lưu"}
@@ -618,6 +842,153 @@ export function ProductFormPage() {
                       </p>
                     )}
                   </>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-md border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Ảnh sản phẩm</h2>
+                  <p className="mt-1 text-xs text-slate-500">Tối đa 3 ảnh JPEG, PNG hoặc WebP; mỗi ảnh tối đa 15 MB.</p>
+                </div>
+                <label className="inline-flex h-9 cursor-pointer items-center rounded border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50">
+                  + Thêm ảnh
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="sr-only"
+                    disabled={isUploadingImages || productImages.length + pendingImages.length >= MAX_PRODUCT_IMAGES}
+                    onChange={handleImageSelection}
+                  />
+                </label>
+              </div>
+              <div
+                className={[
+                  "px-5 py-4 transition-colors",
+                  isDraggingImages ? "bg-brand-50" : ""
+                ].join(" ")}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setIsDraggingImages(true);
+                }}
+                onDragOver={(event) => event.preventDefault()}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setIsDraggingImages(false);
+                }}
+                onDrop={handleImageDrop}
+              >
+                {isUploadingImages && (
+                  <p className="mb-3 rounded bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">
+                    Đang xử lý ảnh...
+                  </p>
+                )}
+                {imageErrors.length > 0 && (
+                  <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {imageErrors.map((message) => <p key={message}>{message}</p>)}
+                  </div>
+                )}
+                {isDraggingImages && (
+                  <p className="mb-3 rounded border border-dashed border-brand-400 bg-white px-3 py-4 text-center text-sm font-medium text-brand-700">
+                    Thả ảnh vào đây để thêm.
+                  </p>
+                )}
+                {isLoadingImages ? (
+                  <p className="text-sm text-slate-500">Đang tải ảnh sản phẩm...</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {productImages.map((image, index) => (
+                      <article key={image.id} className="min-w-0 rounded border border-slate-200 bg-white p-2">
+                        <div className="relative aspect-square overflow-hidden rounded bg-slate-100">
+                          <AuthenticatedImage
+                            path={`/admin/products/${id}/images/${image.id}/thumbnail`}
+                            alt={form.name || image.original_name}
+                            className="h-full w-full object-contain"
+                          />
+                          {index === 0 && (
+                            <span className="absolute left-2 top-2 rounded bg-brand-700 px-2 py-1 text-[11px] font-semibold text-white">
+                              Ảnh chính
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2 truncate text-xs text-slate-600" title={image.original_name}>{image.original_name}</p>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          <button type="button" disabled={index === 0 || isUploadingImages} onClick={() => moveStoredImage(index, -1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">←</button>
+                          <button type="button" disabled={index === productImages.length - 1 || isUploadingImages} onClick={() => moveStoredImage(index, 1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">→</button>
+                          <label className="cursor-pointer rounded border border-slate-300 px-2 py-1 text-xs">
+                            Thay ảnh
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="sr-only"
+                              disabled={isUploadingImages}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) handleReplaceStoredImage(image, file);
+                              }}
+                            />
+                          </label>
+                          <button type="button" onClick={() => downloadProductImage(id, image)} className="rounded border border-slate-300 px-2 py-1 text-xs">Tải gốc</button>
+                          <button type="button" disabled={isUploadingImages} onClick={() => handleDeleteStoredImage(image)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 disabled:opacity-40">Xóa</button>
+                        </div>
+                      </article>
+                    ))}
+                    {pendingImages.map((image, index) => {
+                      const absoluteIndex = productImages.length + index;
+                      return (
+                        <article key={image.key} className="min-w-0 rounded border border-dashed border-brand-300 bg-brand-50/30 p-2">
+                          <div className="relative aspect-square overflow-hidden rounded bg-white">
+                            <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-contain" />
+                            {absoluteIndex === 0 && (
+                              <span className="absolute left-2 top-2 rounded bg-brand-700 px-2 py-1 text-[11px] font-semibold text-white">Ảnh chính</span>
+                            )}
+                          </div>
+                          <p className="mt-2 truncate text-xs text-slate-600" title={image.file.name}>{image.file.name}</p>
+                          <div className="mt-2 flex gap-1">
+                            <button type="button" disabled={index === 0} onClick={() => movePendingImage(index, -1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">←</button>
+                            <button type="button" disabled={index === pendingImages.length - 1} onClick={() => movePendingImage(index, 1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">→</button>
+                            <label className="cursor-pointer rounded border border-slate-300 px-2 py-1 text-xs">
+                              Thay ảnh
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="sr-only"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  event.target.value = "";
+                                  if (file) replacePendingImage(image.key, file);
+                                }}
+                              />
+                            </label>
+                            <button type="button" onClick={() => removePendingImage(image.key)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-600">Xóa</button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                    {Array.from({
+                      length: Math.max(0, MAX_PRODUCT_IMAGES - productImages.length - pendingImages.length)
+                    }).map((_, index) => {
+                      const slotNumber = productImages.length + pendingImages.length + index + 1;
+                      return (
+                        <label
+                          key={`empty-slot-${slotNumber}`}
+                          className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded border border-dashed border-slate-300 bg-slate-50 px-3 text-center text-sm text-slate-500 hover:border-brand-400 hover:bg-brand-50"
+                        >
+                          <span className="font-medium">Ảnh {slotNumber}{slotNumber === 1 ? " - Đại diện" : ""}</span>
+                          <span className="mt-1 text-xs">Bấm hoặc kéo thả để chọn ảnh</span>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            disabled={isUploadingImages}
+                            onChange={handleImageSelection}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </section>

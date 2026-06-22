@@ -46,6 +46,8 @@ frontend/src/router.jsx    route config
 
 Frontend production dùng `VITE_API_BASE_URL=/api/v1`. API client hỗ trợ base URL tương đối và tuyệt đối, chuẩn hóa dấu `/` và giữ query parameters.
 
+Ảnh sản phẩm dùng endpoint backend có kiểm soát. Admin thumbnail được tải bằng Bearer token; Public Lookup chỉ dùng endpoint public của sản phẩm active.
+
 Routes chính:
 
 ```text
@@ -95,6 +97,7 @@ Modules:
 - `auth`
 - `category`
 - `product`
+- `productImage`
 - `customer`
 - `supplier`
 - `stockTransaction`
@@ -104,6 +107,17 @@ Modules:
 - `warrantyBatch` legacy
 
 Production server dùng `app.listen(env.port, env.host)`, với `HOST=127.0.0.1`.
+
+Product image storage:
+
+```text
+PRODUCT_UPLOAD_ROOT/
+  originals/   file gốc giữ nguyên byte
+  thumbnails/  thumbnail WebP
+  temp/        file upload tạm, được dọn sau xử lý
+```
+
+MySQL lưu metadata trong `product_images`. Product list/search lấy ảnh chính bằng một derived join, không query từng sản phẩm.
 
 Admin bootstrap:
 

@@ -2,6 +2,7 @@
 const dotenv = require('dotenv');
 
 const envPath = path.resolve(__dirname, '../../.env');
+const backendRoot = path.resolve(__dirname, '../..');
 dotenv.config({ path: envPath });
 
 const required = [
@@ -25,6 +26,11 @@ module.exports = {
   host: process.env.HOST || '127.0.0.1',
   port: Number(process.env.PORT || 3000),
   timezone: process.env.APP_TIMEZONE || 'Asia/Ho_Chi_Minh',
+  productUploads: {
+    root: path.resolve(backendRoot, process.env.PRODUCT_UPLOAD_ROOT || 'uploads/products'),
+    maxFileBytes: Number(process.env.PRODUCT_IMAGE_MAX_BYTES || 15 * 1024 * 1024),
+    maxImages: Math.min(3, Number(process.env.PRODUCT_IMAGE_MAX_COUNT || 3))
+  },
   db: {
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT || 3306),

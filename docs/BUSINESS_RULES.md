@@ -35,6 +35,9 @@ Hiện tại **không** có:
 - Khi tạo product, hệ thống tạo dòng tồn ban đầu trong `product_inventory_balances` với số lượng 0.
 - Product thuộc một loại sản phẩm (`category_id` trong API/database, UI gọi là “Loại sản phẩm”).
 - `sale_price` là giá bán mặc định optional/nullable trong admin product API và có thể quản lý trong Product Admin UI. `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
+- Mỗi sản phẩm có tối đa 3 ảnh. `sort_order = 1` là ảnh chính; đổi thứ tự sẽ đổi ảnh chính.
+- File gốc được giữ nguyên để tải lại, thumbnail được tạo riêng cho danh sách/POS/Public Lookup. Database chỉ lưu metadata và đường dẫn tương đối.
+- Public chỉ xem ảnh của sản phẩm active. Deactivate không xóa ảnh; Product Admin vẫn quản lý được ảnh để có thể khôi phục sản phẩm.
 - Phase 2A snapshot `sale_price` khi bán qua backend bulk stock-out. Sản phẩm chưa có giá vẫn bán được; dòng thiếu giá có `unit_price = NULL`, `line_total = NULL`, và nếu đơn có bất kỳ dòng thiếu giá thì `total_amount = NULL`.
 - `sale_price = 0` là giá bán thực sự bằng 0, không phải trạng thái thiếu giá.
 

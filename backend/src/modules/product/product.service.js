@@ -70,16 +70,34 @@ function mapSalePrice(value) {
   return Number(value);
 }
 
+function mapImageSummary(row) {
+  const imageCount = Number(row.image_count || 0);
+  return {
+    image_count: imageCount,
+    primary_image_id: row.primary_image_id ? Number(row.primary_image_id) : null
+  };
+}
+
 async function getProductById(id) {
   const [rows] = await pool.query(
     `
       SELECT
         p.id, p.sku, p.name, p.category_id, p.spec_summary, p.sale_price, p.is_active, p.created_at, p.updated_at,
         c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active,
-        COALESCE(pib.quantity, 0) AS total_quantity
+        COALESCE(pib.quantity, 0) AS total_quantity,
+        COALESCE(pim.image_count, 0) AS image_count,
+        pim.primary_image_id
       FROM products p
       JOIN categories c ON c.id = p.category_id
       LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+      LEFT JOIN (
+        SELECT
+          product_id,
+          COUNT(*) AS image_count,
+          MAX(CASE WHEN sort_order = 1 THEN id END) AS primary_image_id
+        FROM product_images
+        GROUP BY product_id
+      ) pim ON pim.product_id = p.id
       WHERE p.id = ?
       LIMIT 1
     `,
@@ -110,7 +128,8 @@ async function getProductById(id) {
     note_groups: noteGroupMap.get(row.id) || [],
     is_active: row.is_active === 1,
     created_at: row.created_at,
-    updated_at: row.updated_at
+    updated_at: row.updated_at,
+    ...mapImageSummary(row)
   };
 }
 
@@ -160,10 +179,20 @@ async function listAdminProducts(query) {
       SELECT
         p.id, p.sku, p.name, p.category_id, p.spec_summary, p.sale_price, p.is_active, p.created_at, p.updated_at,
         c.code AS category_code, c.name AS category_name, c.is_active AS category_is_active,
-        COALESCE(pib.quantity, 0) AS total_quantity
+        COALESCE(pib.quantity, 0) AS total_quantity,
+        COALESCE(pim.image_count, 0) AS image_count,
+        pim.primary_image_id
       FROM products p
       JOIN categories c ON c.id = p.category_id
       LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+      LEFT JOIN (
+        SELECT
+          product_id,
+          COUNT(*) AS image_count,
+          MAX(CASE WHEN sort_order = 1 THEN id END) AS primary_image_id
+        FROM product_images
+        GROUP BY product_id
+      ) pim ON pim.product_id = p.id
       ${whereSql}
       ORDER BY p.id DESC
       LIMIT ? OFFSET ?
@@ -191,7 +220,8 @@ async function listAdminProducts(query) {
       note_groups: noteGroupMap.get(row.id) || [],
       is_active: row.is_active === 1,
       created_at: row.created_at,
-      updated_at: row.updated_at
+      updated_at: row.updated_at,
+      ...mapImageSummary(row)
     })),
     page,
     limit,
@@ -321,9 +351,19 @@ async function searchPublicProducts(query) {
         p.id,
         p.sku,
         p.name,
-        COALESCE(pib.quantity, 0) AS total_quantity
+        COALESCE(pib.quantity, 0) AS total_quantity,
+        COALESCE(pim.image_count, 0) AS image_count,
+        pim.primary_image_id
       FROM products p
       LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+      LEFT JOIN (
+        SELECT
+          product_id,
+          COUNT(*) AS image_count,
+          MAX(CASE WHEN sort_order = 1 THEN id END) AS primary_image_id
+        FROM product_images
+        GROUP BY product_id
+      ) pim ON pim.product_id = p.id
       ${whereSql}
       ORDER BY p.id DESC
       LIMIT ? OFFSET ?
@@ -338,7 +378,8 @@ async function searchPublicProducts(query) {
       sku: product.sku,
       name: product.name,
       total_quantity: Number(product.total_quantity || 0),
-      note_groups: noteGroupMap.get(product.id) || []
+      note_groups: noteGroupMap.get(product.id) || [],
+      ...mapImageSummary(product)
     })),
     page,
     limit,
@@ -350,9 +391,21 @@ async function searchPublicProducts(query) {
 async function getPublicInventoryBySku(sku) {
   const [products] = await pool.query(
     `
-      SELECT p.id, p.sku, p.name, p.is_active, COALESCE(pib.quantity, 0) AS total_quantity
+      SELECT
+        p.id, p.sku, p.name, p.is_active,
+        COALESCE(pib.quantity, 0) AS total_quantity,
+        COALESCE(pim.image_count, 0) AS image_count,
+        pim.primary_image_id
       FROM products p
       LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+      LEFT JOIN (
+        SELECT
+          product_id,
+          COUNT(*) AS image_count,
+          MAX(CASE WHEN sort_order = 1 THEN id END) AS primary_image_id
+        FROM product_images
+        GROUP BY product_id
+      ) pim ON pim.product_id = p.id
       WHERE p.sku = ? AND p.is_active = 1
       LIMIT 1
     `,
@@ -372,7 +425,8 @@ async function getPublicInventoryBySku(sku) {
       sku: product.sku,
       name: product.name,
       total_quantity: Number(product.total_quantity || 0),
-      is_active: product.is_active === 1
+      is_active: product.is_active === 1,
+      ...mapImageSummary(product)
     },
     note_groups: noteGroupMap.get(product.id) || []
   };

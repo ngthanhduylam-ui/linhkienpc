@@ -1,5 +1,10 @@
 import { apiGet } from "../api/apiClient";
 
+export async function listPublicProductImages(sku) {
+  const response = await apiGet(`/public/products/${encodeURIComponent(sku)}/images`);
+  return response?.data?.images || [];
+}
+
 export async function searchPublicProducts(keyword) {
   const trimmedKeyword = keyword?.trim();
   if (!trimmedKeyword) return [];
@@ -12,6 +17,8 @@ export async function searchPublicProducts(keyword) {
     name: product.name,
     sku: product.sku,
     categoryName: product.category?.name || product.category_name || "",
+    imageCount: Number(product.image_count || 0),
+    primaryImage: product.primary_image || null,
     totalQuantity: Number(product.total_quantity || 0),
     noteGroups: (product.note_groups || []).map((item) => ({
       note: item.note,

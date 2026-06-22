@@ -28,6 +28,17 @@ function buildUrl(path, query = {}) {
   return `${normalizedBase}${normalizedPath}${queryString ? `?${queryString}` : ""}`;
 }
 
+export function resolveApiAssetUrl(path) {
+  const value = String(path || "");
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const normalizedBase = String(API_BASE_URL).replace(/\/+$/, "");
+  if (/^https?:\/\//i.test(normalizedBase)) {
+    return new URL(value.startsWith("/") ? value : `/${value}`, new URL(normalizedBase).origin).toString();
+  }
+  return value.startsWith("/") ? value : `/${value}`;
+}
+
 function getStoredAccessToken() {
   return localStorage.getItem(ACCESS_TOKEN_KEY) || "";
 }
@@ -110,13 +121,15 @@ async function request(path, options = {}) {
     query = {},
     body,
     headers = {},
-    retryOn401 = true
+    retryOn401 = true,
+    responseType = "json"
   } = options;
 
-  const requestHeaders = {
-    "Content-Type": "application/json",
-    ...headers
-  };
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const requestHeaders = { ...headers };
+  if (body !== undefined && !isFormData && !requestHeaders["Content-Type"]) {
+    requestHeaders["Content-Type"] = "application/json";
+  }
 
   const accessToken = getStoredAccessToken();
   if (accessToken) {
@@ -126,7 +139,7 @@ async function request(path, options = {}) {
   const response = await fetch(buildUrl(path, query), {
     method,
     headers: requestHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined
+    body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body))
   });
 
   const canTryRefresh =
@@ -142,7 +155,9 @@ async function request(path, options = {}) {
     }
   }
 
-  const payload = await parsePayload(response);
+  const payload = responseType === "blob" && response.ok
+    ? await response.blob()
+    : await parsePayload(response);
   if (!response.ok) {
     const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
     throw new ApiError(message, response.status, payload);
@@ -165,4 +180,8 @@ export function apiPatch(path, body = {}, options = {}) {
 
 export function apiDelete(path, options = {}) {
   return request(path, { ...options, method: "DELETE" });
+}
+
+export function apiGetBlob(path, query = {}, options = {}) {
+  return request(path, { ...options, method: "GET", query, responseType: "blob" });
 }

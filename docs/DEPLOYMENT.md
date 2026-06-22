@@ -41,6 +41,16 @@ Nginx reverse proxy frontend/backend. MySQL và backend không được expose t
 - PM2 chạy một backend instance.
 - Production frontend dùng `VITE_API_BASE_URL=/api/v1`.
 
+Ảnh sản phẩm nên đặt ngoài Git working tree:
+
+```text
+PRODUCT_UPLOAD_ROOT=/var/lib/linhkienpc/product-images
+PRODUCT_IMAGE_MAX_BYTES=15728640
+PRODUCT_IMAGE_MAX_COUNT=3
+```
+
+User chạy PM2 phải có quyền đọc/ghi thư mục này. Không đặt upload root trong `frontend/dist` và không expose trực tiếp bằng Nginx.
+
 ## 3. Backup
 
 ```text
@@ -66,6 +76,8 @@ Backup thủ công trước deploy:
 ```bash
 /home/vitinhphuoctai/backup_linhkienpc.sh
 ```
+
+Từ migration 020, backup hoàn chỉnh phải gồm cả MySQL và `PRODUCT_UPLOAD_ROOT`. Chỉ backup database sẽ không đủ để khôi phục ảnh sản phẩm. Cần kiểm tra restore cả metadata lẫn file.
 
 Nếu backup lỗi, file rỗng hoặc ổ đĩa gần đầy: dừng deploy.
 
@@ -158,6 +170,7 @@ Xác nhận:
 - Tồn giảm đúng và public lookup phản ánh tồn mới.
 - Voucher history/detail/print.
 - Serial/Ghi chú và snapshot giá.
+- Upload, thumbnail, gallery và tải ảnh gốc của sản phẩm.
 - Backend chỉ nghe `127.0.0.1:3000`.
 - Cổng 3000/3306 không public.
 

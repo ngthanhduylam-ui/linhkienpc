@@ -112,6 +112,13 @@ GET   /admin/products/:id
 PATCH /admin/products/:id
 PATCH /admin/products/:id/deactivate
 PATCH /admin/products/:id/activate
+GET   /admin/products/:id/images
+POST  /admin/products/:id/images
+POST  /admin/products/:id/images/:imageId/replace
+PATCH /admin/products/:id/images/reorder
+GET   /admin/products/:id/images/:imageId/thumbnail
+GET   /admin/products/:id/images/:imageId/download
+DELETE /admin/products/:id/images/:imageId
 ```
 
 Admin product API hỗ trợ `sale_price` cho giá bán mặc định:
@@ -120,6 +127,25 @@ Admin product API hỗ trợ `sale_price` cho giá bán mặc định:
 - `sale_price` là optional và nullable; `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
 - Giá hợp lệ là số nguyên không âm, tối đa `999999999999999`.
 - Public lookup không trả `sale_price`.
+
+Ảnh sản phẩm:
+
+- Tối đa 3 ảnh; ảnh đầu tiên theo `sort_order` là ảnh chính.
+- Upload dùng `multipart/form-data`, field `images`.
+- Chấp nhận JPEG, PNG, WebP hợp lệ; mỗi file tối đa 15 MB.
+- Backend giải mã nội dung, giữ file gốc nguyên byte và tạo thumbnail WebP riêng.
+- Reorder gửi `{ "image_ids": [3, 1, 2] }` và phải chứa đầy đủ ID ảnh của sản phẩm.
+- Product list/detail trả `image_count` và `primary_image` trong cùng query.
+
+Public image endpoints:
+
+```text
+GET /public/products/:sku/images
+GET /public/products/:sku/images/:imageId/thumbnail
+GET /public/products/:sku/images/:imageId/download
+```
+
+Public chỉ xem/tải ảnh của sản phẩm active, không nhận đường dẫn filesystem hoặc API quản trị ảnh.
 
 Quy tắc SKU:
 

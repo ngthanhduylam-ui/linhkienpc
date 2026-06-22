@@ -35,3 +35,6 @@ backups/*.sql
 # temporary files
 *.tmp
 *.temp
+
+# runtime uploads
+backend/uploads/

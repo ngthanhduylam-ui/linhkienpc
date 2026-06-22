@@ -1,5 +1,13 @@
 # VI TÍNH PHƯỚC TÀI POS - Changelog theo milestone
 
+## Product Images
+
+- Thêm tối đa 3 ảnh cho mỗi sản phẩm; ảnh đầu tiên là ảnh chính.
+- Giữ file gốc trên filesystem và tạo thumbnail WebP riêng.
+- Product Admin quản lý upload, thứ tự, xóa và tải ảnh gốc.
+- Product List, POS và Public Lookup hiển thị thumbnail; Public Lookup có gallery và tải ảnh của sản phẩm active.
+- Chưa có CDN/object storage hoặc xử lý ảnh hàng loạt.
+
 Tài liệu này ghi lại các mốc thay đổi lớn của hướng POS-first. Không invent ngày nếu không có trong repo/history; các mục được tổ chức theo milestone.
 
 ## 2026-06-19 - Production trial tại cửa hàng

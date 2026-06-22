@@ -15,12 +15,16 @@ const supplierAdminRoutes = require('../modules/supplier/supplier.route');
 const productController = require('../modules/product/product.controller');
 const categoryController = require('../modules/category/category.controller');
 const productValidators = require('../modules/product/product.validation');
+const productImageController = require('../modules/productImage/productImage.controller');
 
 const router = express.Router();
 
 router.use('/health', healthRoute);
 
 router.get('/public/products', productController.searchPublicProducts);
+router.get('/public/products/:sku/images', productValidators.skuParamValidator, productImageController.listPublicImages);
+router.get('/public/products/:sku/images/:imageId/thumbnail', productImageController.getPublicThumbnail);
+router.get('/public/products/:sku/images/:imageId/download', productImageController.downloadPublicImage);
 router.get('/public/products/:sku/inventory', productValidators.skuParamValidator, productController.getPublicInventoryBySku);
 router.get('/public/categories', categoryController.listCategories);
 
