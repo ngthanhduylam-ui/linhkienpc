@@ -22,6 +22,19 @@ export async function listProductsPage({ keyword = "", page = 1, limit = 20, is_
   };
 }
 
+export async function searchActiveProducts(keyword, limit = 12) {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) return [];
+
+  const result = await listProductsPage({
+    keyword: normalizedKeyword,
+    page: 1,
+    limit,
+    is_active: true
+  });
+  return result.items;
+}
+
 export async function listActiveCategories() {
   const response = await apiGet("/public/categories", { page: 1, limit: 100 });
   return response?.data || [];

@@ -5,54 +5,17 @@ import { CustomerSelector } from "../components/CustomerSelector";
 import {
   bulkStockOutRequest,
   getProductInventoryRequest,
-  listActiveCategories,
-  listActiveProducts
+  listActiveProducts,
+  searchActiveProducts
 } from "../services/inventoryOperations.service";
-import { RECENT_PRODUCTS_KEY, filterRecentItemsByAvailable, readRecentItems, saveRecentItem } from "../utils/recentItems";
+import { RECENT_PRODUCTS_KEY, readRecentItems, saveRecentItem } from "../utils/recentItems";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
 
-function stripDiacritics(value) {
-  return (value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\u0111/g, "d")
-    .replace(/\u0110/g, "D");
-}
-
-function normalizeText(value) {
-  return stripDiacritics(value).trim().toLowerCase();
-}
-
-function getSearchTokens(value) {
-  return normalizeText(value).split(/\s+/).filter(Boolean).slice(0, 8);
-}
-
-function compactSearchText(value) {
-  return value.replace(/[.\-\s]/g, "");
-}
-
-function matchesSearchTokens(values, tokens) {
-  const normalizedValues = values.map(normalizeText);
-  const compactValues = normalizedValues.map(compactSearchText);
-
-  return tokens.every((token) => {
-    const compactToken = compactSearchText(token);
-    return normalizedValues.some((value) => value.includes(token)) ||
-      (compactToken && compactValues.some((value) => value.includes(compactToken)));
-  });
-}
-
 function normalizeWarrantyValue(value) {
   if (value === NO_NOTE_WARRANTY_VALUE) return NO_NOTE_WARRANTY_VALUE;
   return (value || "").trim().toUpperCase().replace(/\s+/g, "");
-}
-
-function getCategoryName(product, categories) {
-  if (product?.category?.name) return product.category.name;
-  const match = categories.find((item) => Number(item.id) === Number(product?.category_id));
-  return match?.name || "-";
 }
 
 function sortAvailableProductsFirst(items) {
@@ -225,7 +188,6 @@ function hasOrderDraft(order) {
 
 export function StockOutBulkPage() {
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orders, setOrders] = useState(() => [createEmptyOrder(1)]);
@@ -236,7 +198,11 @@ export function StockOutBulkPage() {
   const orderTabRefs = useRef({});
   const searchInputRef = useRef(null);
   const suppressDropdownOnFocusRef = useRef(false);
+  const productSearchRequestRef = useRef(0);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchProducts, setSearchProducts] = useState([]);
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const [productSearchError, setProductSearchError] = useState("");
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [recentProducts, setRecentProducts] = useState(() => readRecentItems(RECENT_PRODUCTS_KEY));
   const [inventoryBySku, setInventoryBySku] = useState({});
@@ -264,10 +230,9 @@ export function StockOutBulkPage() {
       setIsLoading(true);
       setError("");
       try {
-        const [productItems, categoryItems] = await Promise.all([listActiveProducts(), listActiveCategories()]);
+        const productItems = await listActiveProducts();
         if (!active) return;
         setProducts(productItems);
-        setCategories(categoryItems);
       } catch (err) {
         if (active) setError(err?.message || "Không thể tải dữ liệu sản phẩm.");
       } finally {
@@ -283,7 +248,11 @@ export function StockOutBulkPage() {
 
   useEffect(() => {
     if (!products.length) return;
-    const activeRecentProducts = filterRecentItemsByAvailable(readRecentItems(RECENT_PRODUCTS_KEY), products).slice(0, 20);
+    const availableById = new Map(products.map((item) => [String(item.id), item]));
+    const activeRecentProducts = readRecentItems(RECENT_PRODUCTS_KEY)
+      .map((item) => availableById.get(String(item.id)) || item)
+      .filter((item) => item?.is_active !== false)
+      .slice(0, 20);
     setRecentProducts(activeRecentProducts);
     try {
       window.localStorage.setItem(RECENT_PRODUCTS_KEY, JSON.stringify(activeRecentProducts));
@@ -307,29 +276,49 @@ export function StockOutBulkPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredProducts = useMemo(() => {
-    const tokens = getSearchTokens(debouncedSearch);
-    if (!tokens.length) return [];
+  useEffect(() => {
+    const keyword = debouncedSearch.trim();
+    if (!keyword) {
+      productSearchRequestRef.current += 1;
+      setSearchProducts([]);
+      setIsSearchingProducts(false);
+      setProductSearchError("");
+      return;
+    }
 
-    return sortAvailableProductsFirst(
-      products.filter((item) =>
-        matchesSearchTokens(
-          [
-            item.sku,
-            item.name,
-            getCategoryName(item, categories)
-          ],
-          tokens
-        )
-      )
-    ).slice(0, 12);
-  }, [products, categories, debouncedSearch]);
+    const requestId = productSearchRequestRef.current + 1;
+    productSearchRequestRef.current = requestId;
+    setIsSearchingProducts(true);
+    setProductSearchError("");
+    setSearchProducts([]);
+
+    searchActiveProducts(keyword, 12)
+      .then((items) => {
+        if (productSearchRequestRef.current !== requestId) return;
+        setSearchProducts(sortAvailableProductsFirst(items));
+      })
+      .catch((err) => {
+        if (productSearchRequestRef.current !== requestId) return;
+        setSearchProducts([]);
+        setProductSearchError(err?.message || "Không thể tải kết quả tìm kiếm sản phẩm.");
+      })
+      .finally(() => {
+        if (productSearchRequestRef.current === requestId) {
+          setIsSearchingProducts(false);
+        }
+      });
+  }, [debouncedSearch]);
+
+  const isWaitingForProductSearch = searchInput.trim() !== debouncedSearch;
 
   const displayProducts = useMemo(() => {
     if (!isProductDropdownOpen) return [];
-    if (debouncedSearch) return filteredProducts;
-    return sortAvailableProductsFirst(filterRecentItemsByAvailable(recentProducts, products)).slice(0, 20);
-  }, [debouncedSearch, filteredProducts, isProductDropdownOpen, products, recentProducts]);
+    if (searchInput.trim()) {
+      if (isWaitingForProductSearch) return [];
+      return searchProducts;
+    }
+    return sortAvailableProductsFirst(recentProducts.filter((item) => item?.is_active !== false)).slice(0, 20);
+  }, [isProductDropdownOpen, isWaitingForProductSearch, recentProducts, searchInput, searchProducts]);
 
   useEffect(() => {
     if (!displayProducts.length) {
@@ -377,14 +366,37 @@ export function StockOutBulkPage() {
     };
   }, [displayProducts, inventoryBySku]);
 
-  const showNoResultState = !isLoading && debouncedSearch.length > 0 && filteredProducts.length === 0;
-  const showEmptyState = !isLoading && products.length === 0;
+  const showSearchLoadingState = Boolean(
+    isProductDropdownOpen
+    && searchInput.trim()
+    && (isWaitingForProductSearch || isSearchingProducts)
+  );
+  const showSearchErrorState = Boolean(
+    isProductDropdownOpen
+    && searchInput.trim()
+    && !isWaitingForProductSearch
+    && !isSearchingProducts
+    && productSearchError
+  );
+  const showNoResultState = Boolean(
+    !isLoading
+    && debouncedSearch.length > 0
+    && !isWaitingForProductSearch
+    && !isSearchingProducts
+    && !productSearchError
+    && searchProducts.length === 0
+  );
+  const showEmptyState = !isLoading && !searchInput.trim() && products.length === 0;
   const totalCartQuantity = cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const cartTotalDisplay = getCartTotalDisplay(getCartTotalState(cartItems));
 
   function resetSharedSearchState() {
+    productSearchRequestRef.current += 1;
     setSearchInput("");
     setDebouncedSearch("");
+    setSearchProducts([]);
+    setIsSearchingProducts(false);
+    setProductSearchError("");
     setIsProductDropdownOpen(false);
     suppressDropdownOnFocusRef.current = false;
   }
@@ -476,9 +488,13 @@ export function StockOutBulkPage() {
   }
 
   function resetProductSearchAfterAdd() {
+    productSearchRequestRef.current += 1;
     suppressDropdownOnFocusRef.current = true;
     setSearchInput("");
     setDebouncedSearch("");
+    setSearchProducts([]);
+    setIsSearchingProducts(false);
+    setProductSearchError("");
     setIsProductDropdownOpen(false);
     setActiveProductSku("");
     window.setTimeout(() => {
@@ -570,8 +586,12 @@ export function StockOutBulkPage() {
   }
 
   function handleClearProductSearch() {
+    productSearchRequestRef.current += 1;
     setSearchInput("");
     setDebouncedSearch("");
+    setSearchProducts([]);
+    setIsSearchingProducts(false);
+    setProductSearchError("");
     setIsProductDropdownOpen(true);
     setSuccess("");
     focusProductSearch({ showDropdown: true });
@@ -707,6 +727,19 @@ export function StockOutBulkPage() {
                   ×
                 </button>
               )}
+            {showSearchLoadingState && (
+              <div className="absolute left-0 top-12 z-50 w-[min(520px,calc(100vw-24px))] rounded-md border border-slate-300 bg-white px-3 py-3 text-sm text-slate-500 shadow-xl">
+                Đang tìm sản phẩm...
+              </div>
+            )}
+
+            {showSearchErrorState && (
+              <div className="absolute left-0 top-12 z-50 w-[min(520px,calc(100vw-24px))] rounded-md border border-red-200 bg-white px-3 py-3 text-sm shadow-xl">
+                <p className="font-medium text-red-700">Không thể tải kết quả tìm kiếm.</p>
+                <p className="mt-1 text-xs text-slate-500">{productSearchError}</p>
+              </div>
+            )}
+
             {isProductDropdownOpen && displayProducts.length > 0 && (
               <div
                 className="absolute left-0 top-12 z-50 max-h-[55vh] w-[clamp(520px,40vw,760px)] max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-300 bg-white shadow-xl"
@@ -807,7 +840,7 @@ export function StockOutBulkPage() {
               </div>
             )}
 
-            {isProductDropdownOpen && (showEmptyState || showNoResultState) && (
+            {isProductDropdownOpen && !showSearchLoadingState && !showSearchErrorState && (showEmptyState || showNoResultState) && (
               <div
                 className="absolute left-0 top-12 z-50 w-[min(520px,calc(100vw-24px))] rounded-md border border-slate-300 bg-white p-2.5 text-sm shadow-xl"
               >
