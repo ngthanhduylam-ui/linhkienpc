@@ -125,6 +125,7 @@ async function searchProducts(query) {
 }
 
 async function resolveProductBySku(sku, db = pool, lockBalance = false) {
+  const lockSql = lockBalance ? ' FOR UPDATE' : '';
   const [rows] = await db.query(
     `
       SELECT
@@ -141,6 +142,7 @@ async function resolveProductBySku(sku, db = pool, lockBalance = false) {
       LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
       WHERE p.sku = ?
       LIMIT 1
+      ${lockSql}
     `,
     [sku]
   );
@@ -334,14 +336,20 @@ async function quantityAdjust({ adminId, sku, adjustmentType, quantity, noteGrou
   try {
     await connection.beginTransaction();
 
-    const product = await resolveProductBySku(sku, connection);
+    // Establish locking reads before any consistent read so concurrent requests
+    // cannot calculate note groups from a stale REPEATABLE READ snapshot.
+    const product = await resolveProductBySku(sku, connection, true);
     const currentQuantity = await lockProductBalance(connection, product.id);
     const noteGroups = await getAdjustedNoteGroups(product.id, connection);
+    const selectedGroup = noteGroups.find((group) => group.note_key === noteGroupKey);
+    const currentGroupQuantity = Number(selectedGroup?.quantity || 0);
 
     let nextQuantity = currentQuantity;
+    let nextGroupQuantity = currentGroupQuantity;
 
     if (adjustmentType === 'INCREASE') {
       nextQuantity = currentQuantity + parsedQuantity;
+      nextGroupQuantity = currentGroupQuantity + parsedQuantity;
     } else {
       if (parsedQuantity > currentQuantity) {
         throw new AppError('Adjustment quantity exceeds current inventory.', 422, 'INSUFFICIENT_STOCK', [
@@ -353,21 +361,19 @@ async function quantityAdjust({ adminId, sku, adjustmentType, quantity, noteGrou
         ]);
       }
 
-      const selectedGroup = noteGroups.find((group) => group.note_key === noteGroupKey);
-      const selectedGroupQuantity = Number(selectedGroup?.quantity || 0);
-
-      if (parsedQuantity > selectedGroupQuantity) {
+      if (parsedQuantity > currentGroupQuantity) {
         throw new AppError('Adjustment quantity exceeds selected note group stock.', 422, 'INSUFFICIENT_NOTE_GROUP_STOCK', [
           {
             field: 'quantity',
             issue: 'exceeds_note_group_stock',
             note_group: noteGroupValue || '',
-            available: selectedGroupQuantity
+            available: currentGroupQuantity
           }
         ]);
       }
 
       nextQuantity = currentQuantity - parsedQuantity;
+      nextGroupQuantity = currentGroupQuantity - parsedQuantity;
     }
 
     await connection.query(
@@ -390,8 +396,8 @@ async function quantityAdjust({ adminId, sku, adjustmentType, quantity, noteGrou
         adjustmentType,
         parsedQuantity,
         noteGroupValue,
-        currentQuantity,
-        nextQuantity,
+        currentGroupQuantity,
+        nextGroupQuantity,
         cleanNote(reason),
         adminId
       ]
@@ -415,7 +421,7 @@ async function quantityAdjust({ adminId, sku, adjustmentType, quantity, noteGrou
             note_group_label: adjustment.note_group_label,
             from_quantity: adjustment.from_quantity,
             to_quantity: adjustment.to_quantity,
-            current_total_quantity: adjustment.to_quantity,
+            current_total_quantity: updated.product.total_quantity,
             reason: adjustment.reason,
             occurred_at: adjustment.occurred_at
           }
