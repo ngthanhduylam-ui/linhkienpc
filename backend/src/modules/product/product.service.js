@@ -325,7 +325,10 @@ async function searchPublicProducts(query) {
     };
   }
 
-  const whereParts = ['p.is_active = 1'];
+  const whereParts = [
+    'p.is_active = 1',
+    'COALESCE(pib.quantity, 0) > 0'
+  ];
   const params = [];
 
   if (searchTokens.length) {
@@ -340,6 +343,7 @@ async function searchPublicProducts(query) {
     `
       SELECT COUNT(*) AS total
       FROM products p
+      LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
       ${whereSql}
     `,
     params
