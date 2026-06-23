@@ -179,7 +179,7 @@ export function TransactionVoucherDetailPage() {
 
             <InfoCard title="Thông tin sản phẩm">
               <div className="overflow-x-auto rounded-md border border-slate-200">
-                <table className={`w-full table-fixed border-collapse text-sm ${isSaleVoucher ? "min-w-[920px]" : "min-w-[640px]"}`}>
+                <table className={`w-full table-fixed border-collapse text-sm ${isSaleVoucher ? "min-w-[1120px]" : "min-w-[640px]"}`}>
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="w-14 px-3 py-2.5 text-center">STT</th>
@@ -187,13 +187,17 @@ export function TransactionVoucherDetailPage() {
                       <th className="w-44 px-3 py-2.5 text-left">SKU</th>
                       <th className="w-52 px-3 py-2.5 text-left">Nhóm bảo hành / Ghi chú</th>
                       <th className="w-24 px-3 py-2.5 text-right">Số lượng</th>
-                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Đơn giá</th>}
+                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Giá tham chiếu</th>}
+                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Chiết khấu</th>}
+                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Giá bán</th>}
                       {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Thành tiền</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(voucher.items || []).map((item, index) => {
                       const unitPrice = formatMoney(item.unit_price);
+                      const referenceUnitPrice = formatMoney(item.reference_unit_price);
+                      const discountAmount = formatMoney(item.discount_amount || 0);
                       const lineTotal = formatMoney(item.line_total);
                       const saleNote = isSaleVoucher ? getSaleNote(item) : "";
 
@@ -212,6 +216,16 @@ export function TransactionVoucherDetailPage() {
                           <td className="min-w-0 break-words px-3 py-3 text-brand-800">{formatNote(item.note || item.warranty_note)}</td>
                           <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-900">{Number(item.quantity || 0)}</td>
                           {isSaleVoucher && (
+                            <td className={`px-3 py-3 text-right font-semibold tabular-nums ${referenceUnitPrice.isMissing ? "text-slate-400" : "text-slate-900"}`}>
+                              {referenceUnitPrice.label}
+                            </td>
+                          )}
+                          {isSaleVoucher && (
+                            <td className="px-3 py-3 text-right font-semibold tabular-nums text-red-600">
+                              {Number(item.discount_amount || 0) > 0 ? `−${discountAmount.label}` : "-"}
+                            </td>
+                          )}
+                          {isSaleVoucher && (
                             <td className={`px-3 py-3 text-right font-semibold tabular-nums ${unitPrice.isMissing ? "text-slate-400" : "text-slate-900"}`}>
                               {unitPrice.label}
                             </td>
@@ -227,7 +241,7 @@ export function TransactionVoucherDetailPage() {
 
                     {(!voucher.items || voucher.items.length === 0) && (
                       <tr>
-                        <td colSpan={isSaleVoucher ? 7 : 5} className="bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
+                        <td colSpan={isSaleVoucher ? 9 : 5} className="bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
                           Phiếu chưa có dòng sản phẩm.
                         </td>
                       </tr>

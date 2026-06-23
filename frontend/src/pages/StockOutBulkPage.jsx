@@ -12,6 +12,7 @@ import { RECENT_PRODUCTS_KEY, readRecentItems, saveRecentItem } from "../utils/r
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
+const MAX_MONEY_AMOUNT = 999999999999999;
 
 function normalizeWarrantyValue(value) {
   if (value === NO_NOTE_WARRANTY_VALUE) return NO_NOTE_WARRANTY_VALUE;
@@ -36,8 +37,39 @@ function formatSalePrice(value, emptyLabel = "Chưa thiết lập giá") {
   return `${Number(value).toLocaleString("vi-VN")} ₫`;
 }
 
-function getSafeLineTotal(salePrice, quantity) {
-  if (salePrice === null || salePrice === undefined) {
+function getReferencePrice(item) {
+  const value = item?.product?.sale_price;
+  if (value === null || value === undefined) return null;
+  const numberValue = Number(value);
+  return Number.isSafeInteger(numberValue) && numberValue >= 0 && numberValue <= MAX_MONEY_AMOUNT
+    ? numberValue
+    : null;
+}
+
+function getFinalUnitPrice(item) {
+  const referencePrice = getReferencePrice(item);
+  if (referencePrice !== null) {
+    const discountAmount = Number(item?.discountAmount || 0);
+    if (
+      !Number.isSafeInteger(discountAmount)
+      || discountAmount < 0
+      || discountAmount > MAX_MONEY_AMOUNT
+      || discountAmount > referencePrice
+    ) return null;
+    return referencePrice - discountAmount;
+  }
+
+  const manualUnitPrice = item?.manualUnitPrice;
+  if (manualUnitPrice === null || manualUnitPrice === undefined) return null;
+  const numberValue = Number(manualUnitPrice);
+  return Number.isSafeInteger(numberValue) && numberValue >= 0 && numberValue <= MAX_MONEY_AMOUNT
+    ? numberValue
+    : null;
+}
+
+function getSafeLineTotal(item) {
+  const finalUnitPrice = getFinalUnitPrice(item);
+  if (finalUnitPrice === null) {
     return {
       value: null,
       missingPrice: true,
@@ -45,9 +77,15 @@ function getSafeLineTotal(salePrice, quantity) {
     };
   }
 
-  const price = Number(salePrice);
-  const quantityValue = Number(quantity);
-  if (!Number.isSafeInteger(price) || !Number.isSafeInteger(quantityValue) || price < 0 || quantityValue < 0) {
+  const price = Number(finalUnitPrice);
+  const quantityValue = Number(item?.quantity);
+  if (
+    !Number.isSafeInteger(price)
+    || price < 0
+    || price > MAX_MONEY_AMOUNT
+    || !Number.isSafeInteger(quantityValue)
+    || quantityValue < 0
+  ) {
     return {
       value: null,
       missingPrice: false,
@@ -55,7 +93,7 @@ function getSafeLineTotal(salePrice, quantity) {
     };
   }
 
-  if (price !== 0 && quantityValue > Math.floor(Number.MAX_SAFE_INTEGER / price)) {
+  if (price !== 0 && quantityValue > Math.floor(MAX_MONEY_AMOUNT / price)) {
     return {
       value: null,
       missingPrice: false,
@@ -70,8 +108,8 @@ function getSafeLineTotal(salePrice, quantity) {
   };
 }
 
-function getCartLineTotalDisplay(salePrice, quantity) {
-  const lineTotal = getSafeLineTotal(salePrice, quantity);
+function getCartLineTotalDisplay(item) {
+  const lineTotal = getSafeLineTotal(item);
 
   if (lineTotal.missingPrice) {
     return {
@@ -97,7 +135,7 @@ function getCartTotalState(items) {
   let total = 0;
 
   for (const item of items) {
-    const lineTotal = getSafeLineTotal(item.product?.sale_price, item.quantity);
+    const lineTotal = getSafeLineTotal(item);
     if (lineTotal.missingPrice) {
       return {
         value: null,
@@ -106,7 +144,7 @@ function getCartTotalState(items) {
       };
     }
 
-    if (lineTotal.overflow || total > Number.MAX_SAFE_INTEGER - lineTotal.value) {
+    if (lineTotal.overflow || total > MAX_MONEY_AMOUNT - lineTotal.value) {
       return {
         value: null,
         missingPrice: false,
@@ -143,6 +181,146 @@ function getCartTotalDisplay(totalState) {
     label: formatSalePrice(totalState.value),
     isWarning: false
   };
+}
+
+function digitsToMoneyInput(value) {
+  const digits = String(value ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  if (!digits) return "";
+  const numberValue = Number(digits);
+  if (!Number.isSafeInteger(numberValue)) return digits;
+  return numberValue.toLocaleString("vi-VN");
+}
+
+function moneyInputToNumber(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return 0;
+  const numberValue = Number(digits);
+  return Number.isSafeInteger(numberValue) && numberValue <= MAX_MONEY_AMOUNT ? numberValue : null;
+}
+
+function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+  const referencePrice = getReferencePrice(item);
+  const hasReferencePrice = referencePrice !== null;
+  const currentValue = hasReferencePrice ? Number(item.discountAmount || 0) : item.manualUnitPrice;
+  const [draftValue, setDraftValue] = useState("");
+  const [draftError, setDraftError] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDraftValue(currentValue === null || currentValue === undefined ? "" : digitsToMoneyInput(currentValue));
+    setDraftError("");
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, [currentValue, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    function handleOutside(event) {
+      if (!containerRef.current?.contains(event.target)) onClose();
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [isOpen, onClose]);
+
+  const parsedDraft = moneyInputToNumber(draftValue);
+  const previewPrice = hasReferencePrice && parsedDraft !== null
+    ? referencePrice - parsedDraft
+    : parsedDraft;
+
+  function applyDraft() {
+    if (parsedDraft === null) {
+      setDraftError("Giá trị tiền vượt giới hạn hỗ trợ.");
+      return;
+    }
+    if (hasReferencePrice && parsedDraft > referencePrice) {
+      setDraftError("Chiết khấu không được lớn hơn giá tham chiếu.");
+      return;
+    }
+    onApply(hasReferencePrice
+      ? { discountAmount: parsedDraft, manualUnitPrice: null }
+      : { discountAmount: 0, manualUnitPrice: parsedDraft });
+  }
+
+  return (
+    <div ref={containerRef} className="relative text-right">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onOpen}
+        className="w-full rounded px-1 py-1 text-right hover:bg-blue-50 disabled:cursor-not-allowed"
+      >
+        {getFinalUnitPrice(item) === null ? (
+          <span className="text-[12px] font-semibold text-amber-700">Chưa thiết lập</span>
+        ) : (
+          <>
+            <span className="block text-[12px] font-semibold tabular-nums text-slate-900">
+              {formatSalePrice(hasReferencePrice ? referencePrice : getFinalUnitPrice(item))}
+            </span>
+            {hasReferencePrice && Number(item.discountAmount || 0) > 0 && (
+              <span className="block text-[10px] font-medium tabular-nums text-red-600">
+                −{formatSalePrice(item.discountAmount)}
+              </span>
+            )}
+          </>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full z-40 mt-1 w-80 rounded-md border border-slate-200 bg-white p-4 text-left shadow-xl">
+          <p className="text-sm font-semibold text-slate-900">Thông tin giá</p>
+          <div className="mt-3 space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-500">Giá tham chiếu</span>
+              <span className="font-semibold tabular-nums text-slate-900">
+                {formatSalePrice(referencePrice, "Chưa thiết lập")}
+              </span>
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-slate-600">
+                {hasReferencePrice ? "Chiết khấu" : "Giá bán thực tế"}
+              </span>
+              <input
+                ref={inputRef}
+                type="text"
+                inputMode="numeric"
+                value={draftValue}
+                onChange={(event) => {
+                  setDraftValue(digitsToMoneyInput(event.target.value));
+                  setDraftError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applyDraft();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    onClose();
+                  }
+                }}
+                className="h-10 w-full rounded border border-slate-300 px-3 text-right font-semibold tabular-nums outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              />
+            </label>
+            <div className="flex justify-between gap-4 border-t border-slate-100 pt-3">
+              <span className="text-slate-500">Đơn giá sau giảm</span>
+              <span className={`font-bold tabular-nums ${previewPrice !== null && previewPrice >= 0 ? "text-slate-950" : "text-red-600"}`}>
+                {previewPrice !== null && previewPrice >= 0 ? formatSalePrice(previewPrice) : "Không hợp lệ"}
+              </span>
+            </div>
+            {draftError && <p className="text-xs font-medium text-red-600">{draftError}</p>}
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Thoát
+            </button>
+            <button type="button" onClick={applyDraft} className="rounded bg-brand-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-900">
+              Áp dụng
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function buildGroupFromApi(item) {
@@ -210,6 +388,7 @@ export function StockOutBulkPage() {
   const [activeProductSku, setActiveProductSku] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [activePriceEditorKey, setActivePriceEditorKey] = useState("");
 
   const activeOrder = useMemo(
     () => orders.find((order) => order.id === activeOrderId) || orders[0],
@@ -333,6 +512,10 @@ export function StockOutBulkPage() {
   useEffect(() => {
     orderTabRefs.current[activeOrderId]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeOrderId, orders.length]);
+
+  useEffect(() => {
+    setActivePriceEditorKey("");
+  }, [activeOrderId]);
 
   useEffect(() => {
     let active = true;
@@ -534,6 +717,8 @@ export function StockOutBulkPage() {
           warrantyLabel: group.label,
           maxQuantity,
           quantity: 1,
+          discountAmount: 0,
+          manualUnitPrice: null,
           saleNote: ""
         }
       ];
@@ -570,6 +755,16 @@ export function StockOutBulkPage() {
     setActiveOrderCartItems((prev) => prev.map((item) => (
       item.cartKey === cartKey ? { ...item, saleNote } : item
     )));
+    setError("");
+    setSuccess("");
+  }
+
+  function updateCartItemPrice(cartKey, priceState) {
+    if (isSubmitting) return;
+    setActiveOrderCartItems((prev) => prev.map((item) => (
+      item.cartKey === cartKey ? { ...item, ...priceState } : item
+    )));
+    setActivePriceEditorKey("");
     setError("");
     setSuccess("");
   }
@@ -612,6 +807,32 @@ export function StockOutBulkPage() {
       if (typeof item.saleNote === "string" && item.saleNote.length > 500) {
         return `Dòng ${index + 1}: Serial / Ghi chú không được vượt quá 500 ký tự.`;
       }
+      const referencePrice = getReferencePrice(item);
+      const hasConfiguredReferencePrice =
+        item.product?.sale_price !== null && item.product?.sale_price !== undefined;
+      if (hasConfiguredReferencePrice && referencePrice === null) {
+        return `Dòng ${index + 1}: giá tham chiếu vượt giới hạn hỗ trợ.`;
+      }
+      if (referencePrice !== null) {
+        const discountAmount = Number(item.discountAmount || 0);
+        if (
+          !Number.isSafeInteger(discountAmount)
+          || discountAmount < 0
+          || discountAmount > MAX_MONEY_AMOUNT
+          || discountAmount > referencePrice
+        ) {
+          return `Dòng ${index + 1}: chiết khấu không hợp lệ.`;
+        }
+      } else if (getFinalUnitPrice(item) === null) {
+        return `Dòng ${index + 1}: sản phẩm chưa có giá, vui lòng nhập giá bán thực tế.`;
+      }
+      if (getSafeLineTotal(item).overflow) {
+        return `Dòng ${index + 1}: thành tiền vượt giới hạn hỗ trợ.`;
+      }
+    }
+
+    if (getCartTotalState(cartItems).overflow) {
+      return "Tổng tiền vượt giới hạn hỗ trợ.";
     }
 
     return "";
@@ -644,7 +865,11 @@ export function StockOutBulkPage() {
           sku: item.sku,
           quantity: Number(item.quantity),
           warranty_note: item.warrantyNote,
-          sale_note: saleNote !== "" ? saleNote : null
+          sale_note: saleNote !== "" ? saleNote : null,
+          discount_amount: Number(item.discountAmount || 0),
+          ...(getReferencePrice(item) === null
+            ? { manual_unit_price: Number(item.manualUnitPrice) }
+            : {})
         };
       })
     };
@@ -930,7 +1155,7 @@ export function StockOutBulkPage() {
                     <span></span>
                   </div>
                   {cartItems.map((item) => {
-                    const lineTotal = getCartLineTotalDisplay(item.product?.sale_price, item.quantity);
+                    const lineTotal = getCartLineTotalDisplay(item);
                     const saleNoteWidth = `${Math.min(Math.max((item.saleNote || "").length + 3, 12), 38)}ch`;
                     const saleNoteRows = Math.min(Math.max(Math.ceil(((item.saleNote || "").length + 3) / 38), 1), 4);
 
@@ -964,13 +1189,14 @@ export function StockOutBulkPage() {
                           <div className="min-w-0 truncate rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-brand-800" title={formatWarrantyNote(item.warrantyLabel)}>
                             {formatWarrantyNote(item.warrantyLabel)}
                           </div>
-                          <div
-                            className={`text-right text-[12px] font-semibold tabular-nums ${
-                              item.product?.sale_price === null || item.product?.sale_price === undefined ? "text-slate-400" : "text-slate-900"
-                            }`}
-                          >
-                            {formatSalePrice(item.product?.sale_price, "Chưa thiết lập")}
-                          </div>
+                          <PriceEditor
+                            item={item}
+                            isOpen={activePriceEditorKey === item.cartKey}
+                            disabled={isSubmitting}
+                            onOpen={() => setActivePriceEditorKey(item.cartKey)}
+                            onClose={() => setActivePriceEditorKey("")}
+                            onApply={(priceState) => updateCartItemPrice(item.cartKey, priceState)}
+                          />
                           <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"

@@ -2,6 +2,7 @@ const validateRequest = require('../../middlewares/validateRequest');
 const AppError = require('../../utils/AppError');
 
 const SKU_PATTERN = /^[a-z0-9]+(\.[a-z0-9]+)*$/i;
+const MAX_MONEY_AMOUNT = 999999999999999;
 
 const stockBodyValidator = validateRequest({
   body: {
@@ -71,6 +72,13 @@ function bulkStockOutBodyValidator(req, res, next) {
   const details = [];
   const { customer_id: customerId, items } = req.body || {};
 
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'total_amount')) {
+    details.push({
+      field: 'body.total_amount',
+      issue: 'total_amount is not accepted; the backend calculates the voucher total'
+    });
+  }
+
   if (customerId !== undefined && customerId !== null && customerId !== '') {
     if (typeof customerId !== 'number' || !Number.isInteger(customerId) || customerId < 1) {
       details.push({ field: 'body.customer_id', issue: 'customer_id must be a positive integer' });
@@ -111,6 +119,50 @@ function bulkStockOutBodyValidator(req, res, next) {
 
       if (item.line_total !== undefined) {
         details.push({ field: `${fieldPrefix}.line_total`, issue: 'line_total is not accepted for stock-out' });
+      }
+
+      if (Object.prototype.hasOwnProperty.call(item, 'final_unit_price')) {
+        details.push({
+          field: `${fieldPrefix}.final_unit_price`,
+          issue: 'final_unit_price is not accepted; the backend calculates the final price'
+        });
+      }
+
+      if (
+        item.discount_amount !== undefined
+        && (
+          typeof item.discount_amount !== 'number'
+          || !Number.isSafeInteger(item.discount_amount)
+          || item.discount_amount < 0
+          || item.discount_amount > MAX_MONEY_AMOUNT
+        )
+      ) {
+        details.push({
+          field: `${fieldPrefix}.discount_amount`,
+          issue: `discount_amount must be a non-negative integer not greater than ${MAX_MONEY_AMOUNT}`
+        });
+      }
+
+      if (
+        item.manual_unit_price !== undefined
+        && (
+          typeof item.manual_unit_price !== 'number'
+          || !Number.isSafeInteger(item.manual_unit_price)
+          || item.manual_unit_price < 0
+          || item.manual_unit_price > MAX_MONEY_AMOUNT
+        )
+      ) {
+        details.push({
+          field: `${fieldPrefix}.manual_unit_price`,
+          issue: `manual_unit_price must be a non-negative integer not greater than ${MAX_MONEY_AMOUNT}`
+        });
+      }
+
+      if (item.reference_unit_price !== undefined) {
+        details.push({
+          field: `${fieldPrefix}.reference_unit_price`,
+          issue: 'reference_unit_price is not accepted; the backend reads the current product price'
+        });
       }
 
       if (item.warranty_note !== undefined && item.warranty_note !== null && typeof item.warranty_note !== 'string') {

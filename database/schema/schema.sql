@@ -9,7 +9,7 @@ SOURCE database/schema/customers.sql;
 SOURCE database/schema/suppliers.sql;
 SOURCE database/schema/stock_vouchers.sql;
 SOURCE database/schema/stock_transactions.sql;
--- stock_voucher_items includes sale_note_snapshot for sale line notes.
+-- stock_voucher_items includes sale-note and price/discount snapshots for sale lines.
 SOURCE database/schema/stock_voucher_items.sql;
 SOURCE database/schema/inventory_note_adjustments.sql;
 SOURCE database/schema/inventory_quantity_adjustments.sql;

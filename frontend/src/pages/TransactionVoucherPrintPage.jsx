@@ -176,13 +176,15 @@ export function TransactionVoucherPrintPage() {
                 <th className="border border-slate-900 px-2 py-2">Tên sản phẩm</th>
                 <th className="w-36 border border-slate-900 px-2 py-2">Bảo hành/Ghi chú</th>
                 <th className="w-16 border border-slate-900 px-2 py-2 text-right">Số lượng</th>
-                <th className="w-24 border border-slate-900 px-2 py-2 text-right">Đơn giá</th>
+                <th className="w-32 border border-slate-900 px-2 py-2 text-right">Thông tin giá</th>
                 <th className="w-28 border border-slate-900 px-2 py-2 text-right">Thành tiền</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => {
                 const saleNote = getSaleNote(item);
+                const hasReferencePrice = item.reference_unit_price !== null && item.reference_unit_price !== undefined;
+                const discountAmount = Number(item.discount_amount || 0);
 
                 return (
                   <tr key={item.stock_voucher_item_id || item.transaction_id || index} className="voucher-print-row align-top">
@@ -200,7 +202,19 @@ export function TransactionVoucherPrintPage() {
                       {formatNote(item.warranty_note === null || item.warranty_note === undefined ? item.note : item.warranty_note)}
                     </td>
                     <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{Number(item.quantity || 0)}</td>
-                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.unit_price)}</td>
+                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">
+                      {hasReferencePrice && discountAmount > 0 && (
+                        <span className="block text-[10px] font-normal text-slate-600">
+                          Tham chiếu: {formatMoney(item.reference_unit_price)}
+                        </span>
+                      )}
+                      {discountAmount > 0 && (
+                        <span className="block text-[10px] font-normal text-slate-600">
+                          Giảm: −{formatMoney(item.discount_amount)}
+                        </span>
+                      )}
+                      <span className="block font-semibold">Bán: {formatMoney(item.unit_price)}</span>
+                    </td>
                     <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.line_total)}</td>
                   </tr>
                 );

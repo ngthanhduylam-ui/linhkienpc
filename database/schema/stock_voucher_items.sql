@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS stock_voucher_items (
   warranty_note_snapshot VARCHAR(500) NULL,
   sale_note_snapshot VARCHAR(500) NULL,
   quantity INT UNSIGNED NOT NULL,
+  reference_unit_price DECIMAL(15,0) NULL,
+  discount_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
   unit_price DECIMAL(15,0) NULL,
   line_total DECIMAL(15,0) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -26,6 +28,8 @@ CREATE TABLE IF NOT EXISTS stock_voucher_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
     ON UPDATE CASCADE,
   CONSTRAINT chk_stock_voucher_items_quantity_positive CHECK (quantity > 0),
+  CONSTRAINT chk_stock_voucher_items_reference_price_non_negative CHECK (reference_unit_price IS NULL OR reference_unit_price >= 0),
+  CONSTRAINT chk_stock_voucher_items_discount_non_negative CHECK (discount_amount >= 0),
   CONSTRAINT chk_stock_voucher_items_unit_price_non_negative CHECK (unit_price IS NULL OR unit_price >= 0),
   CONSTRAINT chk_stock_voucher_items_line_total_non_negative CHECK (line_total IS NULL OR line_total >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

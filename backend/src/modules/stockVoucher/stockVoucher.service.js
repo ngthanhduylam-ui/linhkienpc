@@ -135,6 +135,8 @@ async function attachPreviewItems(vouchers) {
         svi.sale_note_snapshot AS sale_note,
         svi.sku_snapshot AS sku,
         svi.product_name_snapshot AS product_name,
+        svi.reference_unit_price,
+        svi.discount_amount,
         svi.unit_price,
         svi.line_total
       FROM stock_voucher_items svi
@@ -155,6 +157,8 @@ async function attachPreviewItems(vouchers) {
       quantity: Number(row.quantity || 0),
       note: row.note,
       sale_note: row.sale_note,
+      reference_unit_price: mapMoney(row.reference_unit_price),
+      discount_amount: mapMoney(row.discount_amount) || 0,
       unit_price: mapMoney(row.unit_price),
       line_total: mapMoney(row.line_total)
     });
@@ -195,6 +199,8 @@ async function attachPreviewItems(vouchers) {
       quantity: Number(row.quantity || 0),
       note: row.note,
       sale_note: null,
+      reference_unit_price: null,
+      discount_amount: 0,
       unit_price: null,
       line_total: null
     });
@@ -314,6 +320,8 @@ async function getStockVoucherById(id) {
         svi.warranty_note_snapshot AS note,
         svi.sale_note_snapshot AS sale_note,
         svi.quantity,
+        svi.reference_unit_price,
+        svi.discount_amount,
         svi.unit_price,
         svi.line_total
       FROM stock_voucher_items svi
@@ -333,6 +341,8 @@ async function getStockVoucherById(id) {
         note: row.note,
         warranty_note: row.note,
         sale_note: row.sale_note,
+        reference_unit_price: mapMoney(row.reference_unit_price),
+        discount_amount: mapMoney(row.discount_amount) || 0,
         unit_price: mapMoney(row.unit_price),
         line_total: mapMoney(row.line_total),
         occurred_at: voucherRows[0].occurred_at,
@@ -375,6 +385,8 @@ async function getStockVoucherById(id) {
       note: row.note,
       warranty_note: row.note,
       sale_note: null,
+      reference_unit_price: null,
+      discount_amount: 0,
       unit_price: null,
       line_total: null,
       occurred_at: row.occurred_at,

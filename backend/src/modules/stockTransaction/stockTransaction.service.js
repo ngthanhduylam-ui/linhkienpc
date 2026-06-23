@@ -11,7 +11,7 @@ function validateQuantity(quantity) {
   }
 }
 
-function decimalToBigInt(value, fieldName) {
+function databaseMoneyToBigInt(value, fieldName) {
   if (value === null || value === undefined) {
     return null;
   }
@@ -29,6 +29,32 @@ function decimalToBigInt(value, fieldName) {
   return parsed;
 }
 
+function requestMoneyToBigInt(value, fieldName, item) {
+  const details = [
+    {
+      sku: item.sku,
+      product_id: item.product_id,
+      field: fieldName,
+      issue: 'must_be_non_negative_integer_within_supported_amount'
+    }
+  ];
+
+  if (
+    typeof value !== 'number'
+    || !Number.isSafeInteger(value)
+    || value < 0
+  ) {
+    throw new AppError(`${fieldName} must be a non-negative integer.`, 400, 'INVALID_MONEY_AMOUNT', details);
+  }
+
+  const parsed = BigInt(value);
+  if (parsed > MAX_MONEY_AMOUNT) {
+    throw new AppError(`${fieldName} exceeds supported amount.`, 400, 'MONEY_AMOUNT_OVERFLOW', details);
+  }
+
+  return parsed;
+}
+
 function moneyToSql(value) {
   return value === null || value === undefined ? null : value.toString();
 }
@@ -38,15 +64,58 @@ function moneyToResponse(value) {
 }
 
 function buildSaleSnapshot(item) {
-  const unitPrice = decimalToBigInt(item.sale_price, 'sale_price');
-  if (unitPrice === null) {
-    return {
-      unit_price: null,
-      line_total: null
-    };
+  const referenceUnitPrice = databaseMoneyToBigInt(item.sale_price, 'sale_price');
+  const discountAmount = requestMoneyToBigInt(item.discount_amount ?? 0, 'discount_amount', item);
+  const hasReferencePrice = referenceUnitPrice !== null;
+  let finalUnitPrice;
+
+  if (hasReferencePrice) {
+    if (item.manual_unit_price !== undefined) {
+      throw new AppError('manual_unit_price is only accepted when the product has no reference price.', 400, 'VALIDATION_ERROR', [
+        {
+          sku: item.sku,
+          product_id: item.product_id,
+          field: 'manual_unit_price',
+          issue: 'not_allowed_when_reference_price_exists'
+        }
+      ]);
+    }
+    if (discountAmount > referenceUnitPrice) {
+      throw new AppError('discount_amount cannot exceed the reference price.', 400, 'INVALID_DISCOUNT_AMOUNT', [
+        {
+          sku: item.sku,
+          product_id: item.product_id,
+          field: 'discount_amount',
+          issue: 'exceeds_reference_price'
+        }
+      ]);
+    }
+    finalUnitPrice = referenceUnitPrice - discountAmount;
+  } else {
+    if (discountAmount !== 0n) {
+      throw new AppError('discount_amount must be 0 when the product has no reference price.', 400, 'INVALID_DISCOUNT_AMOUNT', [
+        {
+          sku: item.sku,
+          product_id: item.product_id,
+          field: 'discount_amount',
+          issue: 'requires_reference_price'
+        }
+      ]);
+    }
+    if (item.manual_unit_price === undefined) {
+      throw new AppError('manual_unit_price is required when the product has no reference price.', 400, 'MANUAL_UNIT_PRICE_REQUIRED', [
+        {
+          sku: item.sku,
+          product_id: item.product_id,
+          field: 'manual_unit_price',
+          issue: 'required'
+        }
+      ]);
+    }
+    finalUnitPrice = requestMoneyToBigInt(item.manual_unit_price, 'manual_unit_price', item);
   }
 
-  const lineTotal = unitPrice * BigInt(item.quantity);
+  const lineTotal = finalUnitPrice * BigInt(item.quantity);
   if (lineTotal > MAX_MONEY_AMOUNT) {
     throw new AppError('line_total exceeds supported amount.', 400, 'MONEY_AMOUNT_OVERFLOW', [
       {
@@ -59,7 +128,9 @@ function buildSaleSnapshot(item) {
   }
 
   return {
-    unit_price: unitPrice,
+    reference_unit_price: referenceUnitPrice,
+    discount_amount: discountAmount,
+    unit_price: finalUnitPrice,
     line_total: lineTotal
   };
 }
@@ -584,6 +655,8 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         product_id: Number(product.id),
         product_name: product.name,
         sale_price: product.sale_price,
+        discount_amount: item.discount_amount ?? 0,
+        manual_unit_price: item.manual_unit_price,
         quantity: Number(item.quantity),
         warranty_note: item.warranty_note,
         sale_note: normalizeSaleNote(item.sale_note),
@@ -595,6 +668,8 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
     resolvedItems.forEach((item) => {
       const priceSnapshot = buildSaleSnapshot(item);
       item.unit_price = priceSnapshot.unit_price;
+      item.reference_unit_price = priceSnapshot.reference_unit_price;
+      item.discount_amount = priceSnapshot.discount_amount;
       item.line_total = priceSnapshot.line_total;
     });
     const totalAmount = calculateVoucherTotalAmount(resolvedItems);
@@ -749,10 +824,12 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
               warranty_note_snapshot,
               sale_note_snapshot,
               quantity,
+              reference_unit_price,
+              discount_amount,
               unit_price,
               line_total
             )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           voucher.id,
@@ -763,6 +840,8 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
           item.transaction_note,
           item.sale_note,
           item.quantity,
+          moneyToSql(item.reference_unit_price),
+          moneyToSql(item.discount_amount),
           moneyToSql(item.unit_price),
           moneyToSql(item.line_total)
         ]
@@ -776,6 +855,8 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
         warranty_note: item.warranty_note === NO_NOTE_WARRANTY_KEY ? NO_NOTE_WARRANTY_KEY : item.transaction_note,
         sale_note: item.sale_note,
         transaction_id: txResult.insertId,
+        reference_unit_price: moneyToResponse(item.reference_unit_price),
+        discount_amount: moneyToResponse(item.discount_amount),
         unit_price: moneyToResponse(item.unit_price),
         line_total: moneyToResponse(item.line_total),
         new_total_quantity: nextQuantity
