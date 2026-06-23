@@ -229,6 +229,11 @@ export async function createCategoryRequest(payload) {
   return response?.data;
 }
 
+export async function updateCategoryRequest(id, payload) {
+  const response = await apiPatch(`/admin/categories/${encodeURIComponent(id)}`, payload);
+  return response?.data;
+}
+
 export async function stockInRequest(payload) {
   const response = await apiPost("/admin/stock-in", payload);
   return response?.data;

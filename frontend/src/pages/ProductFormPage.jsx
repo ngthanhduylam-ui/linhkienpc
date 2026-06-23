@@ -12,6 +12,7 @@ import {
   replaceProductImage,
   reorderProductImages,
   uploadProductImages,
+  updateCategoryRequest,
   updateProductRequest
 } from "../services/inventoryOperations.service";
 
@@ -187,11 +188,17 @@ export function ProductFormPage() {
   const [isSkuManuallyEdited, setIsSkuManuallyEdited] = useState(false);
   const [categorySelectionSource, setCategorySelectionSource] = useState(isEditMode ? "manual" : "empty");
   const [showCategoryCreateForm, setShowCategoryCreateForm] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryInlineInfo, setCategoryInlineInfo] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState("");
+  const [categoryRenameValue, setCategoryRenameValue] = useState("");
+  const [categoryRenameError, setCategoryRenameError] = useState("");
+  const [categoryManagerMessage, setCategoryManagerMessage] = useState("");
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [isRenamingCategory, setIsRenamingCategory] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -426,6 +433,63 @@ export function ProductFormPage() {
       }
     } finally {
       setIsSavingCategory(false);
+    }
+  }
+
+  function openCategoryManager() {
+    setShowCategoryManager(true);
+    setShowCategoryCreateForm(false);
+    setCategoryInlineInfo("");
+    setCategoryManagerMessage("");
+    setCategoryRenameError("");
+    setEditingCategoryId("");
+    setCategoryRenameValue("");
+  }
+
+  function closeCategoryManager() {
+    setShowCategoryManager(false);
+    setCategoryManagerMessage("");
+    setCategoryRenameError("");
+    setEditingCategoryId("");
+    setCategoryRenameValue("");
+  }
+
+  function startCategoryRename(category) {
+    setEditingCategoryId(String(category.id));
+    setCategoryRenameValue(category.name || "");
+    setCategoryRenameError("");
+    setCategoryManagerMessage("");
+  }
+
+  function cancelCategoryRename() {
+    setEditingCategoryId("");
+    setCategoryRenameValue("");
+    setCategoryRenameError("");
+  }
+
+  async function handleRenameCategory(category) {
+    const nextName = categoryRenameValue.trim();
+    if (!nextName) {
+      setCategoryRenameError("Vui lòng nhập tên loại sản phẩm.");
+      return;
+    }
+
+    setIsRenamingCategory(true);
+    setCategoryRenameError("");
+    setCategoryManagerMessage("");
+    setError("");
+    setSuccess("");
+
+    try {
+      const updated = await updateCategoryRequest(category.id, { name: nextName });
+      await reloadCategories();
+      setEditingCategoryId("");
+      setCategoryRenameValue("");
+      setCategoryManagerMessage(`Đã đổi tên loại sản phẩm thành ${updated?.name || nextName}.`);
+    } catch (err) {
+      setCategoryRenameError(err?.message || "Đổi tên loại sản phẩm thất bại.");
+    } finally {
+      setIsRenamingCategory(false);
     }
   }
 
@@ -750,16 +814,26 @@ export function ProductFormPage() {
                           {fieldErrors.category_id}
                         </p>
                       )}
-                      <button
-                        type="button"
-                        className="mt-1.5 text-xs font-medium text-brand-700 hover:underline"
-                        onClick={() => {
-                          setShowCategoryCreateForm((prev) => !prev);
-                          setCategoryInlineInfo("");
-                        }}
-                      >
-                        + Tạo loại sản phẩm mới
-                      </button>
+                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-brand-700 hover:underline"
+                          onClick={() => {
+                            setShowCategoryCreateForm((prev) => !prev);
+                            setShowCategoryManager(false);
+                            setCategoryInlineInfo("");
+                          }}
+                        >
+                          + Tạo loại sản phẩm mới
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-slate-700 hover:text-brand-700 hover:underline"
+                          onClick={openCategoryManager}
+                        >
+                          Quản lý loại
+                        </button>
+                      </div>
                       {categoryInlineInfo && <p className="mt-2 text-xs text-emerald-700">{categoryInlineInfo}</p>}
                     </div>
 
@@ -781,6 +855,94 @@ export function ProductFormPage() {
                           >
                             {isSavingCategory ? "Đang lưu..." : "Lưu loại sản phẩm"}
                           </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {showCategoryManager && (
+                      <div className="md:col-span-2 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-semibold text-slate-900">Quản lý loại sản phẩm</h3>
+                            <p className="text-xs text-slate-500">Đổi tên loại hiện có, không đổi mã và không tạo loại mới.</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            onClick={closeCategoryManager}
+                          >
+                            Đóng
+                          </button>
+                        </div>
+
+                        {categoryManagerMessage && (
+                          <p className="mt-3 rounded bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                            {categoryManagerMessage}
+                          </p>
+                        )}
+                        {categoryRenameError && (
+                          <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                            {categoryRenameError}
+                          </p>
+                        )}
+
+                        <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+                          {categories.map((category) => {
+                            const isEditingCategory = editingCategoryId === String(category.id);
+                            return (
+                              <div key={category.id} className="rounded border border-slate-200 p-2">
+                                {isEditingCategory ? (
+                                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                                    <input
+                                      className="h-9 rounded border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                      value={categoryRenameValue}
+                                      onChange={(event) => {
+                                        setCategoryRenameValue(event.target.value);
+                                        setCategoryRenameError("");
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Escape") cancelCategoryRename();
+                                        if (event.key === "Enter") {
+                                          event.preventDefault();
+                                          handleRenameCategory(category);
+                                        }
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={isRenamingCategory}
+                                      onClick={() => handleRenameCategory(category)}
+                                      className="h-9 rounded bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      Lưu
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isRenamingCategory}
+                                      onClick={cancelCategoryRename}
+                                      className="h-9 rounded border border-slate-300 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      Hủy
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-slate-900">{category.name}</p>
+                                      <p className="truncate text-xs text-slate-500">Mã: {category.code}</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="shrink-0 rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                      onClick={() => startCategoryRename(category)}
+                                    >
+                                      Đổi tên
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
