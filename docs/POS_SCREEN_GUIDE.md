@@ -1,378 +1,169 @@
-﻿# POS_SCREEN_GUIDE.md
+# Hướng dẫn màn Bán tại quầy
 
-# Hướng dẫn màn Bán tại quầy / POS
-
-Tài liệu này là guide chính thức cho `/admin/stock-out`. Mục tiêu là giữ POS nhanh, ổn định, ít click và không trượt về hướng form kho/ERP.
-
-## 1. Purpose of `/admin/stock-out`
+Cập nhật gần nhất: **23/06/2026**
 
 Route: `/admin/stock-out`
 
-Tên nghiệp vụ: **Bán tại quầy**
+Mục tiêu: thao tác bán nhanh, compact, ít click; không biến POS thành form kho hoặc ERP.
 
-Ý nghĩa:
+## Layout
 
-- Màn POS chính của hệ thống.
-- Dùng để tìm sản phẩm, chọn nhóm bảo hành / ghi chú, thêm vào đơn và hoàn tất bán hàng.
-- Backend/API vẫn dùng stock-out/bulk và stock voucher để trừ tồn, nhưng UI phải nói ngôn ngữ POS.
+- Full-screen, không dùng `AdminLayout`.
+- Top bar: Home, product search, order tabs, nút tạo order.
+- Main: cart bên trái.
+- Right panel: customer, tổng số lượng, tổng tiền và submit.
+- Hỗ trợ nhiều order tab local; code hiện chưa đặt giới hạn số tab rõ ràng và chưa persist draft sau reload.
 
-Không gọi màn này là “Xuất & Giao hàng” trong UI chính.
+## Product search
 
-## 2. Full-screen Layout
+- Khi có keyword: debounce khoảng 300ms và gọi server-side admin product API.
+- Request: `q`, `page=1`, `limit=12`, `is_active=true`.
+- Request sequence guard ngăn response cũ ghi đè query mới.
+- Khi search rỗng và user focus: hiển thị recent products từ localStorage.
+- Không fetch toàn bộ product pages.
+- Product hết hàng vẫn có thể xuất hiện và được hiển thị trạng thái tồn theo behavior admin/POS.
 
-`/admin/stock-out` dùng layout riêng:
+Sau khi add:
 
-- Không dùng AdminSidebar.
-- Không dùng AdminHeader.
-- Không dùng AdminLayout padding/max-width.
-- Full-screen, ưu tiên thao tác tại quầy.
-
-Bố cục chính:
-
-- Top POS bar.
-- Khu vực cart/order bên trái.
-- Right panel cho khách hàng và summary.
-
-## 3. Top Bar
-
-Top bar gồm:
-
-1. Home button
-   - Icon-only.
-   - Link về `/admin`.
-   - Luôn hiển thị.
-
-2. Product search
-   - Placeholder hiện tại: `Tìm sản phẩm theo tên hoặc SKU`.
-   - Là điểm focus chính của POS.
-   - Không hiển thị shortcut giả như F1/F3/F10.
-
-3. Order tabs
-   - `Đơn 1`, `Đơn 2`, ...
-   - Active tab rõ ràng.
-   - Inactive tab nhẹ hơn.
-   - Tabs có thể scroll ngang khi nhiều đơn.
-
-4. New order button `+`
-   - Nằm ngay sau tab cuối.
-   - Không pin ở mép phải màn hình.
-   - Tạo đơn local mới và switch sang đơn đó.
-
-## 4. Home Button
-
-Home button đưa về `/admin`.
-
-Yêu cầu:
-
-- Dễ thấy nhưng không chiếm quá nhiều diện tích.
-- Không làm mất state nếu user đang thao tác mà chưa chủ động rời trang; hiện tại đây là link điều hướng bình thường nên cần cẩn trọng khi dùng.
-
-## 5. Product Search Behavior
-
-Luồng chính:
-
-1. User focus/click vào search.
-2. Nếu input rỗng, hiển thị recent products.
-3. Nếu user gõ, hiển thị matching products.
-4. User chọn nhóm bảo hành / ghi chú.
-5. User click `Thêm`.
-6. Product được thêm vào cart.
-7. Search reset và sẵn sàng cho sản phẩm kế tiếp.
-
-Search cần ưu tiên:
-
-- Tên sản phẩm.
-- SKU.
-- Không phụ thuộc tags/aliases/compatibility vì chưa implement.
-
-## 6. Recent Products Behavior
-
-Recent products:
-
-- Dùng để tăng tốc thao tác.
-- Lưu localStorage.
-- Chỉ hiện khi search rỗng và user chủ động focus/click.
-- Không hiện inactive products.
-- Không tự động reopen ngay sau khi add.
-
-## 7. Product Dropdown Behavior
-
-Dropdown là POS autocomplete, không phải admin form.
-
-Yêu cầu:
-
-- Floating dưới search.
-- Không đẩy layout.
-- Compact, nhiều sản phẩm visible trước khi scroll.
-- Width phù hợp desktop 1920×1080 và 2560×1440.
-- Product row hiển thị: tên sản phẩm, SKU, tổng tồn và giá bán mặc định chỉ đọc.
-- Hết hàng phải muted/khó nhầm.
-- Không hiển thị category nếu làm row rối.
-- Không cho sửa giá và không hiển thị payment/debt.
-
-Dropdown đóng khi:
-
-- Click outside.
-- Escape.
-- Add product thành công.
-- User clear search.
-
-Dropdown không đóng khi:
-
-- Click trong dropdown để chọn warranty group/add.
-- Tương tác với nội dung dropdown.
-
-## 8. Warranty / Note Selection
-
-Current version:
-
-- Nhóm bảo hành / ghi chú được chọn **trước khi thêm vào cart**.
-- Mỗi warranty row hiển thị label, quantity còn lại và button `Thêm`/`+1`/`✓ Đã chọn đủ`.
-- Nếu SKU + note group đã có trong cart, dropdown phải cho user hiểu đã chọn bao nhiêu.
-- Nếu đã chọn đủ tồn, button disabled và text rõ ràng.
-
-Nguồn nhóm:
-
-- Transaction note / warranty note.
-- Inventory note/quantity adjustments.
-- Nhóm `Không ghi chú` nếu có tồn không note.
-
-Future only:
-
-- Chuyển warranty selection vào cart.
-- Không làm trong phase hiện tại nếu chưa có yêu cầu riêng.
-
-## 9. Add-to-cart Behavior
-
-Khi click `Thêm`:
-
-- Thêm quantity = 1.
-- Nếu same SKU + same nhóm bảo hành / ghi chú đã có trong cart, tăng quantity thêm 1.
-- Không vượt quá tồn của nhóm đó.
-- Không thay đổi backend payload ngoài logic hiện có.
-
-## 10. Required Reset Sequence After Add
-
-Sau khi add thành công, bắt buộc:
-
-1. Clear search input.
-2. Clear debounced search.
+1. Clear input.
+2. Clear debounced keyword.
 3. Close dropdown.
-4. Reset suggestions/active item nếu cần.
-5. Focus search input.
-6. Không reopen recent products tự động.
+4. Focus lại input.
+5. Không tự mở recent products.
 
-User phải có thể gõ tiếp ngay để thêm sản phẩm khác.
+Dropdown đóng khi click outside, Escape, clear hoặc add thành công. API error phải khác trạng thái “không tìm thấy”.
 
-## 11. Cart Table Behavior
+## Product result
 
-Cart hiện là table/list compact.
+Mỗi result có:
 
-Cột chính:
+- Thumbnail nếu có.
+- Tên.
+- SKU.
+- Tổng tồn.
+- Giá bán mặc định chỉ đọc.
+- Warranty/note groups còn tồn.
 
-- Sản phẩm
-- SKU
-- Nhóm bảo hành / ghi chú
-- Đơn giá
-- Số lượng
-- Thành tiền
-- Xóa
+Không cho sửa giá trong dropdown.
 
-Yêu cầu:
+## Cart key và warranty group
 
-- Product name là primary.
-- Serial/Ghi chú bán hàng là input compact theo từng dòng, nằm dưới tên sản phẩm.
-- SKU compact, có thể wrap/break khi dài.
-- Nhóm bảo hành / ghi chú dễ thấy.
-- Đơn giá và thành tiền chỉ đọc; giá thiếu hiển thị trạng thái chưa xác định.
-- Quantity controls đủ lớn để click.
-- Không horizontal scroll trên desktop bình thường.
-- Delete action nhanh và rõ.
+Cart key:
 
-Không dùng card lớn kiểu admin cho từng dòng.
+```text
+SKU + normalized warranty group
+```
 
-## 12. Quantity Rules
+- Same SKU + same group: tăng quantity và giữ nguyên `saleNote`.
+- Same SKU + khác group: hai dòng độc lập.
+- `saleNote` không tham gia merge key.
+- Quantity không vượt tồn group.
 
-Quantity trong cart:
+## Cart row
 
-- Tối thiểu 1.
-- Tối đa `item.maxQuantity` theo nhóm tồn.
-- Minus disabled khi quantity <= 1.
-- Plus disabled khi quantity >= maxQuantity.
-- Manual typing được phép.
-- Giá trị invalid phải clamp an toàn.
-- Submit dùng quantity mới nhất trong cart.
+Thứ tự cột:
 
-## 13. Duplicate SKU + Note-group Merge Behavior
+```text
+Sản phẩm -> SKU -> Nhóm bảo hành/Ghi chú -> Đơn giá -> Số lượng -> Thành tiền -> Xóa
+```
 
-Cart key dựa trên:
+Serial/Ghi chú nằm dưới tên sản phẩm:
 
-- SKU
-- normalized warranty/note group
+- Thuộc từng row và từng order.
+- Tối đa 500 ký tự.
+- Trim khi submit; empty/whitespace gửi `null`.
+- Textarea compact, rộng khoảng 3cm khi rỗng, tăng đến khoảng 38ch rồi wrap.
 
-Nếu add cùng SKU + cùng nhóm:
+Giá:
 
-- Merge vào dòng hiện có.
-- Tăng quantity thêm 1.
-- Giữ nguyên Serial/Ghi chú người dùng đã nhập.
-- Không vượt tồn.
+- `null/undefined`: Chưa thiết lập/Chưa xác định.
+- `0`: `0 ₫`.
+- Số dương: format VND.
+- Line/cart total dùng integer an toàn; overflow hiển thị cảnh báo.
+- Chỉ đọc, không parse ngược chuỗi đã format.
 
-Nếu cùng SKU nhưng khác nhóm:
+## Multi-order
 
-- Tạo dòng riêng.
-- Quantity riêng.
-- Validation riêng theo nhóm.
+Mỗi order giữ riêng:
 
-## 14. Customer Selector
+- `cartItems`
+- `selectedCustomer`
+- `saleNote` cấp order nếu có
 
-Customer selector nằm ở right panel.
+Switch tab không làm mất dữ liệu. Tạo order mới không kế thừa note/cart/customer. Khi submit thành công chỉ reset order đã bán.
 
-Hiện tại:
+## Submit
 
-- Customer optional nếu backend cho phép `customer_id` không có.
-- Recent customers.
-- Search khách hàng.
-- Quick create khách hàng nếu current flow hỗ trợ.
-- Selected customer card hiển thị tên, phone và nút đổi.
-- Inactive customers không được hiển thị trong selector/recent.
+Payload:
 
-Không thêm debt/payment/address refactor trong POS ở phase hiện tại.
+```json
+{
+  "customer_id": 1,
+  "items": [
+    {
+      "sku": "example.sku",
+      "quantity": 1,
+      "warranty_note": "BH 12 tháng",
+      "sale_note": "Serial ABC"
+    }
+  ]
+}
+```
 
-## 15. Multiple Order Tabs
+Không gửi:
 
-Hiện tại POS hỗ trợ nhiều order local state:
+```text
+unit_price
+line_total
+total_amount
+discount
+payment
+debt
+```
 
-- `Đơn 1`, `Đơn 2`, ...
-- Button `+` tạo đơn mới.
-- Mỗi order giữ riêng cartItems, selectedCustomer và note state nếu có.
-- Search input có thể shared/reset khi switch.
-- Switching tab không submit hoặc clear đơn khác.
+Backend là nguồn validate tồn, lấy giá, snapshot tiền, tạo stock transaction và voucher.
 
-Chưa có draft persistence localStorage/session.
+Nếu sale thành công nhưng reload product thất bại, UI phải báo bán đã thành công nhưng chưa refresh dữ liệu; không được báo sale thất bại.
 
-## 16. Closing Draft Orders
+## Customer
 
-Close tab:
+- Optional.
+- Search/recent/quick create theo flow hiện tại.
+- Field thực tế: name, phone, address.
+- Inactive customer không xuất hiện.
+- Chưa có debt/payment/customer group.
 
-- Nếu đơn có sản phẩm/khách hàng/note, hỏi confirm:
-  `Đơn này chưa được lưu. Bạn có chắc muốn đóng đơn?`
-- Nếu còn một đơn cuối, close sẽ clear đơn đó thay vì remove toàn bộ tab.
-- Khi đang submitting, không cho switch/create/close order.
+## Giá và next task
 
-## 17. Submit Behavior
+Hiện POS chỉ đọc `products.sale_price`.
 
-Submit button hiện dùng wording: `Hoàn tất bán hàng`.
+Task tiếp theo đã chốt về mặt định hướng:
 
-Submit:
+- Click đơn giá mở popup nhỏ.
+- Nhập `discount_amount` bằng số tiền VND.
+- `discount_amount` là số tiền giảm trên mỗi đơn vị sản phẩm của dòng hàng, không phải tổng số tiền giảm của cả dòng.
+- Không dùng phần trăm.
+- Đơn giá cuối = giá tham chiếu - `discount_amount`.
+- Thành tiền dòng = đơn giá cuối x số lượng.
+- Frontend gửi `discount_amount`; không gửi giá cuối hoặc các tổng tiền như nguồn sự thật.
+- Backend tự đọc giá tham chiếu hợp lệ, validate discount, tính lại đơn giá cuối, thành tiền, tổng phiếu và lưu snapshot.
+- Warranty group chỉ quản lý tồn, không gắn bảng giá.
 
-- Gửi only active order.
-- Gọi `bulkStockOutRequest`.
-- Payload giữ logic backend hiện có.
-- Backend validate tồn kho.
-- Backend tạo stock voucher.
-- Payload có `sale_note` nullable theo từng dòng nhưng không có `unit_price`, `line_total` hoặc `total_amount`.
-- Backend tự snapshot giá và tính lại tổng tiền.
-- Sau success, clear active order.
-- Other order tabs không bị clear.
+Chức năng này chưa được code.
 
-## 18. Double-submit Prevention
+## Responsive
 
-Trong lúc `isSubmitting`:
+- Mục tiêu desktop FullHD và 2K.
+- Không body overflow ngang.
+- Product/SKU/note phải wrap/truncate an toàn.
+- Cart controls không đổi kích thước khi nội dung thay đổi.
 
-- Không cho submit lần 2.
-- Disable create/switch/close order.
-- Disable clear cart.
-- Disable remove product.
-- Disable quantity changes.
-- Disable customer change.
-- Confirm button hiển thị trạng thái xử lý.
+## Không thêm nếu chưa có task riêng
 
-`handleSubmit` phải guard ngay từ đầu nếu đang submitting.
-
-## 19. Success versus Refresh Failure Handling
-
-Quy tắc quan trọng:
-
-- Nếu `bulkStockOutRequest` thành công, sale được xem là thành công.
-- Clear active order.
-- Show success, kèm voucher code nếu response có.
-- Sau đó reload products/tồn kho riêng.
-- Nếu reloadProducts fail, báo warning: bán thành công nhưng chưa làm mới tồn kho.
-- Không được báo “bán thất bại” sau khi backend đã tạo sale/voucher thành công.
-
-## 20. Empty Cart State
-
-Empty cart state nên:
-
-- Cân giữa khu vực chính.
-- Icon muted.
-- Text gợi ý: `Tìm và chọn sản phẩm để bắt đầu bán hàng.`
-- Có action `Thêm sản phẩm ngay` để focus search.
-- Không dùng admin card nặng.
-
-## 21. Responsive Desktop Behavior
-
-Màn hình mục tiêu:
-
-- 1920×1080
-- 2560×1440
-
-Yêu cầu:
-
-- Top bar không bị vỡ.
-- `+` nằm ngay sau order tab cuối.
-- Cart table không overflow ngang trên desktop bình thường.
-- Dropdown đủ rộng để đọc nhưng không che toàn màn.
-- Right panel đủ compact, không dư whitespace lớn.
-
-Mobile không phải ưu tiên cho POS admin, nhưng không nên crash layout nghiêm trọng.
-
-## 22. Explicitly Forbidden POS Scope
-
-Không thêm vào POS hiện tại:
-
-- Giá nhập
-- Sửa giá bán trực tiếp
-- Chiết khấu
-- Thanh toán
-- Công nợ
-- Hóa đơn
-- VAT/tax
-- Báo cáo tài chính
-- Marketplace/e-commerce workflow
-- Keyboard shortcut UI giả
-- ERP workflow
-
-Stock voucher hiện là phiếu giao dịch kho/bán nội bộ, không phải invoice.
-
-## 23. Manual Regression Checklist
-
-Sau mỗi lần sửa POS, test tối thiểu:
-
-1. Mở `/admin/stock-out`.
-2. Admin sidebar/header bị ẩn.
-3. Home button về `/admin`.
-4. Focus search rỗng hiển thị recent products.
-5. Typing filter products.
-6. Click outside đóng dropdown.
-7. Escape đóng dropdown.
-8. Click `Thêm` add product.
-9. Sau add, search input clear.
-10. Sau add, debounced search clear.
-11. Sau add, dropdown đóng.
-12. Sau add, focus quay lại search input.
-13. Dropdown không tự mở lại.
-14. Add same SKU + same note group tăng quantity.
-15. Add same SKU + khác note group tạo dòng riêng.
-16. Quantity +/- hoạt động.
-17. Quantity không vượt tồn.
-18. Serial/Ghi chú giữ đúng khi đổi quantity, merge dòng và chuyển order.
-19. Đơn giá, thành tiền và tổng tiền hiển thị đúng với giá 0/null/dương.
-20. Remove product hoạt động.
-21. Clear all hỏi confirmation.
-22. Customer selector hoạt động.
-23. Multiple order switch không leak state.
-24. Close draft order có confirm.
-25. Submit sale tạo voucher và payload không có field tiền.
-26. Nếu refresh tồn lỗi sau success, UI không báo sale failed.
-27. Public Lookup không bị ảnh hưởng.
+- Payment, khách đưa, tiền thừa.
+- Debt.
+- Giá nhập.
+- Discount toàn đơn.
+- Invoice.
+- Báo cáo.
+- Bán & In.

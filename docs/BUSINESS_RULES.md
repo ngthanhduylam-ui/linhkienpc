@@ -1,169 +1,129 @@
-# BUSINESS_RULES.md
+# VI TÍNH PHƯỚC TÀI POS - Quy tắc nghiệp vụ
 
-Tài liệu này là nguồn tham chiếu nghiệp vụ hiện tại cho **VI TÍNH PHƯỚC TÀI POS**.
+Cập nhật gần nhất: **23/06/2026**
 
-## 1. Phạm vi hệ thống
+## 1. Phạm vi
 
-Hệ thống phục vụ cửa hàng linh kiện PC:
+Hệ thống phục vụ:
 
-- Tra cứu tồn kho công khai.
-- Quản lý sản phẩm và loại sản phẩm.
-- Nhập hàng.
-- Bán tại quầy / xuất kho.
-- Kiểm hàng và điều chỉnh tồn.
-- Quản lý khách hàng, nhà cung cấp.
-- Xem lịch sử phiếu nhập / phiếu bán.
+- Tra cứu tồn công khai.
+- Product Admin.
+- Nhập hàng, bán tại quầy và kiểm hàng.
+- Khách hàng, nhà cung cấp.
+- Phiếu nhập, phiếu bán và mẫu in bảo hành.
 
-Admin product API và Product Admin UI có `sale_price` optional/nullable để lưu giá bán mặc định. POS hiển thị giá, thành tiền và tổng tiền dạng chỉ đọc; backend bulk stock-out luôn tự lấy giá sản phẩm để snapshot và tính lại. Hệ thống chưa có giá nhập, giảm giá, thanh toán, công nợ hoặc báo cáo tài chính.
+Không hiện có: giá nhập, discount, payment, debt, invoice, accounting hoặc financial reporting.
 
-Hiện tại **không** có:
+## 2. Product và SKU
 
-- Giá nhập, chiết khấu.
-- Thanh toán, công nợ.
-- Hóa đơn, kế toán, báo cáo tài chính.
-- E-commerce checkout.
-- Tài khoản khách công khai.
-- Tags/aliases/compatibility search.
+- SKU unique, chỉ dùng chữ thường, số và dấu chấm.
+- Product thuộc một `category_id`; UI gọi là **Loại sản phẩm**.
+- Category bắt buộc khi create/update.
+- Form có thể gợi ý category từ token thứ hai của SKU. Đây chỉ là gợi ý; lựa chọn thủ công luôn được ưu tiên.
+- `sale_price DECIMAL(15,0) NULL`: `NULL` là chưa thiết lập, `0` là giá hợp lệ.
+- Tối đa 3 ảnh/product; ảnh `sort_order=1` là ảnh chính.
 
-## 2. Sản phẩm và SKU
+## 3. Search
 
-- SKU đại diện cho một model sản phẩm và phải unique.
-- SKU chỉ dùng chữ thường, số và dấu chấm.
-- Không dùng dấu cách, dấu gạch ngang hoặc ký tự đặc biệt trong SKU.
-- UI tự chuyển SKU nhập hoa thành chữ thường.
-- Product inactive không xuất hiện trong public search và list mặc định.
-- Khi tạo product, hệ thống tạo dòng tồn ban đầu trong `product_inventory_balances` với số lượng 0.
-- Product thuộc một loại sản phẩm (`category_id` trong API/database, UI gọi là “Loại sản phẩm”).
-- `sale_price` là giá bán mặc định optional/nullable trong admin product API và có thể quản lý trong Product Admin UI. `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
-- Mỗi sản phẩm có tối đa 3 ảnh. `sort_order = 1` là ảnh chính; đổi thứ tự sẽ đổi ảnh chính.
-- File gốc được giữ nguyên để tải lại, thumbnail được tạo riêng cho danh sách/POS/Public Lookup. Database chỉ lưu metadata và đường dẫn tương đối.
-- Public chỉ xem ảnh của sản phẩm active. Deactivate không xóa ảnh; Product Admin vẫn quản lý được ảnh để có thể khôi phục sản phẩm.
-- Phase 2A snapshot `sale_price` khi bán qua backend bulk stock-out. Sản phẩm chưa có giá vẫn bán được; dòng thiếu giá có `unit_price = NULL`, `line_total = NULL`, và nếu đơn có bất kỳ dòng thiếu giá thì `total_amount = NULL`.
-- `sale_price = 0` là giá bán thực sự bằng 0, không phải trạng thái thiếu giá.
+- Search product hỗ trợ tối đa 8 token theo logic AND.
+- Token không cần liền nhau hoặc đúng thứ tự; mỗi token có thể match field khác nhau.
+- Compact search bỏ dấu chấm/gạch ngang cơ bản để hỗ trợ model như `b360m-d` và `b360md`.
+- Chưa có alias/compatibility/fuzzy engine đầy đủ.
+- POS search gọi server, không fetch toàn bộ pages.
 
-Ví dụ SKU hợp lệ:
+## 4. Public Lookup
 
-```text
-2nd.maybo.lenovo.v50t13imb
-2nd.cpu.intel.12400f
-new.ram.ddr4.8gb
+- Route UI `/`, API `GET /api/v1/public/products`.
+- Search rỗng không trả toàn bộ product.
+- Search/list chỉ trả product thỏa:
+
+```sql
+p.is_active = 1
+AND COALESCE(pib.quantity, 0) > 0
 ```
 
-## 3. Loại sản phẩm
+- Product active tồn 0 hoặc chưa có balance không xuất hiện.
+- Khi stock-in/adjustment làm tồn lớn hơn 0, product tự xuất hiện lại.
+- Public detail trực tiếp `GET /public/products/:sku/inventory` hiện vẫn trả product active tồn 0 để giữ tương thích.
+- Public không trả `sale_price`, `unit_price`, `line_total`, `total_amount` hoặc `sale_note`.
 
-- Loại sản phẩm lưu trong bảng `categories`.
-- Backend vẫn dùng tên kỹ thuật `category`.
-- UI hiển thị là “Loại sản phẩm” để gần cách dùng thực tế/Sapo hơn.
-- Deactivate loại sản phẩm không tự động deactivate sản phẩm đang active.
+## 5. Tồn kho và nhóm bảo hành
 
-## 4. Tồn kho
+- `product_inventory_balances` là tổng tồn hiện tại.
+- Tồn chỉ đổi qua stock-in, stock-out hoặc inventory-check.
+- Nhóm bảo hành/tình trạng được tính từ:
+  - `stock_transactions.note`;
+  - `inventory_note_adjustments`;
+  - `inventory_quantity_adjustments`.
+- Nhóm rỗng là **Không ghi chú**.
+- Warranty group chỉ quản lý tồn, không quyết định giá.
+- `sale_note` tách biệt hoàn toàn khỏi warranty group.
 
-- Nguồn tồn hiện tại là `product_inventory_balances`.
-- Không chỉnh trực tiếp bảng tồn từ UI.
-- Tồn chỉ thay đổi qua:
-  - nhập hàng,
-  - bán/xuất hàng,
-  - kiểm hàng/điều chỉnh tồn.
-- Mỗi thay đổi tồn cần có lịch sử trong `stock_transactions` hoặc bảng điều chỉnh tương ứng.
-- Stock-out không được vượt tổng tồn hoặc vượt tồn theo nhóm bảo hành/ghi chú đã chọn.
+## 6. Stock-in
 
-## 5. Nhóm bảo hành / ghi chú
+- UI `/admin/stock-in`.
+- API chính `POST /api/v1/admin/stock-in/bulk`.
+- Supplier optional.
+- Mỗi item có SKU, quantity dương và warranty note optional.
+- Tạo stock transactions, voucher IN và tăng balance.
+- Không có giá nhập, payment hoặc debt.
 
-- Workflow hiện tại không dùng `warranty_batches` làm đơn vị nhập/xuất chính.
-- Nhóm bảo hành/ghi chú được lấy từ note của giao dịch nhập/xuất và điều chỉnh tồn.
-- Nhóm trống được hiểu là không ghi chú.
-- POS/stock-out phải chọn đúng nhóm còn tồn trước khi xuất.
-- Public lookup hiển thị nhóm bảo hành/ghi chú còn tồn để người dùng tra cứu.
+## 7. POS / Stock-out
 
-## 6. Nhập hàng
+- UI `/admin/stock-out`.
+- API chính `POST /api/v1/admin/stock-out/bulk`.
+- Customer optional.
+- Same SKU + same normalized warranty group merge thành một dòng.
+- Same SKU + khác group là hai dòng.
+- `sale_note` thuộc cart row nhưng không tham gia merge key.
+- Quantity không vượt tổng tồn hoặc tồn của group.
+- Backend lấy `products.sale_price`; frontend không được quyết định snapshot tiền hiện tại.
+- Nếu một item thiếu giá: `unit_price=NULL`, `line_total=NULL`; voucher có item thiếu giá thì `total_amount=NULL`.
+- `sale_price=0` vẫn snapshot và hiển thị là `0 ₫`.
+- `sale_note` được trim, chuỗi rỗng lưu `NULL`, tối đa 500 ký tự.
 
-- Route UI chính: `/admin/stock-in`.
-- API chính: `POST /api/v1/admin/stock-in/bulk`.
-- Nhà cung cấp là optional.
-- Mỗi dòng nhập có:
-  - SKU/product,
-  - số lượng dương,
-  - nhóm bảo hành/ghi chú optional.
-- Nhập hàng cộng tồn và tạo phiếu nhập.
-- Không có giá nhập, thanh toán hoặc công nợ trong workflow hiện tại.
+## 8. Inventory Check
 
-## 7. Bán tại quầy / xuất kho
+- UI `/admin/inventory-check`.
+- Note move chuyển quantity giữa hai group trong một transaction và không đổi tổng tồn.
+- Quantity adjustment tăng/giảm cả total và group tương ứng.
+- Balance phải được khóa bằng locking read trước khi tính group ledger.
+- `from_quantity/to_quantity` là tồn group trước/sau thao tác, không phải tổng tồn.
+- Decrease phải kiểm tra cả tổng tồn lẫn tồn group.
+- Lỗi giữa chừng rollback toàn bộ; concurrent requests không được lost update.
 
-- Route UI chính: `/admin/stock-out`.
-- API chính: `POST /api/v1/admin/stock-out/bulk`.
-- Khách hàng là optional.
-- Cart/đơn local chỉ là trạng thái frontend để thao tác nhanh tại quầy.
-- Cùng SKU + cùng nhóm bảo hành/ghi chú được merge trong cart.
-- Số lượng bán tối thiểu là 1 và tối đa là tồn còn lại của nhóm đã chọn.
-- Bán thành công tạo phiếu bán/stock voucher.
-- Backend snapshot giá bán mặc định vào `stock_voucher_items` cho phiếu bán. Việc snapshot này không thay đổi quy tắc trừ tồn.
-- Serial/Ghi chú bán hàng theo từng dòng là dữ liệu riêng của dòng phiếu, tách khỏi nhóm bảo hành/tồn kho. Từ Task 7C, POS có ô Serial/Ghi chú theo từng dòng cart và backend bulk stock-out lưu optional `sale_note` vào `stock_voucher_items.sale_note_snapshot`.
-- `sale_note` không ảnh hưởng tồn kho, không thay thế `warranty_note_snapshot` và không được ghi vào `stock_transactions.note`.
-- Chi tiết phiếu và mẫu in phiếu bán hiển thị sale note riêng dưới tên sản phẩm khi có dữ liệu.
-- Chưa có thanh toán, giảm giá, công nợ, hóa đơn hoặc báo cáo tài chính.
-- Phiếu bán không phải hóa đơn thanh toán.
+## 9. Voucher, snapshot và print
 
-## 8. Kiểm hàng
+- Bulk stock-in/out tạo `stock_vouchers`.
+- Phiếu OUT mới dùng `stock_voucher_items` để snapshot SKU, tên, warranty note, sale note, quantity và tiền.
+- Voucher detail ưu tiên snapshot; legacy fallback không crash.
+- Phiếu IN không hiển thị giá nhập giả.
+- Mẫu in A4 chỉ hỗ trợ OUT, gọi `window.print()`, không lưu PDF.
+- Voucher là phiếu nghiệp vụ/bảo hành, không phải invoice thanh toán.
 
-- Route UI: `/admin/inventory-check`.
-- Dùng để tìm sản phẩm, xem tồn, tăng/giảm tồn theo nhóm ghi chú và ghi lý do.
-- Có thể chuyển một phần hoặc toàn bộ tồn từ nhóm ghi chú hiện tại sang nhóm khác bằng một thao tác. Đây là adjustment mới, không sửa lịch sử giao dịch cũ và không làm thay đổi tổng tồn sản phẩm.
-- Nếu tìm không thấy sản phẩm, UI có hành động “+ Thêm sản phẩm mới”.
-- Đây chưa phải hệ thống phiếu kiểm hàng đầy đủ theo kiểu ERP.
+## 10. Khách hàng và nhà cung cấp
 
-## 9. Khách hàng
+- Field thực tế: `name`, `phone`, `address`, `is_active`.
+- Inactive record không xuất hiện trong selector mặc định.
+- Không có debt, tax, tags hoặc địa chỉ hành chính tách riêng.
 
-- Customer dùng cho POS/stock-out.
-- Các trường đang dùng thực tế:
-  - tên,
-  - số điện thoại,
-  - địa chỉ.
-- Customer inactive không xuất hiện trong selector/list mặc định.
-- Không có công nợ, nhóm khách hàng, tags, tax, email hoặc địa chỉ tỉnh/huyện/xã tách riêng trong API hiện tại.
+## 11. Giá và phase tiếp theo
 
-## 10. Nhà cung cấp
+Quyết định chưa code:
 
-- Supplier dùng cho stock-in.
-- Các trường đang dùng thực tế:
-  - tên,
-  - số điện thoại,
-  - địa chỉ.
-- Supplier inactive không xuất hiện trong selector/list mặc định.
-- Không có công nợ, tags, tax, email hoặc địa chỉ tỉnh/huyện/xã tách riêng trong API hiện tại.
+- `products.sale_price` là giá tham chiếu.
+- Click đơn giá tại POS mở popup nhỏ.
+- Nhập `discount_amount` bằng số tiền VND, không dùng phần trăm.
+- `discount_amount` là số tiền giảm trên mỗi đơn vị sản phẩm của dòng hàng, không phải tổng số tiền giảm của cả dòng.
+- Đơn giá cuối = giá tham chiếu - `discount_amount`.
+- Thành tiền dòng = đơn giá cuối x số lượng.
+- Frontend gửi `discount_amount`; backend không tin `final_unit_price`, `line_total` hoặc `total_amount`.
+- Backend tự đọc giá tham chiếu hợp lệ, validate discount, tính lại tiền và lưu snapshot.
+- Không gắn giá với warranty group.
 
-## 11. Public lookup
+## 12. Auth
 
-- Public route `/` không yêu cầu login.
-- UI không hiển thị tất cả sản phẩm khi ô tìm kiếm trống.
-- Public search dùng để tra theo tên sản phẩm, SKU hoặc ghi chú bảo hành.
-- Search hỗ trợ tối đa 8 từ theo logic AND: các từ không cần liền nhau hoặc đúng thứ tự và có thể match ở các field khác nhau.
-- Search này chưa phải hệ thống alias, compatibility hoặc fuzzy matching nâng cao.
-- Không hiển thị:
-  - giá hoặc dữ liệu tiền,
-  - admin actions,
-  - khách hàng/nhà cung cấp,
-  - lịch sử giao dịch nội bộ.
-
-## 12. Auth admin
-
-- Admin login bằng username/password.
-- Admin login được giới hạn 10 request trong 15 phút theo IP. Các endpoint refresh/logout và API khác không dùng limiter này.
-- Sau Nginx, Express chỉ tin proxy loopback; rate limiter dùng IP đã được Express chuẩn hóa từ proxy tin cậy.
-- Password lưu bằng bcrypt hash.
-- Access token dùng JWT.
-- Refresh token được hash trong database và rotate khi refresh.
-- Admin inactive không được login.
-- Protected API dùng `requireAuth`.
-
-## 13. Không tự ý mở rộng scope
-
-Không thêm các mảng sau nếu chưa có yêu cầu phase riêng:
-
-- giá nhập hoặc sửa giá trực tiếp tại POS,
-- payment,
-- debt/công nợ,
-- invoice,
-- accounting,
-- reporting,
-- search tags/aliases/compatibility,
-- barcode/serial/IMEI/lô-HSD management.
+- Login admin bằng username/password, password hash bằng bcrypt.
+- JWT access/refresh; refresh token được hash và rotate.
+- Login rate limit 10 request/15 phút/IP.
+- Limiter không áp dụng cho refresh, logout, public hoặc API admin khác.

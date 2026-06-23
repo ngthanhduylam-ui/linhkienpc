@@ -1,62 +1,58 @@
 # Cấu trúc thư mục hiện tại
 
-Tài liệu này mô tả cấu trúc repo thực tế của **VI TÍNH PHƯỚC TÀI POS**. Không dùng các tên page/module cũ như `/admin/batches` hoặc `Inventory Workbench` làm hướng chính.
-
-## 1. Cấu trúc cấp cao
+Cập nhật gần nhất: **23/06/2026**
 
 ```text
 linhkienpc/
-├─ backend/              # Express API, auth, nghiệp vụ tồn kho/POS
-├─ database/             # schema, migrations, seed, script SQL
-├─ docs/                 # tài liệu dự án
-├─ frontend/             # React + Vite frontend
-├─ backups/              # backup thủ công/local nếu có
-├─ README.md             # landing page repo
-└─ PROJECT_RULES.md      # quy tắc an toàn cố định
+├─ backend/             Express API
+├─ database/            migrations, schema, seeds, SQL scripts
+├─ docs/                tài liệu dự án
+├─ frontend/            React/Vite application
+├─ backups/             backup local nếu có
+├─ CHAT_HANDOFF.md      tài liệu bàn giao chat
+├─ PROJECT_RULES.md
+└─ README.md
 ```
 
-## 2. Frontend
+## Frontend
 
 ```text
-frontend/
-├─ index.html
-├─ package.json
-├─ vite.config.js
-├─ tailwind.config.js
-└─ src/
-   ├─ api/               # apiClient, refresh token handling
-   ├─ components/        # shared UI components
-   ├─ contexts/          # AuthContext
-   ├─ layouts/           # AdminLayout
-   ├─ pages/             # route pages
-   ├─ services/          # API service wrappers
-   ├─ utils/             # format/normalization helpers
-   └─ router.jsx         # React Router config
+frontend/src/
+├─ api/apiClient.js
+├─ components/
+├─ contexts/AuthContext.jsx
+├─ layouts/AdminLayout.jsx
+├─ pages/
+├─ services/
+├─ utils/
+└─ router.jsx
 ```
 
-Route pages chính:
+Pages chính:
 
-- `PublicSearchPage.jsx` -> `/`
-- `AdminLoginPage.jsx` -> `/admin/login`
-- `ProductManagementPage.jsx` -> `/admin/products`
-- `ProductFormPage.jsx` -> `/admin/products/new`, `/admin/products/:id/edit`
-- `StockInBulkPage.jsx` -> `/admin/stock-in`
-- `StockOutBulkPage.jsx` -> `/admin/stock-out`
-- `InventoryCheckPage.jsx` -> `/admin/inventory-check`
-- `CustomerListPage.jsx` -> `/admin/customers`
-- `SupplierListPage.jsx` -> `/admin/suppliers`
-- `TransactionHistoryPage.jsx` -> `/admin/transaction-history`
-- `TransactionVoucherDetailPage.jsx` -> `/admin/transaction-history/:voucherId`
+- `PublicSearchPage.jsx`
+- `ProductManagementPage.jsx`
+- `ProductFormPage.jsx`
+- `StockInBulkPage.jsx`
+- `StockOutBulkPage.jsx`
+- `InventoryCheckPage.jsx`
+- `CustomerListPage.jsx`
+- `CustomerDetailPage.jsx`
+- `SupplierListPage.jsx`
+- `TransactionHistoryPage.jsx`
+- `TransactionVoucherDetailPage.jsx`
+- `TransactionVoucherPrintPage.jsx`
 
-## 3. Backend
+`StockInPage.jsx` và `StockOutPage.jsx` là single/legacy pages. Route chính dùng bulk pages.
+
+## Backend
 
 ```text
 backend/
-├─ package.json
-├─ .env.example
 ├─ scripts/
 │  ├─ migrate.js
 │  └─ seed.js
+├─ uploads/             default local upload root
 └─ src/
    ├─ app.js
    ├─ server.js
@@ -67,61 +63,58 @@ backend/
    └─ utils/
 ```
 
-Modules backend chính:
+Modules:
 
-- `auth`
-- `category`
-- `product`
-- `customer`
-- `supplier`
-- `stockTransaction`
-- `stockVoucher`
-- `inventory`
-- `inventoryCheck`
-- `warrantyBatch` legacy, không phải workflow UI chính
+```text
+auth
+category
+customer
+inventory
+inventoryCheck
+product
+productImage
+stockTransaction
+stockVoucher
+supplier
+warrantyBatch
+```
 
-## 4. Database
+Các file `*.edit-master-data-backup` và `*.delivery-note-backup` là bản backup code cũ trong repo, không phải module runtime.
+
+## Database
 
 ```text
 database/
-├─ migrations/           # migration chạy theo thứ tự số
-├─ schema/               # schema SQL theo bảng và file tổng hợp schema.sql
-├─ seeds/                # seed SQL
-└─ scripts/              # script SQL vận hành/test
+├─ migrations/          001..020
+├─ schema/              schema từng bảng + schema.sql
+├─ seeds/
+└─ scripts/
 ```
 
-Lưu ý:
+Migration runner dùng `database/migrations`; `database/schema` là schema nguồn/tổng hợp tham chiếu.
 
-- `database/schema/schema.sql` là file tổng hợp `SOURCE` các schema con.
-- Migration hiện là nguồn setup chính khi chạy `npm run migrate`.
+## Documentation
 
-## 5. Documentation
+```text
+README.md
+PROJECT_RULES.md
+CHAT_HANDOFF.md
+backend/README.md
+docs/api.md
+docs/ARCHITECTURE.md
+docs/BUSINESS_RULES.md
+docs/CHANGELOG_POS.md
+docs/database.md
+docs/DEPLOYMENT.md
+docs/FOLDER_STRUCTURE.md
+docs/POS_SCREEN_GUIDE.md
+docs/PROJECT_DIRECTION.md
+docs/PROJECT_STATUS.md
+```
 
-Tài liệu chính:
+## Redirect/legacy routes
 
-- `docs/PROJECT_DIRECTION.md`
-- `docs/PROJECT_STATUS.md`
-- `docs/POS_SCREEN_GUIDE.md`
-- `docs/CHANGELOG_POS.md`
-- `docs/ARCHITECTURE.md`
-- `docs/BUSINESS_RULES.md`
-- `docs/API.md`
-- `docs/DATABASE.md`
-- `docs/DEPLOYMENT.md`
-- `docs/FOLDER_STRUCTURE.md`
-
-Root docs:
-
-- `README.md`
-- `PROJECT_RULES.md`
-
-Backend docs:
-
-- `backend/README.md`
-
-## 6. Legacy Notes
-
-- `/admin/inventory-workbench` hiện redirect về `/admin/stock-in`.
-- `/admin/stock-out-bulk` hiện redirect về `/admin/stock-out`.
-- `StockInPage.jsx` và `StockOutPage.jsx` là page single/legacy, không phải workflow chính.
-- `warrantyBatch` backend/database còn tồn tại nhưng UI hiện tại dùng nhóm bảo hành / ghi chú từ stock transactions.
+- `/admin/inventory-workbench` -> `/admin/stock-in`
+- `/admin/stock-out-bulk` -> `/admin/stock-out`
+- `/admin/stock-in-single` và `/admin/stock-out-single` vẫn tồn tại.
+- `warrantyBatch` còn được mount để tương thích nhưng không phải workflow chính.

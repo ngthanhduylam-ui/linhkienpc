@@ -1,194 +1,122 @@
-# VI TÍNH PHƯỚC TÀI POS - Trạng thái hiện tại
+# VI TÍNH PHƯỚC TÀI POS - Trạng thái dự án
 
-Cập nhật: **19/06/2026**
+Cập nhật gần nhất: **23/06/2026**
 
-## 1. Trạng thái sản phẩm
+## Trạng thái chung
 
-Hệ thống đang ở giai đoạn **Production trial / Chạy thử thực tế tại cửa hàng** trên Ubuntu Server tự host.
+Hệ thống đang ở giai đoạn **Production trial / chạy thử thực tế tại cửa hàng** trên Ubuntu self-hosted. Ưu tiên hiện tại là ổn định bán hàng, tồn kho, tra cứu công khai, phiếu, ảnh, backup và bảo mật trước khi mở module tài chính.
 
-Trong 1-2 tuần tiếp theo:
+## Production đã xác nhận
 
-- Không mở thêm tính năng lớn.
-- Theo dõi lỗi phát sinh trong thao tác thật.
-- Ưu tiên bán hàng, tồn kho, public lookup, khách hàng, Serial/Ghi chú, phiếu, lịch sử, backup, đăng nhập và bảo mật.
-- Chỉ sửa bug thật hoặc điểm UX gây nhầm.
+```text
+Domain:           https://vitinhphuoctai.duckdns.org
+Repo:             /opt/linhkienpc/linhkienpc
+Branch:           codex-dev
+Frontend:         Nginx
+Backend:          PM2 linhkienpc-api
+Backend bind:     127.0.0.1:3000
+Database:         MySQL localhost
+Product uploads:  /opt/linhkienpc/uploads/products
+```
 
-Định hướng vẫn là **POS First, Offline First, Self-hosted, Inventory supports sales, Sapo-inspired, Not an ERP**.
+- HTTPS/Certbot, UFW và DuckDNS cron đã cấu hình.
+- Backup MySQL chạy lúc 23:00, giữ 14 ngày.
+- Backup ảnh tự động sang HDD riêng chưa có.
+- Restore database end-to-end chưa được ghi nhận là đã diễn tập hoàn chỉnh.
 
-## 2. Production đã xác nhận
-
-- Domain: `https://vitinhphuoctai.duckdns.org`
-- Server: Ubuntu Server tại cửa hàng
-- Repo: `/opt/linhkienpc/linhkienpc`
-- Branch deploy: `codex-dev`
-- Frontend: Nginx
-- Backend: PM2 process `linhkienpc-api`
-- Backend bind: `127.0.0.1:3000`
-- Database: MySQL localhost
-- HTTPS: Let's Encrypt/Certbot
-- `certbot renew --dry-run`: đã thành công
-- Certbot timer: đang hoạt động
-- DuckDNS: cron cập nhật mỗi 5 phút
-
-Firewall:
-
-- SSH chỉ cho phép từ LAN.
-- Cổng 80/443 mở public.
-- Cổng 3000/3306 không mở public.
-
-## 3. Backup
-
-- Script: `/home/vitinhphuoctai/backup_linhkienpc.sh`
-- Thư mục: `/home/vitinhphuoctai/backups`
-- Log cron: `/home/vitinhphuoctai/backup.log`
-- Lịch: 23:00 hằng ngày
-- Retention: 14 ngày
-- Cron đã tạo được backup có dữ liệu.
-
-Việc tạo backup đã được xác nhận. Quy trình restore hoàn chỉnh chưa được ghi nhận là đã diễn tập thành công, vì vậy không được xem restore là đã kiểm chứng.
-
-## 4. Bảo mật đã hoàn thành
-
-- Đã đổi mật khẩu MySQL sau khi secret cũ từng xuất hiện trong image.
-- Đã đổi mật khẩu Admin.
-- Đã loại bỏ mật khẩu Admin hard-code khỏi source.
-- `DEFAULT_ADMIN_PASSWORD` chỉ lấy từ environment.
-- Seed không reset mật khẩu khi admin đã tồn tại.
-- Nếu chưa có admin và thiếu `DEFAULT_ADMIN_PASSWORD`, seed báo lỗi rõ ràng.
-- Backend hỗ trợ `HOST`; production dùng `HOST=127.0.0.1`.
-- `app.set("trust proxy", "loopback")` để lấy IP qua Nginx loopback.
-- `POST /api/v1/admin/auth/login` giới hạn 10 request/15 phút/IP.
-- Request vượt giới hạn trả HTTP 429 với code `AUTH_LOGIN_RATE_LIMITED`.
-- Limiter không áp dụng cho public lookup, refresh, logout, POS, products hoặc API admin khác.
-
-Rate limiter hiện dùng memory store, phù hợp với một PM2 instance. Nếu chuyển sang cluster/nhiều instance cần shared store như Redis.
-
-## 5. Modules đang hoạt động
-
-### Public Lookup
-
-- Route `/`, không cần login.
-- Tìm theo tên, SKU và ghi chú bảo hành.
-- Search nhiều token theo AND, không yêu cầu các từ liền nhau hoặc đúng thứ tự.
-- Hiển thị tổng tồn và nhóm bảo hành.
-- Không trả `sale_price`, dữ liệu tiền, `sale_note` hoặc admin actions.
-- Hiển thị ảnh chính và gallery ảnh của sản phẩm active; cho tải file gốc qua endpoint có kiểm soát.
+## Đã hoàn thành trong code
 
 ### Product Admin
 
-- List, search, filter, pagination.
-- Add/edit, activate/deactivate.
-- SKU validation và duplicate handling.
-- Giá bán mặc định `sale_price` optional/nullable.
-- Product list và form hiển thị/quản lý giá bán.
-- Quản lý tối đa 3 ảnh, đổi ảnh chính bằng thứ tự, xóa và tải file gốc.
-- Product list hiển thị thumbnail ảnh chính; sản phẩm chưa có ảnh dùng placeholder.
+- List/search/filter/pagination; add/edit; activate/deactivate.
+- Validation Loại sản phẩm và map lỗi `category_id`.
+- Gợi ý category từ token thứ hai của SKU; alias hiện có `main -> mainboard`; không ghi đè lựa chọn thủ công.
+- `sale_price` nullable và hiển thị ở form/list.
+- Tối đa 3 ảnh/product: upload, replace, reorder, delete, thumbnail và download file gốc.
 
-### Stock In
+### Product Search
 
-- Bulk nhập hàng.
-- Nhà cung cấp optional.
-- Số lượng và nhóm bảo hành/ghi chú.
-- Tồn tăng và tạo phiếu nhập.
-- Chưa có giá nhập, thanh toán hoặc công nợ.
+- Multi-token AND, tối đa 8 token; không cần liền nhau hoặc đúng thứ tự.
+- Compact normalization hỗ trợ model/SKU có dấu chấm hoặc gạch ngang.
+- POS dùng server-side admin product search với debounce và request sequence guard; không còn giới hạn trong page tải đầu.
 
-### POS / Stock Out
+### Public Lookup
 
-- Full-screen `/admin/stock-out`.
-- Search, recent products, customer selector và multi-order.
-- Merge theo SKU + nhóm bảo hành.
-- Giá bán, đơn giá, thành tiền và tổng tiền chỉ đọc.
-- Serial/Ghi chú riêng theo từng dòng.
-- Search dropdown và cart hiển thị thumbnail ảnh chính khi có.
-- Backend tự lấy `products.sale_price`, snapshot tiền và sale note.
-- Submit không gửi `unit_price`, `line_total` hoặc `total_amount`.
-- Trừ tồn và rollback vẫn theo logic inventory hiện có.
+- Route `/`, không cần đăng nhập.
+- Search theo tên, SKU và ghi chú bảo hành.
+- Chỉ trả product active có tổng tồn lớn hơn 0.
+- Product tồn 0 hoặc chưa có balance bị ẩn; tăng tồn lại sẽ tự xuất hiện.
+- Có thumbnail, gallery và download ảnh gốc.
+- Không trả giá, snapshot tiền hoặc sale note.
+
+### POS / Bán tại quầy
+
+- Full-screen `/admin/stock-out`, hỗ trợ nhiều order tab local; code hiện chưa đặt giới hạn số tab rõ ràng.
+- Recent products, server-side search, thumbnail và chọn warranty group.
+- Merge theo SKU + warranty group.
+- Giá, đơn giá, thành tiền và tổng tiền chỉ đọc.
+- Serial/Ghi chú riêng từng cart row, tối đa 500 ký tự.
+- Backend tự snapshot giá và sale note; payload POS không gửi field tiền.
 
 ### Inventory Check
 
-- Tìm sản phẩm, xem tồn theo nhóm.
-- Chuyển nhóm ghi chú và điều chỉnh số lượng có lý do.
-- UI hỗ trợ đổi ghi chú bảo hành trong một thao tác qua `inventory-check/note-move`; tổng tồn không đổi và lịch sử chuyển nhóm được lưu riêng.
-- Chưa phải workflow phiếu kiểm kê ERP đầy đủ.
+- Tìm sản phẩm, xem tổng tồn và tồn theo nhóm.
+- Note move trong một thao tác, tổng tồn không đổi.
+- Quantity increase/decrease theo nhóm và lưu lịch sử.
+- Đã sửa lỗi `from_quantity/to_quantity` dùng nhầm tồn tổng.
+- Đã khóa balance trước khi tính group ledger để tránh stale snapshot/lost update.
+- Concurrent increase đã được test.
+- Dữ liệu lệch của product ID 1 đã được xử lý production về `total=1`, `BH 7.28=1` theo thông tin vận hành được cung cấp.
 
-### Customers / Suppliers
+### Voucher và in
 
-- List, search, add/edit, activate/deactivate.
-- Các field thực tế: tên, số điện thoại, địa chỉ.
-- Không có công nợ.
+- List/detail phiếu IN/OUT.
+- Phiếu OUT dùng snapshot SKU, tên, warranty note, sale note, unit price, line total và total amount.
+- Phiếu legacy thiếu snapshot vẫn mở được.
+- Mẫu in A4 cho phiếu OUT, dùng `window.print()`, không tạo/lưu PDF.
 
-### Voucher History / Detail / Print
+### Auth và vận hành
 
-- Danh sách phiếu nhập và phiếu bán.
-- Detail phiếu bán dùng snapshot tên, SKU, nhóm bảo hành, sale note và tiền.
-- Phiếu cũ thiếu snapshot vẫn mở được.
-- Mẫu in A4 chỉ hỗ trợ phiếu OUT/Bán hàng.
-- Nút `In phiếu` dùng `window.print()`, không tạo hoặc lưu PDF.
-- Chưa có nút Bán & In tại POS và chưa có cấu hình logo/mẫu.
+- JWT access/refresh, refresh token hash và rotate.
+- Login rate limit riêng: 10 request/15 phút/IP.
+- Không còn password admin hard-code.
+- Backend hỗ trợ `HOST`, production bind loopback.
+- Frontend API client hỗ trợ `/api/v1` tương đối và URL tuyệt đối.
 
-## 6. Kiểm thử production đã xác nhận
+## Đã deploy/test production
 
-- Admin login.
-- Public Lookup qua HTTPS.
-- Public categories trả HTTP 200.
-- Bán nhiều sản phẩm và tồn giảm đúng.
-- Public Lookup phản ánh tồn mới.
-- History, detail và print voucher.
-- Serial/Ghi chú bán hàng.
-- Phase 2A sale price snapshot.
-- Nginx reverse proxy API.
-- PM2 restart.
-- Backend vẫn chỉ nghe localhost sau restart.
-- Certbot renewal dry run.
-- Backup cron tạo file backup có dữ liệu lúc 23:00.
+Theo nhật ký vận hành hiện có:
 
-## 7. Routes chính
+- Admin login và Public Lookup qua HTTPS.
+- Bán nhiều sản phẩm, trừ tồn và cập nhật Public Lookup.
+- Snapshot giá, sale note, history/detail/print.
+- Product images.
+- Inventory quantity adjustment fix và sửa dữ liệu lệch product ID 1.
+- Public Lookup ẩn sản phẩm hết hàng.
+- PM2/Nginx reverse proxy, Certbot renewal dry-run và backup cron.
 
-```text
-/
-/admin/login
-/admin/products
-/admin/products/new
-/admin/products/:id/edit
-/admin/stock-in
-/admin/stock-out
-/admin/inventory-check
-/admin/customers
-/admin/customers/:id
-/admin/suppliers
-/admin/transaction-history
-/admin/transaction-history/:voucherId
-/admin/transaction-history/:voucherId/print
-```
+## Chưa làm / backlog
 
-## 8. Chưa có / đang hoãn
-
-- Giá nhập.
-- Sửa giá trực tiếp tại POS.
-- Giảm giá.
-- Luồng thanh toán đầy đủ.
-- Khách đưa/tiền thừa.
-- Công nợ khách hàng/nhà cung cấp.
-- Hóa đơn/invoice.
-- Báo cáo doanh thu, lợi nhuận và báo cáo tài chính.
-- Quản lý serial riêng từng thiết bị.
+- Chiết khấu VND theo từng dòng tại POS.
+- Click đơn giá để mở popup chỉnh chiết khấu.
+- Chiết khấu phần trăm: không dùng theo quyết định hiện tại.
+- Bảng giá theo warranty group: không làm.
+- Bảng giá lái cố định: không theo hướng hiện tại.
+- Chiết khấu toàn đơn, thanh toán, khách đưa/tiền thừa.
+- Giá nhập, công nợ, lợi nhuận và báo cáo tài chính.
+- Bán & In trực tiếp tại POS.
 - Draft persistence cho multi-order.
-- Mẫu in phiếu nhập.
-- Cấu hình logo và mẫu in.
+- Mẫu in phiếu nhập và cấu hình logo/mẫu in.
+- Compatibility search nâng cao cho máy bộ.
+- Backup ảnh tự động ra HDD.
 
-## 9. Rủi ro cần theo dõi
+## Next task đã chốt
 
-- Rate limiter memory store chỉ phù hợp một backend instance.
-- Server tự host phụ thuộc điện và Internet tại cửa hàng.
-- Cần theo dõi `backup.log`, dung lượng backup và log ứng dụng.
-- Restore database chưa được xác nhận bằng một buổi diễn tập hoàn chỉnh.
-- Cần kiểm tra dung lượng đĩa định kỳ.
-- Cần tiếp tục xác nhận PM2, Nginx, MySQL, Certbot timer và cron tự lên sau reboot.
+Khảo sát và thiết kế **chiết khấu bằng số tiền VND theo từng dòng POS**:
 
-## 10. Ưu tiên thực tế tiếp theo
-
-1. Chạy thử ổn định 1-2 tuần.
-2. Ghi lại lỗi theo bước tái hiện và voucher/SKU liên quan.
-3. Kiểm tra backup hằng ngày và dung lượng đĩa.
-4. Theo dõi PM2/Nginx/MySQL sau reboot hoặc mất điện.
-5. Chỉ mở phase mới sau khi các flow bán, tồn và khôi phục vận hành đủ tin cậy.
+- Giá sản phẩm là giá tham chiếu.
+- Warranty group chỉ quản lý tồn.
+- Người bán click đơn giá, nhập số tiền chiết khấu.
+- Giá thực bán = giá tham chiếu - chiết khấu.
+- Backend phải lưu snapshot giá thực bán.
+- Chưa mở payment, debt, cost hoặc bảng giá theo nhóm.

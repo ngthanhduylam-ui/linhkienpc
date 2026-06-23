@@ -1,5 +1,26 @@
 # VI TÍNH PHƯỚC TÀI POS - Changelog theo milestone
 
+Cập nhật gần nhất: **23/06/2026**
+
+## 2026-06-23 - Search, inventory integrity, Public Lookup và handoff
+
+- POS product search chuyển sang server-side Admin Products API, không còn giới hạn trong page product tải ban đầu.
+- Search hỗ trợ multi-token AND và compact model/SKU.
+- Product images hoàn thành: tối đa 3 ảnh, original, thumbnail WebP, primary image, gallery/download.
+- Inventory Check quantity adjustment sửa `from_quantity/to_quantity` theo tồn group.
+- Locking read được thực hiện trước khi tính group ledger để tránh stale snapshot/lost update.
+- Public Lookup search/list chỉ hiện product active có tổng tồn lớn hơn 0; product thiếu balance được xem là tồn 0.
+- Public detail trực tiếp theo SKU giữ hành vi tương thích hiện tại.
+- Dữ liệu lệch production của product ID 1 được ghi nhận đã đưa về `total=1`, `BH 7.28=1`.
+- Tài liệu dự án được đồng bộ lại và thêm `CHAT_HANDOFF.md`.
+
+Quyết định hướng giá tiếp theo, chưa code:
+
+- `products.sale_price` là giá tham chiếu chung.
+- Warranty group chỉ quản lý tồn, không gắn bảng giá.
+- POS sẽ cho nhập discount bằng số tiền VND theo từng dòng, không dùng phần trăm.
+- Chưa có payment, debt, cost hoặc báo cáo tài chính.
+
 ## Product Images
 
 - Thêm tối đa 3 ảnh cho mỗi sản phẩm; ảnh đầu tiên là ảnh chính.
@@ -62,7 +83,7 @@ Quyết định chính:
 - `/admin/login` với JWT + refresh token.
 - Protected admin routes.
 - Public route `/` không cần login.
-- Public Lookup search theo tên sản phẩm/SKU/ghi chú bảo hành nếu backend hỗ trợ.
+- Public Lookup search theo tên sản phẩm, SKU và ghi chú bảo hành.
 - Empty search không show all products.
 - Result card hiển thị tổng tồn và nhóm bảo hành / ghi chú.
 - Copy product name.

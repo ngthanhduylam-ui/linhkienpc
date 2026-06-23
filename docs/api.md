@@ -1,76 +1,43 @@
-# API.md
+# VI TÍNH PHƯỚC TÀI POS - API
 
-Tài liệu này tóm tắt API hiện tại của **VI TÍNH PHƯỚC TÀI POS**. Base URL:
+Cập nhật gần nhất: **23/06/2026**
+
+Base URL:
 
 ```text
 /api/v1
 ```
 
-Admin endpoints, trừ auth, cần header:
+Admin endpoints, trừ login/refresh/logout, cần Bearer access token theo route/middleware thực tế.
 
-```http
-Authorization: Bearer <access_token>
-```
-
-## 1. Response format
-
-Success:
-
-```json
-{
-  "success": true,
-  "data": {},
-  "meta": {
-    "server_time": "2026-06-13T00:00:00.000Z"
-  }
-}
-```
-
-List:
-
-```json
-{
-  "success": true,
-  "data": [],
-  "meta": {
-    "page": 1,
-    "limit": 20,
-    "total": 0,
-    "server_time": "2026-06-13T00:00:00.000Z"
-  }
-}
-```
-
-Error:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Request validation failed."
-  },
-  "meta": {
-    "request_id": null,
-    "server_time": "2026-06-13T00:00:00.000Z"
-  }
-}
-```
-
-## 2. Public endpoints
+## Public
 
 ```text
 GET /health
 GET /public/products
 GET /public/products/:sku/inventory
+GET /public/products/:sku/images
+GET /public/products/:sku/images/:imageId/thumbnail
+GET /public/products/:sku/images/:imageId/download
 GET /public/categories
 ```
 
-Public lookup không yêu cầu login và không trả `sale_price`, `unit_price`, `line_total`, `total_amount`, `sale_note`, payment/debt hoặc admin actions.
+### `GET /public/products`
 
-Product search qua `q` hỗ trợ tối đa 8 token theo logic AND. Các token không cần liền nhau hoặc đúng thứ tự; mỗi token có thể match tên, SKU, và với Public Lookup là ghi chú bảo hành. Đây là substring search có normalize cơ bản, chưa phải alias/compatibility/fuzzy search đầy đủ.
+Query chính: `q`, `page`, `limit`.
 
-## 3. Auth admin
+- Search rỗng trả danh sách rỗng.
+- Tối đa 8 token, logic AND, không cần liền nhau hoặc đúng thứ tự.
+- Token match tên, SKU hoặc warranty note.
+- Chỉ trả product active có tổng tồn lớn hơn 0.
+- Count và pagination dùng cùng filter tồn.
+- Không trả `sale_price`, snapshot tiền hoặc `sale_note`.
+
+### Public inventory detail
+
+`GET /public/products/:sku/inventory` giữ hành vi tương thích hiện tại: product active tồn 0 vẫn có thể được tra cứu trực tiếp. Public Lookup UI tạo kết quả bằng endpoint search/list, không dùng detail để bypass filter.
+
+## Admin auth
 
 ```text
 POST /admin/auth/login
@@ -79,18 +46,11 @@ POST /admin/auth/logout
 GET  /admin/auth/me
 ```
 
-Ghi chú:
+- Login rate limit 10 request/15 phút/IP.
+- Vượt giới hạn trả 429, code `AUTH_LOGIN_RATE_LIMITED`.
+- Limiter không áp dụng refresh/logout hoặc endpoint khác.
 
-- Login bằng username/password.
-- `POST /admin/auth/login` giới hạn 10 request trong 15 phút theo IP; request thứ 11 trong cùng cửa sổ trả HTTP 429.
-- Lỗi giới hạn dùng code `AUTH_LOGIN_RATE_LIMITED` và không lộ stack trace/secret.
-- Production nhận IP client qua Nginx với Express `trust proxy` đặt là `loopback`.
-- Rate limit chỉ áp dụng cho login, không áp dụng cho refresh/logout hoặc API khác.
-- Refresh token được rotate.
-- Logout revoke refresh token.
-- `/admin/auth/me` cần access token.
-
-## 4. Loại sản phẩm / categories
+## Categories
 
 ```text
 GET   /admin/categories
@@ -101,9 +61,7 @@ PATCH /admin/categories/:id/deactivate
 PATCH /admin/categories/:id/activate
 ```
 
-UI gọi là “Loại sản phẩm”, backend/database vẫn dùng `category`.
-
-## 5. Products
+## Products
 
 ```text
 GET   /admin/products
@@ -112,54 +70,36 @@ GET   /admin/products/:id
 PATCH /admin/products/:id
 PATCH /admin/products/:id/deactivate
 PATCH /admin/products/:id/activate
-GET   /admin/products/:id/images
-POST  /admin/products/:id/images
-POST  /admin/products/:id/images/:imageId/replace
-PATCH /admin/products/:id/images/reorder
-GET   /admin/products/:id/images/:imageId/thumbnail
-GET   /admin/products/:id/images/:imageId/download
+```
+
+Admin product API trả `sale_price` dạng number hoặc `null`. Giá hợp lệ là số nguyên 0..999999999999999.
+
+Search admin hỗ trợ multi-token và category name. POS dùng:
+
+```text
+GET /admin/products?q=<keyword>&page=1&limit=12&is_active=true
+```
+
+Admin search vẫn có thể trả product hết hàng.
+
+### Product images
+
+```text
+GET    /admin/products/:id/images
+POST   /admin/products/:id/images
+POST   /admin/products/:id/images/:imageId/replace
+PATCH  /admin/products/:id/images/reorder
+GET    /admin/products/:id/images/:imageId/thumbnail
+GET    /admin/products/:id/images/:imageId/download
 DELETE /admin/products/:id/images/:imageId
 ```
 
-Admin product API hỗ trợ `sale_price` cho giá bán mặc định:
+- Upload multipart field `images`.
+- Tối đa 3 ảnh, 15 MB/file.
+- JPEG/PNG/WebP hợp lệ.
+- Backend giữ file gốc và tạo thumbnail WebP 720px.
 
-- `sale_price` chỉ xuất hiện trong admin product list/detail/create/update response.
-- `sale_price` là optional và nullable; `NULL` nghĩa là chưa thiết lập giá bán, `0` là giá bán thực sự bằng 0.
-- Giá hợp lệ là số nguyên không âm, tối đa `999999999999999`.
-- Public lookup không trả `sale_price`.
-
-Ảnh sản phẩm:
-
-- Tối đa 3 ảnh; ảnh đầu tiên theo `sort_order` là ảnh chính.
-- Upload dùng `multipart/form-data`, field `images`.
-- Chấp nhận JPEG, PNG, WebP hợp lệ; mỗi file tối đa 15 MB.
-- Backend giải mã nội dung, giữ file gốc nguyên byte và tạo thumbnail WebP riêng.
-- Reorder gửi `{ "image_ids": [3, 1, 2] }` và phải chứa đầy đủ ID ảnh của sản phẩm.
-- Product list/detail trả `image_count` và `primary_image` trong cùng query.
-
-Public image endpoints:
-
-```text
-GET /public/products/:sku/images
-GET /public/products/:sku/images/:imageId/thumbnail
-GET /public/products/:sku/images/:imageId/download
-```
-
-Public chỉ xem/tải ảnh của sản phẩm active, không nhận đường dẫn filesystem hoặc API quản trị ảnh.
-
-Quy tắc SKU:
-
-- Unique.
-- Chữ thường, số, dấu chấm.
-- Không dùng dấu cách, dấu gạch ngang hoặc ký tự đặc biệt.
-
-Lỗi duplicate SKU cần hiển thị rõ ở UI:
-
-```text
-SKU này đã tồn tại. Vui lòng dùng SKU khác.
-```
-
-## 6. Customers
+## Customers
 
 ```text
 GET   /admin/customers
@@ -171,16 +111,7 @@ PATCH /admin/customers/:id/activate
 GET   /admin/customers/:id/transactions
 ```
 
-Trường UI đang dùng thực tế:
-
-- `name`
-- `phone`
-- `address`
-- `is_active`
-
-Không giả định customer group, debt, tax, tags hoặc địa chỉ tách tỉnh/huyện/xã đã tồn tại.
-
-## 7. Suppliers
+## Suppliers
 
 ```text
 GET   /admin/suppliers
@@ -190,104 +121,37 @@ PATCH /admin/suppliers/:id/deactivate
 PATCH /admin/suppliers/:id/activate
 ```
 
-Trường UI đang dùng thực tế:
+Không có supplier detail route riêng.
 
-- `name`
-- `phone`
-- `address`
-- `is_active`
-
-Không có route detail supplier riêng trong router hiện tại.
-
-## 8. Stock-in
-
-Primary bulk endpoint:
-
-```text
-POST /admin/stock-in/bulk
-```
-
-Legacy/single endpoint:
+## Stock-in / Stock-out
 
 ```text
 POST /admin/stock-in
-```
-
-Ý nghĩa:
-
-- Nhập hàng cộng tồn.
-- Có thể gắn `supplier_id`.
-- Mỗi dòng có SKU/product, quantity và note/nhóm bảo hành.
-- Tạo stock transactions và stock voucher.
-- Không gửi price/payment/debt fields.
-
-## 9. Stock-out / POS
-
-Primary bulk endpoint:
-
-```text
-POST /admin/stock-out/bulk
-```
-
-Legacy/single endpoint:
-
-```text
+POST /admin/stock-in/bulk
 POST /admin/stock-out
+POST /admin/stock-out/bulk
+GET  /admin/stock-transactions
 ```
 
-Ý nghĩa:
+Bulk stock-out payload hiện tại:
 
-- Bán tại quầy / xuất kho trừ tồn.
-- Có thể gắn `customer_id`.
-- Validate tổng tồn và tồn theo nhóm note/warranty.
-- Tạo stock transactions và stock voucher.
-- Frontend không gửi `unit_price`; backend tự snapshot giá từ `products.sale_price`.
-- Nếu sản phẩm có `sale_price`, backend lưu `unit_price` và `line_total` vào `stock_voucher_items`.
-- Nếu có bất kỳ dòng nào chưa có giá (`sale_price IS NULL`), `stock_vouchers.total_amount` là `NULL`.
-- Bulk stock-out item hỗ trợ optional nullable `sale_note` tối đa 500 ký tự. Backend trim trước khi lưu vào `stock_voucher_items.sale_note_snapshot`; chuỗi rỗng hoặc chỉ khoảng trắng lưu thành `NULL`.
-- `sale_note` là Serial/Ghi chú bán hàng riêng của dòng, tách biệt với `warranty_note`, không dùng để chọn nhóm tồn và không ghi vào `stock_transactions.note`.
-- Không gửi payment/debt/discount/invoice fields.
-
-## 10. Stock transactions
-
-```text
-GET /admin/stock-transactions
+```json
+{
+  "customer_id": 1,
+  "items": [
+    {
+      "sku": "2nd.main.asus.b760m.k",
+      "quantity": 1,
+      "warranty_note": "BH 7.28",
+      "sale_note": "Serial ABC"
+    }
+  ]
+}
 ```
 
-Dùng cho lịch sử giao dịch dòng-level nếu cần. UI hiện ưu tiên voucher-level qua stock vouchers.
+Frontend không gửi `unit_price`, `line_total`, `total_amount`. Backend lấy `products.sale_price`, validate stock và snapshot voucher trong cùng transaction.
 
-## 11. Stock vouchers
-
-```text
-GET /admin/stock-vouchers
-GET /admin/stock-vouchers/:id
-```
-
-UI routes:
-
-```text
-/admin/transaction-history
-/admin/transaction-history/:voucherId
-```
-
-Voucher dùng để xem:
-
-- mã phiếu,
-- loại phiếu,
-- ngày tạo,
-- người tạo,
-- khách hàng/nhà cung cấp nếu có,
-- tổng số lượng,
-- `total_amount` nullable,
-- danh sách sản phẩm.
-- Với phiếu bán mới, detail item có `unit_price` và `line_total` nullable từ snapshot.
-- Với phiếu bán mới, detail item có `sale_note` nullable từ `stock_voucher_items.sale_note_snapshot`, tách biệt với `warranty_note`.
-- Với phiếu cũ chưa có snapshot, detail fallback về `stock_transactions` và giá là `NULL`.
-- Với phiếu cũ hoặc dòng không có ghi chú bán hàng, `sale_note` là `NULL`.
-
-Voucher không phải invoice.
-
-## 12. Inventory check
+## Inventory Check
 
 ```text
 GET  /admin/inventory-check/products
@@ -296,35 +160,54 @@ POST /admin/inventory-check/note-move
 POST /admin/inventory-check/quantity-adjust
 ```
 
-Dùng để:
+- `note-move`: chuyển group, không đổi total.
+- `quantity-adjust`: tăng/giảm total và selected group; history lưu group quantity trước/sau.
 
-- tìm sản phẩm khi kiểm hàng,
-- xem tồn và nhóm ghi chú,
-- chuyển tồn giữa nhóm ghi chú,
-- tăng/giảm tồn có lý do.
-
-## 13. Inventory overview
-
-Mounted under:
+Inventory overview:
 
 ```text
-/admin/inventory/*
+GET /admin/inventory
 ```
 
-Xem tồn kho admin. Không phải nguồn chỉnh tồn trực tiếp.
+## Stock vouchers
 
-## 14. Warranty batch legacy
+```text
+GET /admin/stock-vouchers
+GET /admin/stock-vouchers/:id
+```
 
-Module `warrantyBatch` vẫn được mount dưới `/admin` để tương thích.
+OUT detail có thể trả:
 
-Không dùng các route batch làm workflow chính cho POS/stock-in hiện tại. Workflow hiện tại lấy nhóm bảo hành/ghi chú từ transaction notes và adjustment records.
+```text
+voucher.total_amount
+items[].sku
+items[].name
+items[].warranty_note
+items[].sale_note
+items[].quantity
+items[].unit_price
+items[].line_total
+```
 
-## 15. Nguyên tắc thay đổi API
+Legacy voucher có thể trả money/sale note `null`.
 
-- Không đổi payload nhập/xuất tồn nếu chưa có phase riêng.
-- Public lookup không trả giá, dữ liệu tiền, sale note, payment/debt/invoice hoặc admin actions.
-- Stock-in không có giá nhập trong Phase 2A.
-- Stock-out/voucher APIs chỉ snapshot giá bán mặc định theo Phase 2A; không thêm payment/debt/discount/invoice nếu chưa có task được duyệt rõ.
-- Admin product API được phép lưu giá bán mặc định qua `sale_price`.
-- Không đổi schema/route public lookup nếu không cần.
-- Nếu backend trả lỗi cụ thể, frontend phải hiển thị rõ thay vì thông báo mơ hồ.
+## Warranty batch legacy
+
+```text
+GET   /admin/products/:productId/batches
+POST  /admin/products/:productId/batches
+GET   /admin/batches/:id
+PATCH /admin/batches/:id
+PATCH /admin/batches/:id/deactivate
+PATCH /admin/batches/:id/activate
+```
+
+Không phải workflow chính của POS hiện tại.
+
+## Nguyên tắc mở rộng API
+
+- Không thêm price/payment/debt/invoice vào public.
+- Stock-in chưa có giá nhập.
+- Warranty group không phải bảng giá.
+- Discount VND theo dòng là next task, chưa có contract API.
+- Không thay đổi inventory payload/schema nếu chưa có phase được duyệt.

@@ -1,132 +1,92 @@
-# VI TÍNH PHƯỚC TÀI POS - Định hướng chính thức
+# VI TÍNH PHƯỚC TÀI POS - Định hướng
 
-Cập nhật: **19/06/2026**
+Cập nhật gần nhất: **23/06/2026**
 
-Tài liệu này là nguồn nhớ dài hạn về hướng sản phẩm. Khi ghi chú cũ mâu thuẫn, phải kiểm tra code và ưu tiên trạng thái đã xác nhận trong `PROJECT_STATUS.md`.
+## Triết lý sản phẩm
 
-## 1. Project identity
+```text
+POS First
+Offline First
+Self-Hosted
+Sapo-inspired workflow
+Stability First
+Not an ERP
+```
 
-Tên dự án: **VI TÍNH PHƯỚC TÀI POS**
+“Offline First” trong giai đoạn hiện tại nghĩa là hệ thống và dữ liệu do cửa hàng tự quản, ưu tiên dùng trong hạ tầng tại cửa hàng. Frontend chưa phải PWA có offline sync.
 
-- POS First
-- Offline First
-- Self-hosted
-- Inventory supports sales
-- Sapo-inspired
-- Fast operation
-- Minimal clicks
-- Stability before advanced finance
-- Not an ERP
+Kho là nền tảng hỗ trợ bán hàng, không phải trung tâm để mở rộng thành workflow ERP nhiều bước.
 
-Ứng dụng phục vụ cửa hàng linh kiện PC và sửa chữa máy tính. Tồn kho là nền tảng hỗ trợ bán hàng, không phải lý do để biến workflow thành phần mềm kho hoặc ERP nhiều bước.
-
-## 2. Thứ tự ưu tiên
+## Thứ tự ưu tiên
 
 1. Bán tại quầy nhanh và chính xác.
-2. Tồn kho đúng, có lịch sử và rollback an toàn.
-3. Public Lookup dễ dùng, không cần đăng nhập.
-4. Khách hàng, nhà cung cấp và nhóm bảo hành đủ cho vận hành thật.
-5. Phiếu bán, Serial/Ghi chú và mẫu in phục vụ bảo hành.
-6. Bảo mật, backup và khả năng vận hành self-hosted.
-7. Chỉ sau khi ổn định mới xem xét tính năng tài chính nâng cao.
+2. Khách hàng.
+3. Bảo hành và Serial/Ghi chú phục vụ hậu mãi.
+4. Công nợ khi có phase riêng.
+5. Kho hỗ trợ bán hàng.
+6. Báo cáo sau khi dữ liệu đủ ổn định.
 
-## 3. Trạng thái phase hiện tại
+## Trạng thái hiện tại
 
-Hệ thống đang **Production trial / Chạy thử thực tế tại cửa hàng** từ ngày 19/06/2026.
+Production trial đã có:
 
-Phase 2A đã cung cấp:
+- Public Lookup.
+- Product Admin và product images.
+- Stock-in, POS stock-out và Inventory Check.
+- Customer/Supplier.
+- Sale price mặc định và snapshot giá phiếu bán.
+- Sale note theo dòng.
+- Voucher history/detail và in A4.
+- Auth, backup và hardening production cơ bản.
 
-- Giá bán mặc định optional trên sản phẩm.
-- Snapshot đơn giá, thành tiền và tổng tiền khi bán.
-- Hiển thị tiền chỉ đọc trong POS và chi tiết phiếu.
-- Serial/Ghi chú bán hàng riêng từng dòng.
-- Mẫu in A4 phiếu bán.
+## Quyết định về giá
 
-Backend là nguồn tính và snapshot tiền. POS không tự quyết định giá và không gửi field tiền.
+Hiện tại:
 
-## 4. Phạm vi không mở rộng hiện tại
+- `products.sale_price` là giá bán tham chiếu chung.
+- Backend bulk stock-out snapshot `unit_price`, `line_total`, `total_amount`.
+- POS chỉ hiển thị giá; chưa cho sửa.
 
-Không tự thêm:
+Quyết định cho phase tiếp theo:
 
-- Giá nhập.
-- Sửa giá trực tiếp tại POS.
-- Chiết khấu/giảm giá.
-- Thanh toán, khách đưa, tiền thừa.
-- Công nợ khách hàng/nhà cung cấp.
-- Hóa đơn, kế toán.
-- Báo cáo doanh thu/lợi nhuận/tài chính.
-- Workflow ERP phức tạp.
+- Warranty group/tình trạng chỉ quản lý tồn, không gắn bảng giá.
+- Người bán có thể click đơn giá tại POS.
+- Popup nhỏ cho nhập `discount_amount` bằng số tiền VND.
+- `discount_amount` là số tiền giảm trên mỗi đơn vị sản phẩm của dòng hàng, không phải tổng số tiền giảm của cả dòng.
+- Không dùng phần trăm.
+- Đơn giá cuối = giá tham chiếu - `discount_amount`.
+- Thành tiền dòng = đơn giá cuối x số lượng.
+- Frontend gửi `discount_amount`; backend tự đọc giá tham chiếu, validate discount và tự tính lại đơn giá cuối, thành tiền, tổng phiếu.
+- Chiết khấu theo từng dòng và lưu snapshot trên phiếu.
+
+Quyết định này mới là hướng triển khai, chưa phải tính năng đã hoàn thành.
+
+## Những hướng không làm hiện tại
+
+- Giá cố định theo warranty group.
+- Bảng giá lái cố định.
+- ERP inventory/accounting workflow.
+- Discount phần trăm.
 - E-commerce checkout.
+- Payment, debt, cost và reporting trong cùng một task.
 
-Giá bán mặc định và snapshot phiếu bán là tính năng active; chúng không đồng nghĩa hệ thống đã có payment, invoice hoặc accounting.
+## Roadmap
 
-## 5. Nguyên tắc UX
+### Hiện tại
 
-- Giao diện dày thông tin nhưng dễ scan.
-- Search -> chọn -> thêm -> xác nhận.
-- POS full-screen, compact và ít click.
-- Không hiển thị field giả hoặc shortcut chưa hỗ trợ.
-- Dùng từ ngữ: Bán tại quầy, Nhập hàng, Kiểm hàng, Phiếu bán, Phiếu nhập, Nhóm bảo hành/Ghi chú.
-- Không dùng tên cũ như “Xuất & Giao hàng” trong UI chính.
+- Theo dõi lỗi production có bước tái hiện rõ.
+- Kiểm tra backup, dung lượng, PM2/Nginx/MySQL sau reboot.
+- Ưu tiên integrity của tồn và phiếu.
 
-## 6. Quy tắc tồn kho
+### Task gần nhất
 
-- Không sửa trực tiếp số dư tồn từ UI thông thường.
-- Tồn chỉ đổi qua stock-in, stock-out hoặc inventory-check.
-- Mọi thay đổi tồn phải có lịch sử.
-- Bulk stock-in/out tạo stock voucher.
-- Stock operation dựa trên SKU + nhóm bảo hành/ghi chú.
-- `sale_note` là dữ liệu bán hàng riêng, không tham gia chia nhóm tồn.
-- Stock voucher là phiếu nghiệp vụ nội bộ, không phải hóa đơn thanh toán.
+- Thiết kế chiết khấu VND theo dòng POS và snapshot backend.
 
-## 7. Public Lookup
+### Backlog sau ổn định
 
-- Route `/`, không yêu cầu login.
-- Không show toàn bộ sản phẩm khi search rỗng.
-- Tìm theo tên, SKU và ghi chú bảo hành.
-- Hiển thị tồn và nhóm bảo hành.
-- Không trả giá, dữ liệu tiền, sale note, đối tác hoặc lịch sử nội bộ.
-
-Public Lookup phải được bảo vệ khi refactor POS/admin.
-
-## 8. Self-hosted production
-
-Production:
-
-- `https://vitinhphuoctai.duckdns.org`
-- Ubuntu Server tại cửa hàng
-- Nginx + HTTPS Let's Encrypt
-- PM2 process `linhkienpc-api`
-- Express bind `127.0.0.1:3000`
-- MySQL localhost
-- DuckDNS cron mỗi 5 phút
-- Backup MySQL mỗi ngày 23:00, giữ 14 ngày
-
-Workflow chính không phụ thuộc cloud SaaS. Domain/Internet hỗ trợ truy cập từ ngoài, còn thiết kế vận hành vẫn ưu tiên self-hosted và khả năng dùng trong mạng cửa hàng.
-
-## 9. Roadmap
-
-### Hiện tại: production stabilization
-
-- Chạy thử thực tế 1-2 tuần.
-- Theo dõi lỗi bán hàng, tồn, public lookup, phiếu, print và backup.
-- Theo dõi PM2/Nginx/MySQL/Certbot/cron sau reboot.
-- Sửa bug có bước tái hiện rõ.
-
-### Sau khi ổn định
-
-- Cải thiện luồng Bán & In nếu thực tế cần.
-- Draft persistence cho multi-order.
-- Customer warranty history tốt hơn.
-- Search aliases/compatibility.
-- Báo cáo tồn kho cơ bản.
-
-### Future finance phase
-
-- Giá nhập.
-- Thanh toán.
-- Giảm giá.
-- Công nợ.
-- Báo cáo doanh thu/lợi nhuận.
-
-Mỗi mục tài chính phải có phase và business rules riêng. Không gom chúng thành một cuộc chuyển đổi ERP.
+- Bán & In.
+- Draft persistence.
+- Warranty history theo khách hàng.
+- Compatibility search nâng cao.
+- Backup ảnh tự động.
+- Công nợ và báo cáo chỉ mở bằng phase riêng.

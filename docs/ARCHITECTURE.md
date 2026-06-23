@@ -1,52 +1,32 @@
 # VI TÍNH PHƯỚC TÀI POS - Architecture
 
-Cập nhật: **19/06/2026**
+Cập nhật gần nhất: **23/06/2026**
 
-## 1. Tổng quan
-
-Local:
-
-```text
-Browser -> React/Vite -> Express /api/v1 -> MySQL
-```
-
-Production:
+## Tổng quan
 
 ```text
 Browser
-  -> HTTPS https://vitinhphuoctai.duckdns.org
-  -> Nginx
-     -> frontend/dist
-     -> reverse proxy /api/v1
-  -> Express under PM2: linhkienpc-api
-  -> 127.0.0.1:3000
+  -> Nginx (HTTPS, frontend/dist)
+  -> /api/v1 reverse proxy
+  -> Express under PM2 at 127.0.0.1:3000
   -> MySQL localhost
 ```
 
-Stack:
+Frontend production dùng `VITE_API_BASE_URL=/api/v1`. API client ghép base tương đối bằng string, hỗ trợ base tuyệt đối ở local, giữ query parameters và refresh flow.
 
-- React 18, Vite, React Router, TailwindCSS
-- Node.js 18+, Express
-- MySQL
-- JWT access/refresh token, bcrypt
-- Nginx, PM2, Let's Encrypt/Certbot
-
-## 2. Frontend
+## Frontend
 
 ```text
-frontend/src/api/          API client và refresh flow
-frontend/src/components/   shared UI
-frontend/src/contexts/     AuthContext
-frontend/src/layouts/      AdminLayout
-frontend/src/pages/        route pages
-frontend/src/services/     API wrappers
-frontend/src/utils/        format/normalize helpers
-frontend/src/router.jsx    route config
+frontend/src/
+  api/          API client
+  components/   shared components
+  contexts/     AuthContext
+  layouts/      AdminLayout
+  pages/        route pages
+  services/     API wrappers
+  utils/        recent items, warranty helpers
+  router.jsx
 ```
-
-Frontend production dùng `VITE_API_BASE_URL=/api/v1`. API client hỗ trợ base URL tương đối và tuyệt đối, chuẩn hóa dấu `/` và giữ query parameters.
-
-Ảnh sản phẩm dùng endpoint backend có kiểm soát. Admin thumbnail được tải bằng Bearer token; Public Lookup chỉ dùng endpoint public của sản phẩm active.
 
 Routes chính:
 
@@ -67,29 +47,19 @@ Routes chính:
 /admin/transaction-history/:voucherId/print TransactionVoucherPrintPage
 ```
 
-POS và trang print dùng layout riêng; print route vẫn được bảo vệ bởi admin authentication nhưng không bọc `AdminLayout`.
+POS và print route được bảo vệ bởi `ProtectedRoute` nhưng không dùng `AdminLayout`.
 
-## 3. Auth
-
-- Access token và refresh token hiện lưu trong `localStorage`.
-- API client gắn Bearer token cho admin request.
-- Khi gặp 401, client thử refresh và retry một lần.
-- Refresh thất bại sẽ xóa token và chuyển về login.
-- Login limiter chỉ gắn tại `POST /admin/auth/login`.
-- Giới hạn: 10 request/15 phút/IP; request vượt giới hạn trả 429.
-- `app.set("trust proxy", "loopback")` chỉ tin Nginx chạy qua loopback.
-- Limiter memory store phù hợp một PM2 instance; multi-instance cần shared store.
-
-## 4. Backend
+## Backend
 
 ```text
-backend/src/app.js
-backend/src/server.js
-backend/src/config/
-backend/src/middlewares/
-backend/src/modules/
-backend/src/routes/index.js
-backend/src/utils/
+backend/src/
+  app.js
+  server.js
+  config/
+  middlewares/
+  modules/
+  routes/
+  utils/
 ```
 
 Modules:
@@ -106,89 +76,52 @@ Modules:
 - `inventoryCheck`
 - `warrantyBatch` legacy
 
-Production server dùng `app.listen(env.port, env.host)`, với `HOST=127.0.0.1`.
+`app.js` mount API dưới `/api/v1` và dùng `app.set('trust proxy', 'loopback')`. `server.js` listen bằng `env.port` và `env.host`.
 
-Product image storage:
+## Search architecture
+
+- Admin product list và POS dùng `GET /admin/products`.
+- POS search gọi server với `q`, `page=1`, `limit=12`, `is_active=true`.
+- Request sequence guard ngăn response cũ ghi đè query mới.
+- Public search dùng cùng token builder nhưng thêm warranty-note matching và filter tồn lớn hơn 0.
+- Public search rỗng trả danh sách rỗng.
+
+## Inventory architecture
 
 ```text
-PRODUCT_UPLOAD_ROOT/
-  originals/   file gốc giữ nguyên byte
-  thumbnails/  thumbnail WebP
-  temp/        file upload tạm, được dọn sau xử lý
+Current total: product_inventory_balances
+Stock ledger:  stock_transactions
+Group moves:   inventory_note_adjustments
+Qty changes:   inventory_quantity_adjustments
 ```
 
-MySQL lưu metadata trong `product_images`. Product list/search lấy ảnh chính bằng một derived join, không query từng sản phẩm.
+`inventoryNoteGroups` tổng hợp group từ ba nguồn ledger và đối chiếu với total balance.
 
-Admin bootstrap:
+Quantity adjustment:
 
-- Không có mật khẩu hard-code.
-- Chỉ lấy `DEFAULT_ADMIN_PASSWORD` từ environment.
-- Admin đã tồn tại không bị reset.
-- Chưa có admin và thiếu password sẽ báo lỗi rõ ràng.
+1. Begin transaction.
+2. Lock product/balance bằng `FOR UPDATE`.
+3. Tính group ledger sau locking read.
+4. Validate total và selected group.
+5. Update balance và insert history.
+6. Commit; lỗi thì rollback.
 
-## 5. Route mounting
+## POS và voucher snapshot
 
-Base URL:
+POS gửi:
 
 ```text
-/api/v1
+customer_id?
+items[].sku
+items[].quantity
+items[].warranty_note
+items[].sale_note
 ```
 
-Public:
+POS không gửi field tiền. Backend lấy `products.sale_price`, tính và snapshot vào:
 
 ```text
-GET /health
-GET /public/products
-GET /public/products/:sku/inventory
-GET /public/categories
-```
-
-Admin auth:
-
-```text
-POST /admin/auth/login
-POST /admin/auth/refresh
-POST /admin/auth/logout
-GET  /admin/auth/me
-```
-
-Protected admin:
-
-```text
-/admin/categories/*
-/admin/customers/*
-/admin/suppliers/*
-/admin/products/*
-/admin/inventory-check/*
-/admin/stock-vouchers/*
-/admin/inventory/*
-/admin/stock-in
-/admin/stock-in/bulk
-/admin/stock-out
-/admin/stock-out/bulk
-/admin/stock-transactions
-```
-
-## 6. Stock-in
-
-- Frontend chọn supplier optional, sản phẩm, quantity và nhóm bảo hành.
-- Backend bulk stock-in validate và cộng `product_inventory_balances`.
-- Ghi `stock_transactions` và tạo `stock_vouchers`.
-- Không có giá nhập, payment hoặc debt.
-
-## 7. POS / Stock-out
-
-- Full-screen POS, search/recent products, customer và multi-order.
-- Cart merge theo SKU + nhóm bảo hành.
-- `sale_note` thuộc từng cart row nhưng không tham gia merge key.
-- POS hiển thị giá, line total và cart total dạng chỉ đọc.
-- Payload gửi SKU, quantity, warranty note và sale note; không gửi field tiền.
-- Backend validate stock, tự lấy `products.sale_price`, trừ tồn và snapshot voucher.
-
-Snapshot:
-
-```text
-stock_voucher_items
+stock_voucher_items:
   sku_snapshot
   product_name_snapshot
   warranty_note_snapshot
@@ -197,46 +130,41 @@ stock_voucher_items
   unit_price
   line_total
 
-stock_vouchers
+stock_vouchers:
   total_amount
 ```
 
-`stock_transactions.note` chỉ giữ nhóm bảo hành/tồn kho, không giữ sale note.
+`stock_transactions.note` chỉ phục vụ nhóm tồn.
 
-## 8. Voucher detail và print
+## Product images
 
-- List/detail dùng stock voucher API.
-- Detail phiếu OUT hiển thị snapshot SKU/name/warranty/sale note/money.
-- Legacy voucher fallback không crash và có thể trả giá/sale note `NULL`.
-- Phiếu IN không hiển thị giá nhập giả.
-- Print route lấy voucher detail API, không lấy cart.
-- `window.print()` chỉ được gọi khi nhấn nút In phiếu.
-- CSS print dùng A4, table header lặp lại và tránh cắt row.
-
-## 9. Database
-
-Nguồn tồn:
+Filesystem:
 
 ```text
-product_inventory_balances
+PRODUCT_UPLOAD_ROOT/
+  originals/
+  thumbnails/
+  temp/
 ```
 
-Lịch sử và phiếu:
+- File gốc được giữ nguyên.
+- Thumbnail WebP rộng tối đa 720px.
+- MySQL lưu metadata trong `product_images`.
+- Admin thumbnail cần auth; public image endpoint chỉ cho product active.
+- Production upload root: `/opt/linhkienpc/uploads/products`.
 
-```text
-stock_transactions
-stock_vouchers
-stock_voucher_items
-```
+## Auth và security
 
-Các bảng legacy `warranty_batches` và `inventory_balances` vẫn được giữ để tương thích, không phải workflow mới.
+- Access/refresh token hiện lưu trong `localStorage`.
+- API client refresh và retry một lần khi gặp 401.
+- Refresh thất bại xóa token và chuyển login.
+- Login limiter chỉ gắn `POST /admin/auth/login`.
+- Limiter memory store phù hợp một PM2 instance; cluster cần shared store.
 
-## 10. Production boundaries
+## Production boundaries
 
-- Nginx là public entry point duy nhất cho web/API.
-- Backend chỉ bind loopback.
-- MySQL chỉ localhost.
-- UFW mở 80/443 public, SSH từ LAN; không mở 3000/3306.
-- DuckDNS cập nhật mỗi 5 phút.
-- Backup MySQL hằng ngày lúc 23:00, retention 14 ngày.
-- Hệ thống chưa có giá nhập, discount, payment, debt, invoice hoặc financial reporting.
+- Nginx là public entry point.
+- Backend và MySQL không expose trực tiếp.
+- Upload ảnh nằm ngoài Git repo.
+- Database backup không bao gồm file ảnh.
+- Không có payment, debt, cost, invoice hoặc reporting architecture ở phase hiện tại.

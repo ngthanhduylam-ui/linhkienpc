@@ -1,87 +1,38 @@
-# VI TÍNH PHƯỚC TÀI POS - Deployment và vận hành
+# VI TÍNH PHƯỚC TÀI POS - Deployment
 
-Cập nhật: **19/06/2026**
+Cập nhật gần nhất: **23/06/2026**
 
-Đây là runbook an toàn cho production tự host tại cửa hàng. Không ghi secret thật vào tài liệu hoặc command history chia sẻ.
+Không ghi secret thật vào tài liệu hoặc command history chia sẻ.
 
-## 1. Production topology
-
-```text
-Internet
-  -> https://vitinhphuoctai.duckdns.org
-  -> UFW ports 80/443
-  -> Nginx
-     -> frontend static build
-     -> /api/v1 -> 127.0.0.1:3000
-  -> PM2: linhkienpc-api
-  -> MySQL localhost
-```
-
-Thông tin:
+## Production topology
 
 ```text
-Repo:             /opt/linhkienpc/linhkienpc
-Backend:          /opt/linhkienpc/linhkienpc/backend
-Frontend build:   /opt/linhkienpc/linhkienpc/frontend/dist
-Branch:           codex-dev
-PM2 process:      linhkienpc-api
 Domain:           https://vitinhphuoctai.duckdns.org
+Repo:             /opt/linhkienpc/linhkienpc
+Branch:           codex-dev
+Frontend build:   /opt/linhkienpc/linhkienpc/frontend/dist
+Backend:          /opt/linhkienpc/linhkienpc/backend
+PM2 process:      linhkienpc-api
 Backend bind:     127.0.0.1:3000
+Database:         MySQL localhost
+Product uploads:  /opt/linhkienpc/uploads/products
 ```
 
-Nginx reverse proxy frontend/backend. MySQL và backend không được expose trực tiếp ra Internet.
+Nginx phục vụ frontend và reverse proxy `/api/v1`. UFW không mở public port 3000/3306.
 
-## 2. Hạ tầng đã xác nhận
-
-- HTTPS dùng Let's Encrypt/Certbot.
-- `certbot renew --dry-run` đã thành công.
-- Certbot timer đang active.
-- UFW chỉ mở 80/443 public; SSH giới hạn LAN; 3000/3306 không public.
-- DuckDNS cron cập nhật IP mỗi 5 phút.
-- PM2 chạy một backend instance.
-- Production frontend dùng `VITE_API_BASE_URL=/api/v1`.
-
-Ảnh sản phẩm nên đặt ngoài Git working tree:
+## Backup
 
 ```text
-PRODUCT_UPLOAD_ROOT=/var/lib/linhkienpc/product-images
-PRODUCT_IMAGE_MAX_BYTES=15728640
-PRODUCT_IMAGE_MAX_COUNT=3
+Script:     /home/vitinhphuoctai/backup_linhkienpc.sh
+Directory:  /home/vitinhphuoctai/backups
+Log:        /home/vitinhphuoctai/backup.log
+Schedule:   23:00 daily
+Retention:  14 days
 ```
 
-User chạy PM2 phải có quyền đọc/ghi thư mục này. Không đặt upload root trong `frontend/dist` và không expose trực tiếp bằng Nginx.
+Database backup không chứa ảnh. Backup ảnh từ `/opt/linhkienpc/uploads/products` ra HDD riêng là backlog và chưa tự động hóa.
 
-## 3. Backup
-
-```text
-Script:    /home/vitinhphuoctai/backup_linhkienpc.sh
-Directory: /home/vitinhphuoctai/backups
-Log:       /home/vitinhphuoctai/backup.log
-Schedule:  23:00 daily
-Retention: 14 days
-```
-
-Cron đã tạo được backup có dữ liệu. Việc restore hoàn chỉnh chưa được xác nhận bằng diễn tập end-to-end.
-
-Kiểm tra:
-
-```bash
-tail -n 100 /home/vitinhphuoctai/backup.log
-ls -lh /home/vitinhphuoctai/backups
-df -h
-```
-
-Backup thủ công trước deploy:
-
-```bash
-/home/vitinhphuoctai/backup_linhkienpc.sh
-```
-
-Từ migration 020, backup hoàn chỉnh phải gồm cả MySQL và `PRODUCT_UPLOAD_ROOT`. Chỉ backup database sẽ không đủ để khôi phục ảnh sản phẩm. Cần kiểm tra restore cả metadata lẫn file.
-
-Nếu backup lỗi, file rỗng hoặc ổ đĩa gần đầy: dừng deploy.
-
-## 4. Pre-deploy checks
+## Pre-deploy
 
 Local:
 
@@ -96,38 +47,49 @@ npm run build
 Server:
 
 ```bash
-ssh vitinhphuoctai@<server-lan-ip>
 cd /opt/linhkienpc/linhkienpc
 git branch --show-current
 git status --short
 git log -1 --oneline
+git remote -v
 pm2 status
 sudo nginx -t
 sudo systemctl status nginx --no-pager
 sudo systemctl status mysql --no-pager
 df -h
+ls -lh /home/vitinhphuoctai/backups | tail
 ```
 
-Chỉ deploy khi branch đúng, working tree server sạch, backup thành công và không có cảnh báo dung lượng.
+Dừng nếu sai branch, working tree dirty, backup lỗi/rỗng, ổ đĩa thiếu hoặc không xác định commit rollback.
 
-## 5. Deploy theo thứ tự
+## Deploy theo thứ tự
+
+Ghi commit hiện tại:
 
 ```bash
 cd /opt/linhkienpc/linhkienpc
-git status --short
+git rev-parse HEAD
+```
+
+Backup và pull:
+
+```bash
 /home/vitinhphuoctai/backup_linhkienpc.sh
 git pull --ff-only origin codex-dev
 ```
 
-Nếu có migration đã được review:
+Backend/migration nếu thay đổi:
 
 ```bash
 cd /opt/linhkienpc/linhkienpc/backend
 npm install
 npm run migrate
+pm2 restart linhkienpc-api
+pm2 status
+pm2 logs linhkienpc-api --lines 100 --nostream
 ```
 
-Build frontend:
+Frontend:
 
 ```bash
 cd /opt/linhkienpc/linhkienpc/frontend
@@ -137,19 +99,9 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Restart backend chỉ khi backend hoặc dependency backend thay đổi:
+Không dùng `npm run db:setup` như lệnh deploy thường lệ. Seed chỉ chạy có chủ đích.
 
-```bash
-cd /opt/linhkienpc/linhkienpc/backend
-npm install
-pm2 restart linhkienpc-api
-pm2 status
-pm2 logs linhkienpc-api --lines 100 --nostream
-```
-
-Không chạy `db:setup` trên production như một thói quen deploy; dùng migration runner và chỉ seed khi có chủ đích.
-
-## 6. Post-deploy verification
+## Post-deploy
 
 ```bash
 curl -I https://vitinhphuoctai.duckdns.org
@@ -160,106 +112,49 @@ pm2 status
 sudo nginx -t
 ```
 
-Xác nhận:
+Smoke checklist:
 
 - Admin login.
-- Public Lookup HTTPS.
-- Public categories HTTP 200.
-- Product list.
-- POS search và bán test có kiểm soát.
-- Tồn giảm đúng và public lookup phản ánh tồn mới.
-- Voucher history/detail/print.
-- Serial/Ghi chú và snapshot giá.
-- Upload, thumbnail, gallery và tải ảnh gốc của sản phẩm.
+- Public search/list chỉ hiện product active còn tồn.
+- Product list và product images.
+- POS server-side search, sale và inventory decrement.
+- Inventory Check note move/quantity adjustment.
+- Voucher list/detail/print.
 - Backend chỉ nghe `127.0.0.1:3000`.
-- Cổng 3000/3306 không public.
 
-## 7. Kiểm tra bảo mật/vận hành
+## Rollback code
 
-```bash
-sudo ss -lntp
-sudo ufw status verbose
-sudo systemctl status certbot.timer --no-pager
-sudo certbot renew --dry-run
-pm2 status
-pm2 save
-```
-
-DuckDNS:
-
-```bash
-crontab -l
-/home/vitinhphuoctai/duckdns/duck.sh
-```
-
-Script DuckDNS production: `/home/vitinhphuoctai/duckdns/duck.sh`. Không in nội dung script nếu có token.
-
-Certbot:
-
-```bash
-sudo certbot certificates
-sudo certbot renew --dry-run
-```
-
-Không in `.env`, JWT secret, mật khẩu database hoặc mật khẩu admin ra log/tài liệu. Chỉ kiểm tra tên biến và quyền file.
-
-## 8. Rollback code
-
-Trước deploy, ghi lại commit cũ:
+Ưu tiên checkout commit tốt đã ghi nhận, không dùng `git reset --hard` khi chưa kiểm tra:
 
 ```bash
 cd /opt/linhkienpc/linhkienpc
-git rev-parse HEAD
-```
-
-Nếu cần rollback code, ưu tiên checkout một commit đã biết rõ và build lại:
-
-```bash
 git checkout <previous-known-good-commit>
+
 cd frontend
 VITE_API_BASE_URL=/api/v1 npm run build
 sudo nginx -t
 sudo systemctl reload nginx
+
 cd ../backend
 pm2 restart linhkienpc-api
 ```
 
-Sau khi ổn định, đưa repo server trở lại branch deploy theo quy trình Git có kiểm soát. Không dùng `git reset --hard` khi chưa kiểm tra thay đổi local.
+Sau sự cố, đưa server trở lại branch `codex-dev` bằng quy trình Git có kiểm soát.
 
-## 9. Rollback database
+## Rollback database
 
-Database rollback chỉ dùng khi migration gây lỗi và đã xác định backup đúng:
+Chỉ restore khi đã dừng thao tác bán và hiểu phạm vi mất dữ liệu:
 
 ```bash
 mysql -u <db-user> -p <database-name> < /home/vitinhphuoctai/backups/<backup-file>.sql
 ```
 
-Restore có thể ghi đè dữ liệu bán hàng mới sau thời điểm backup. Phải dừng thao tác bán, ghi nhận thời điểm và xác nhận phạm vi mất dữ liệu trước khi restore. Vì restore end-to-end chưa được diễn tập đầy đủ, đây là điểm cần dừng và đánh giá thay vì thao tác vội.
+Restore end-to-end chưa được ghi nhận là đã diễn tập hoàn chỉnh. Đây là điểm phải dừng và đánh giá, không thao tác vội.
 
-## 10. Điểm phải dừng
+## Secret và environment
 
-- Working tree server không sạch hoặc sai branch.
-- Backup mới nhất lỗi/rỗng.
-- Không đủ dung lượng đĩa.
-- Migration chưa được đọc hoặc chưa test local.
-- Nginx config test thất bại.
-- Backend bind ra `0.0.0.0` ngoài chủ đích.
-- Port 3000/3306 xuất hiện public.
-- PM2/Nginx/MySQL không ổn định trước deploy.
-- Không xác định được commit rollback.
-
-## 11. Local Windows
-
-```powershell
-cd backend
-npm install
-Copy-Item .env.example .env
-npm run db:setup
-npm run dev
-
-cd ..\frontend
-npm install
-npm run dev
-```
-
-Local nên dùng backend/database local. Nếu frontend local trỏ production, mọi thao tác nhập/xuất sẽ tác động dữ liệu thật.
+- Không in nội dung `.env`.
+- Chỉ kiểm tra file tồn tại, quyền file và tên biến.
+- Production cần `HOST=127.0.0.1`.
+- `DEFAULT_ADMIN_PASSWORD` không có fallback trong source.
+- `PRODUCT_UPLOAD_ROOT=/opt/linhkienpc/uploads/products`.

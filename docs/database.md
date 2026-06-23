@@ -1,207 +1,95 @@
-# DATABASE.md
+# VI TÍNH PHƯỚC TÀI POS - Database
 
-Database hiện dùng MySQL với charset/collation `utf8mb4`. Schema tổng hợp nằm tại:
+Cập nhật gần nhất: **23/06/2026**
+
+MySQL dùng `utf8mb4`. Migration runner đọc `database/migrations/*.sql`, ghi file đã chạy vào `schema_migrations` và skip khi chạy lại.
+
+## Bảng chính
+
+### Auth
+
+- `admins`: tài khoản admin, bcrypt `password_hash`.
+- `admin_refresh_tokens`: refresh token hash, expiry và revoke state.
+
+### Product
+
+- `categories`: `code`, `name`, `description`, `is_active`.
+- `products`: SKU, tên, category, mô tả, `sale_price`, trạng thái.
+- `product_images`: metadata file gốc/thumbnail và `sort_order` 1-3.
+
+`products.sale_price DECIMAL(15,0) NULL`:
+
+- `NULL`: chưa thiết lập.
+- `0`: giá hợp lệ.
+- Check không âm.
+
+### Inventory
+
+- `product_inventory_balances`: nguồn tổng tồn hiện tại, unique theo `product_id`.
+- `stock_transactions`: ledger IN/OUT; `note` là warranty/inventory group.
+- `inventory_note_adjustments`: chuyển quantity giữa group, không đổi total.
+- `inventory_quantity_adjustments`: tăng/giảm quantity theo group.
+
+`inventory_quantity_adjustments.from_quantity/to_quantity` biểu diễn tồn group trước/sau thao tác. Service hiện khóa balance trước khi tính ledger để chống stale snapshot.
+
+### Vouchers
+
+- `stock_vouchers`: header phiếu IN/OUT, đối tác, người tạo, thời gian, `total_amount`.
+- `stock_voucher_items`: snapshot dòng phiếu bán.
+
+Các field snapshot:
 
 ```text
-database/schema/schema.sql
+voucher_id
+stock_transaction_id
+product_id
+sku_snapshot
+product_name_snapshot
+warranty_note_snapshot
+sale_note_snapshot
+quantity
+unit_price
+line_total
 ```
 
-Migration nằm tại:
+- `warranty_note_snapshot`: group tồn đã chọn.
+- `sale_note_snapshot`: Serial/Ghi chú bán hàng, không dùng tính tồn.
+- `unit_price`, `line_total`, `total_amount` nullable để tương thích giá thiếu và phiếu legacy.
 
-```text
-database/migrations/
+### Partners
+
+- `customers`: name, phone, address, active.
+- `suppliers`: name, phone, address, active.
+
+### Legacy
+
+- `warranty_batches`
+- `inventory_balances`
+
+Workflow hiện tại không dùng hai bảng này làm nguồn tồn chính. Không xóa nếu chưa có migration cleanup riêng.
+
+## Cách tính tồn theo group
+
+Group ledger được tổng hợp từ:
+
+1. `stock_transactions`: IN cộng, OUT trừ.
+2. `inventory_quantity_adjustments`: INCREASE cộng, DECREASE trừ.
+3. `inventory_note_adjustments`: trừ source, cộng destination.
+
+Sau đó đối chiếu với `product_inventory_balances.quantity`; phần total chưa có group được đưa vào group không ghi chú. Nếu tổng group lớn hơn balance, service cảnh báo integrity.
+
+## Public stock rule
+
+Public search/list join `product_inventory_balances` và chỉ trả:
+
+```sql
+p.is_active = 1
+AND COALESCE(pib.quantity, 0) > 0
 ```
 
-## 1. Nhóm bảng auth
+Admin/POS/Inventory Check không áp dụng filter này.
 
-### `admins`
-
-Lưu tài khoản admin.
-
-Trường chính:
-
-- `username` unique.
-- `password_hash` dùng bcrypt.
-- `display_name`.
-- `is_active`.
-
-### `admin_refresh_tokens`
-
-Lưu refresh token đã hash.
-
-Trường chính:
-
-- `admin_id`.
-- `token_hash`.
-- `expires_at`.
-- `revoked_at`.
-
-Không lưu refresh token gốc trong database.
-
-## 2. Nhóm sản phẩm
-
-### `categories`
-
-Lưu loại sản phẩm.
-
-Backend/database gọi là `category`, UI gọi là “Loại sản phẩm”.
-
-Trường chính:
-
-- `code` unique.
-- `name` unique.
-- `description`.
-- `is_active`.
-
-### `products`
-
-Lưu model sản phẩm.
-
-Trường chính:
-
-- `sku` unique.
-- `name`.
-- `category_id`.
-- `spec_summary`.
-- `sale_price` nullable, lưu giá bán mặc định dùng trong Phase 2A.
-- `is_active`.
-
-### `product_images`
-
-Lưu metadata tối đa 3 ảnh cho mỗi sản phẩm; nội dung file nằm trên filesystem, không lưu BLOB trong MySQL.
-
-- `product_id`: liên kết `products.id`.
-- `original_path`: đường dẫn tương đối tới file gốc.
-- `thumbnail_path`: đường dẫn tương đối tới thumbnail WebP.
-- `original_name`, `mime_type`, `file_size`.
-- `sort_order`: từ 1 đến 3; ảnh có `sort_order = 1` là ảnh chính.
-
-Unique `(product_id, sort_order)` giữ thứ tự ổn định. FK cascade xóa metadata nếu sản phẩm bị hard-delete; workflow ứng dụng phải dọn file gốc và thumbnail tương ứng. Product Admin hiện chỉ activate/deactivate, không có hard-delete từ UI.
-
-Quy tắc SKU hiện tại:
-
-- chữ thường,
-- số,
-- dấu chấm,
-- không dấu cách/dấu gạch ngang/ký tự đặc biệt.
-
-## 3. Nhóm tồn kho
-
-### `product_inventory_balances`
-
-Nguồn tồn chính hiện tại.
-
-Trường chính:
-
-- `product_id` unique.
-- `quantity`.
-- `updated_at`.
-
-Quy tắc:
-
-- Không chỉnh trực tiếp từ UI.
-- Chỉ thay đổi qua nhập hàng, bán/xuất hàng, kiểm hàng/điều chỉnh tồn.
-
-### `stock_transactions`
-
-Sổ giao dịch nhập/xuất.
-
-Trường chính:
-
-- `txn_type`: `IN` hoặc `OUT`.
-- `product_id`.
-- `quantity`.
-- `note`: nhóm bảo hành/ghi chú hiện tại.
-- `customer_id` nullable.
-- `supplier_id` nullable.
-- `voucher_id` nullable/linked với phiếu.
-- `created_by_admin_id`.
-- `occurred_at`.
-
-`note` là nguồn chính để tính nhóm bảo hành/ghi chú trong POS/public lookup.
-
-### `stock_vouchers`
-
-Nhóm các dòng `stock_transactions` thành phiếu nhập hoặc phiếu bán.
-
-Dùng cho:
-
-- transaction history list,
-- detail phiếu,
-- kiểm tra sản phẩm/số lượng trong phiếu.
-
-Không phải invoice và không chứa payment/debt logic.
-
-Phase 2A thêm `total_amount` nullable để lưu tổng tiền phiếu bán được backend bulk stock-out snapshot. Phiếu cũ, phiếu nhập, hoặc phiếu bán có dòng thiếu giá có thể giữ `NULL`.
-
-### `stock_voucher_items`
-
-Bảng dòng phiếu cho Phase 2A.
-
-Trường chính:
-
-- `voucher_id`.
-- `stock_transaction_id` nullable.
-- `product_id`.
-- `sku_snapshot`.
-- `product_name_snapshot`.
-- `warranty_note_snapshot` nullable.
-- `sale_note_snapshot` nullable, lưu Serial/Ghi chú bán hàng riêng của từng dòng phiếu bán khi backend bulk stock-out nhận `sale_note`.
-- `quantity`.
-- `unit_price` nullable.
-- `line_total` nullable.
-
-Bảng này dùng để lưu snapshot dòng phiếu bán, không thay thế `stock_transactions` và không đổi logic tồn kho hiện tại. `sku_snapshot`, `product_name_snapshot`, `warranty_note_snapshot`, `sale_note_snapshot`, `quantity`, `unit_price` và `line_total` là dữ liệu tại thời điểm bán. `warranty_note_snapshot` là nhóm bảo hành/tồn kho đã chọn; `sale_note_snapshot` là Serial/Ghi chú bán hàng riêng của dòng, được backend trim trước khi lưu và không dùng để tính tồn. `unit_price`, `line_total` và `sale_note_snapshot` nullable để tương thích phiếu cũ, sản phẩm chưa có giá hoặc dòng bán không có ghi chú bán hàng.
-
-## 4. Nhóm đối tác
-
-### `customers`
-
-Trường thực tế đang dùng:
-
-- `name`.
-- `phone`.
-- `address`.
-- `is_active`.
-
-Được dùng trong POS/stock-out nếu chọn khách hàng.
-
-### `suppliers`
-
-Trường thực tế đang dùng:
-
-- `name`.
-- `phone`.
-- `address`.
-- `is_active`.
-
-Được dùng trong stock-in nếu chọn nhà cung cấp.
-
-## 5. Nhóm kiểm hàng
-
-### `inventory_note_adjustments`
-
-Ghi nhận thao tác chuyển tồn giữa các nhóm ghi chú/bảo hành.
-
-### `inventory_quantity_adjustments`
-
-Ghi nhận thao tác tăng/giảm tồn khi kiểm hàng.
-
-Các bảng này hỗ trợ màn `/admin/inventory-check`.
-
-## 6. Bảng legacy
-
-### `warranty_batches`
-
-Module lô bảo hành cũ. Hiện không phải workflow chính của POS/stock-in.
-
-### `inventory_balances`
-
-Bảng tồn theo warranty batch từ kiến trúc cũ. Workflow hiện tại dùng `product_inventory_balances`.
-
-Không xóa các bảng legacy nếu chưa có migration/phase dọn riêng.
-
-## 7. Migrations hiện có
+## Migrations hiện có
 
 ```text
 001_create_admins.sql
@@ -226,41 +114,23 @@ Không xóa các bảng legacy nếu chưa có migration/phase dọn riêng.
 020_create_product_images.sql
 ```
 
-## 8. Backup/restore
+## Migration 018-020
 
-Trước khi deploy hoặc chạy migration trên server thật, luôn backup MySQL.
+- `018`: thêm `products.sale_price`, `stock_vouchers.total_amount`, tạo `stock_voucher_items`.
+- `019`: thêm `stock_voucher_items.sale_note_snapshot`.
+- `020`: tạo `product_images`.
 
-Production hiện dùng:
+## Backup
+
+Database:
 
 ```text
-Script:    /home/vitinhphuoctai/backup_linhkienpc.sh
-Directory: /home/vitinhphuoctai/backups
-Log:       /home/vitinhphuoctai/backup.log
-Schedule:  23:00 daily
-Retention: 14 days
+/home/vitinhphuoctai/backup_linhkienpc.sh
+/home/vitinhphuoctai/backups
+/home/vitinhphuoctai/backup.log
+23:00 daily, retention 14 days
 ```
 
-Backup cron đã tạo file có dữ liệu. Restore end-to-end chưa được xác nhận là đã diễn tập thành công.
+Ảnh nằm tại `/opt/linhkienpc/uploads/products` và không có trong MySQL backup. Backup ảnh sang HDD riêng hiện chưa tự động hóa.
 
-Không commit file backup chứa dữ liệu thật vào repo.
-
-## 9. Những bảng/chức năng chưa có
-
-Schema đã chuẩn bị cho Phase 2A:
-
-- giá bán mặc định trên `products.sale_price`,
-- snapshot giá bán/tổng tiền phiếu bán qua `stock_vouchers.total_amount` và `stock_voucher_items`.
-
-Backend bulk stock-out sử dụng các field này để snapshot giá bán vào phiếu bán. POS hiển thị giá, thành tiền và tổng tiền dạng chỉ đọc nhưng không cho sửa giá. Hệ thống chưa có thanh toán/công nợ/hóa đơn.
-
-Chưa có schema cho:
-
-- giá nhập,
-- thanh toán,
-- công nợ,
-- hóa đơn,
-- kế toán,
-- báo cáo tài chính,
-- tags/aliases/compatibility search.
-
-Không document hoặc code UI như thể các phần này đã tồn tại.
+Không chạy migration production nếu chưa backup, chưa test local hoặc chưa xác định rollback.
