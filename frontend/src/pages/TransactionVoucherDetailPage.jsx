@@ -109,6 +109,49 @@ function SummaryRow({ label, children }) {
   );
 }
 
+function MoneyStackRow({ label, value, valueClassName = "" }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="shrink-0 text-slate-500">{label}</span>
+      <span className={`min-w-0 text-right tabular-nums ${value.isMissing ? "text-slate-400" : "text-slate-900"} ${valueClassName}`}>
+        {value.label}
+      </span>
+    </div>
+  );
+}
+
+function ProductSnapshotInfo({ item, saleNote }) {
+  return (
+    <div className="min-w-0 text-slate-900">
+      <span className="block whitespace-normal break-words font-semibold leading-5">{getSnapshotProductName(item)}</span>
+      <span className="mt-1 block break-words text-[12px] font-medium leading-4 text-slate-500">
+        <span className="font-semibold text-slate-600">SKU:</span> {getSnapshotSku(item)}
+      </span>
+      {saleNote && (
+        <span className="mt-1 block text-[12px] font-medium leading-4 text-slate-500">
+          <span className="font-semibold text-slate-600">Serial / Ghi chú:</span> {saleNote}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PriceSnapshotStack({ referenceUnitPrice, discountAmount, discountValue, unitPrice, lineTotal }) {
+  return (
+    <div className="space-y-1.5 text-xs">
+      <MoneyStackRow label="Tham chiếu:" value={referenceUnitPrice} />
+      {discountValue > 0 && (
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="shrink-0 text-slate-500">Chiết khấu:</span>
+          <span className="min-w-0 text-right font-semibold tabular-nums text-red-600">−{discountAmount.label}</span>
+        </div>
+      )}
+      <MoneyStackRow label="Giá bán:" value={unitPrice} valueClassName="font-semibold" />
+      <MoneyStackRow label="Thành tiền:" value={lineTotal} valueClassName="text-sm font-bold text-slate-950" />
+    </div>
+  );
+}
+
 export function TransactionVoucherDetailPage() {
   const { voucherId } = useParams();
   const [voucher, setVoucher] = useState(null);
@@ -178,76 +221,86 @@ export function TransactionVoucherDetailPage() {
             </InfoCard>
 
             <InfoCard title="Thông tin sản phẩm">
-              <div className="overflow-x-auto rounded-md border border-slate-200">
-                <table className={`w-full table-fixed border-collapse text-sm ${isSaleVoucher ? "min-w-[1120px]" : "min-w-[640px]"}`}>
-                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="w-14 px-3 py-2.5 text-center">STT</th>
-                      <th className="px-3 py-2.5 text-left">Sản phẩm</th>
-                      <th className="w-44 px-3 py-2.5 text-left">SKU</th>
-                      <th className="w-52 px-3 py-2.5 text-left">Nhóm bảo hành / Ghi chú</th>
-                      <th className="w-24 px-3 py-2.5 text-right">Số lượng</th>
-                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Giá tham chiếu</th>}
-                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Chiết khấu</th>}
-                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Giá bán</th>}
-                      {isSaleVoucher && <th className="w-36 px-3 py-2.5 text-right">Thành tiền</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {(voucher.items || []).map((item, index) => {
+              <div className="overflow-x-auto rounded-md border border-slate-200 text-sm">
+                <div
+                  className={
+                    isSaleVoucher
+                      ? "hidden bg-slate-50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(40px,48px)_minmax(220px,1.6fr)_minmax(150px,1fr)_minmax(56px,72px)_minmax(190px,0.9fr)] md:items-center md:gap-3"
+                      : "hidden bg-slate-50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[minmax(40px,48px)_minmax(220px,1.7fr)_minmax(150px,1fr)_minmax(56px,72px)] md:items-center md:gap-3"
+                  }
+                >
+                  <div className="text-center">STT</div>
+                  <div className="min-w-0 text-left">Sản phẩm</div>
+                  <div className="min-w-0 text-left">Nhóm bảo hành / Ghi chú</div>
+                  <div className="text-right">Số lượng</div>
+                  {isSaleVoucher && <div className="min-w-0 text-right">Giá / Thành tiền</div>}
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {(voucher.items || []).map((item, index) => {
                       const unitPrice = formatMoney(item.unit_price);
                       const referenceUnitPrice = formatMoney(item.reference_unit_price);
                       const discountAmount = formatMoney(item.discount_amount || 0);
+                      const discountValue = Number(item.discount_amount || 0);
                       const lineTotal = formatMoney(item.line_total);
                       const saleNote = isSaleVoucher ? getSaleNote(item) : "";
 
                       return (
-                        <tr key={item.transaction_id || index} className="hover:bg-blue-50/40">
-                          <td className="px-3 py-3 text-center text-slate-500">{index + 1}</td>
-                          <td className="min-w-0 px-3 py-3 font-semibold text-slate-900">
-                            <span className="line-clamp-2">{getSnapshotProductName(item)}</span>
-                            {saleNote && (
-                              <span className="mt-1 block text-[12px] font-medium leading-4 text-slate-500">
-                                <span className="font-semibold text-slate-600">Serial / Ghi chú:</span> {saleNote}
-                              </span>
+                        <div key={item.transaction_id || index} className="hover:bg-blue-50/40">
+                          <div
+                            className={
+                              isSaleVoucher
+                                ? "hidden px-3 py-3 md:grid md:grid-cols-[minmax(40px,48px)_minmax(220px,1.6fr)_minmax(150px,1fr)_minmax(56px,72px)_minmax(190px,0.9fr)] md:items-start md:gap-3"
+                                : "hidden px-3 py-3 md:grid md:grid-cols-[minmax(40px,48px)_minmax(220px,1.7fr)_minmax(150px,1fr)_minmax(56px,72px)] md:items-start md:gap-3"
+                            }
+                          >
+                            <div className="text-center text-slate-500">{index + 1}</div>
+                            <ProductSnapshotInfo item={item} saleNote={saleNote} />
+                            <div className="min-w-0 break-words text-brand-800">{formatNote(item.note || item.warranty_note)}</div>
+                            <div className="text-right font-semibold tabular-nums text-slate-900">{Number(item.quantity || 0)}</div>
+                            {isSaleVoucher && (
+                              <PriceSnapshotStack
+                                referenceUnitPrice={referenceUnitPrice}
+                                discountAmount={discountAmount}
+                                discountValue={discountValue}
+                                unitPrice={unitPrice}
+                                lineTotal={lineTotal}
+                              />
                             )}
-                          </td>
-                          <td className="min-w-0 break-words px-3 py-3 text-slate-600">{getSnapshotSku(item)}</td>
-                          <td className="min-w-0 break-words px-3 py-3 text-brand-800">{formatNote(item.note || item.warranty_note)}</td>
-                          <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-900">{Number(item.quantity || 0)}</td>
-                          {isSaleVoucher && (
-                            <td className={`px-3 py-3 text-right font-semibold tabular-nums ${referenceUnitPrice.isMissing ? "text-slate-400" : "text-slate-900"}`}>
-                              {referenceUnitPrice.label}
-                            </td>
-                          )}
-                          {isSaleVoucher && (
-                            <td className="px-3 py-3 text-right font-semibold tabular-nums text-red-600">
-                              {Number(item.discount_amount || 0) > 0 ? `−${discountAmount.label}` : "-"}
-                            </td>
-                          )}
-                          {isSaleVoucher && (
-                            <td className={`px-3 py-3 text-right font-semibold tabular-nums ${unitPrice.isMissing ? "text-slate-400" : "text-slate-900"}`}>
-                              {unitPrice.label}
-                            </td>
-                          )}
-                          {isSaleVoucher && (
-                            <td className={`px-3 py-3 text-right font-semibold tabular-nums ${lineTotal.isMissing ? "text-slate-400" : "text-slate-900"}`}>
-                              {lineTotal.label}
-                            </td>
-                          )}
-                        </tr>
+                          </div>
+
+                          <div className="space-y-3 p-3 md:hidden">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">#{index + 1}</span>
+                              <span className="text-right text-sm font-semibold tabular-nums text-slate-900">SL: {Number(item.quantity || 0)}</span>
+                            </div>
+                            <ProductSnapshotInfo item={item} saleNote={saleNote} />
+                            <div className="rounded-md bg-slate-50 p-3 text-sm text-brand-800">
+                              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Nhóm bảo hành / Ghi chú</p>
+                              <p className="break-words">{formatNote(item.note || item.warranty_note)}</p>
+                            </div>
+                            {isSaleVoucher && (
+                              <div className="rounded-md border border-slate-100 p-3">
+                                <PriceSnapshotStack
+                                  referenceUnitPrice={referenceUnitPrice}
+                                  discountAmount={discountAmount}
+                                  discountValue={discountValue}
+                                  unitPrice={unitPrice}
+                                  lineTotal={lineTotal}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
 
                     {(!voucher.items || voucher.items.length === 0) && (
-                      <tr>
-                        <td colSpan={isSaleVoucher ? 9 : 5} className="bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
-                          Phiếu chưa có dòng sản phẩm.
-                        </td>
-                      </tr>
+                      <div className="bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
+                        Phiếu chưa có dòng sản phẩm.
+                      </div>
                     )}
-                  </tbody>
-                </table>
+                </div>
               </div>
             </InfoCard>
           </div>
