@@ -1,6 +1,6 @@
 const validateRequest = require('../../middlewares/validateRequest');
 
-const idPattern = /^\d+$/;
+const idPattern = /^[1-9]\d*$/;
 
 const createCategoryValidator = validateRequest({
   body: {

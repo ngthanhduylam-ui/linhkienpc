@@ -126,10 +126,60 @@ async function setCategoryActive(id, isActive) {
   return getCategoryById(id);
 }
 
+async function deleteCategory(id) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [categoryRows] = await connection.query(
+      `
+        SELECT id, code, name, description, is_active, created_at, updated_at
+        FROM categories
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [id]
+    );
+
+    if (!categoryRows.length) {
+      throw new AppError('Category not found.', 404, 'RESOURCE_NOT_FOUND');
+    }
+
+    const [usageRows] = await connection.query(
+      'SELECT COUNT(*) AS total FROM products WHERE category_id = ?',
+      [id]
+    );
+    const usageCount = Number(usageRows[0]?.total || 0);
+    if (usageCount > 0) {
+      throw new AppError(
+        'Không thể xoá loại sản phẩm vì đang có sản phẩm sử dụng.',
+        409,
+        'CATEGORY_IN_USE',
+        [{ field: 'params.id', issue: 'category is used by products', product_count: usageCount }]
+      );
+    }
+
+    const [deleteResult] = await connection.query('DELETE FROM categories WHERE id = ?', [id]);
+    if (deleteResult.affectedRows !== 1) {
+      throw new AppError('Category not found.', 404, 'RESOURCE_NOT_FOUND');
+    }
+
+    await connection.commit();
+    return { ...categoryRows[0], is_active: categoryRows[0].is_active === 1 };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   listCategories,
   getCategoryById,
   createCategory,
   updateCategory,
-  setCategoryActive
+  setCategoryActive,
+  deleteCategory
 };

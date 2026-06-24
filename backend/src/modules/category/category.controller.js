@@ -47,3 +47,13 @@ exports.activateCategory = asyncHandler(async (req, res) => {
   const updated = await categoryService.setCategoryActive(toId(req.params.id), true);
   res.json({ success: true, data: updated, meta: { server_time: new Date().toISOString() } });
 });
+
+exports.deleteCategory = asyncHandler(async (req, res) => {
+  const deleted = await categoryService.deleteCategory(toId(req.params.id));
+  res.json({
+    success: true,
+    data: deleted,
+    message: 'Đã xoá loại sản phẩm.',
+    meta: { server_time: new Date().toISOString() }
+  });
+});

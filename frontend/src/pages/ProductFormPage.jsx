@@ -4,6 +4,7 @@ import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import {
   createCategoryRequest,
   createProductRequest,
+  deleteCategoryRequest,
   deleteProductImage,
   downloadProductImage,
   getProductRequest,
@@ -199,6 +200,7 @@ export function ProductFormPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [isRenamingCategory, setIsRenamingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -490,6 +492,43 @@ export function ProductFormPage() {
       setCategoryRenameError(err?.message || "Đổi tên loại sản phẩm thất bại.");
     } finally {
       setIsRenamingCategory(false);
+    }
+  }
+
+  async function handleDeleteCategory(category) {
+    const confirmed = window.confirm(
+      `Bạn có chắc muốn xoá loại sản phẩm "${category.name}"?\nChỉ loại chưa có sản phẩm mới có thể xoá.`
+    );
+    if (!confirmed) return;
+
+    setDeletingCategoryId(String(category.id));
+    setCategoryRenameError("");
+    setCategoryManagerMessage("");
+    setError("");
+    setSuccess("");
+
+    try {
+      await deleteCategoryRequest(category.id);
+      await reloadCategories();
+      if (String(form.category_id) === String(category.id)) {
+        setForm((prev) => ({ ...prev, category_id: "" }));
+        setCategorySelectionSource("empty");
+        clearFieldError("category_id");
+      }
+      if (editingCategoryId === String(category.id)) {
+        cancelCategoryRename();
+      }
+      setCategoryManagerMessage(`Đã xoá loại sản phẩm ${category.name}.`);
+    } catch (err) {
+      const code = err?.payload?.error?.code;
+      const status = err?.status || err?.payload?.error?.status;
+      if (code === "CATEGORY_IN_USE" || status === 409) {
+        setCategoryRenameError("Không thể xoá loại sản phẩm vì đang có sản phẩm sử dụng.");
+      } else {
+        setCategoryRenameError(err?.message || "Xoá loại sản phẩm thất bại.");
+      }
+    } finally {
+      setDeletingCategoryId("");
     }
   }
 
@@ -864,7 +903,7 @@ export function ProductFormPage() {
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h3 className="text-sm font-semibold text-slate-900">Quản lý loại sản phẩm</h3>
-                            <p className="text-xs text-slate-500">Đổi tên loại hiện có, không đổi mã và không tạo loại mới.</p>
+                            <p className="text-xs text-slate-500">Có thể đổi tên loại hiện có. Chỉ xoá được loại chưa có sản phẩm sử dụng.</p>
                           </div>
                           <button
                             type="button"
@@ -931,13 +970,24 @@ export function ProductFormPage() {
                                       <p className="truncate text-sm font-medium text-slate-900">{category.name}</p>
                                       <p className="truncate text-xs text-slate-500">Mã: {category.code}</p>
                                     </div>
-                                    <button
-                                      type="button"
-                                      className="shrink-0 rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                      onClick={() => startCategoryRename(category)}
-                                    >
-                                      Đổi tên
-                                    </button>
+                                    <div className="flex shrink-0 items-center gap-3">
+                                      <button
+                                        type="button"
+                                        disabled={Boolean(deletingCategoryId)}
+                                        className="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                        onClick={() => startCategoryRename(category)}
+                                      >
+                                        Đổi tên
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={Boolean(deletingCategoryId)}
+                                        className="rounded border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                        onClick={() => handleDeleteCategory(category)}
+                                      >
+                                        {deletingCategoryId === String(category.id) ? "Đang xoá..." : "Xóa"}
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                               </div>

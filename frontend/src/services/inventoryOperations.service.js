@@ -234,6 +234,11 @@ export async function updateCategoryRequest(id, payload) {
   return response?.data;
 }
 
+export async function deleteCategoryRequest(id) {
+  const response = await apiDelete(`/admin/categories/${encodeURIComponent(id)}`);
+  return response?.data;
+}
+
 export async function stockInRequest(payload) {
   const response = await apiPost("/admin/stock-in", payload);
   return response?.data;

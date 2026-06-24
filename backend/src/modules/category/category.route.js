@@ -10,5 +10,6 @@ router.get('/:id', validators.idParamValidator, controller.getCategoryById);
 router.patch('/:id', validators.updateCategoryValidator, controller.updateCategory);
 router.patch('/:id/deactivate', validators.idParamValidator, controller.deactivateCategory);
 router.patch('/:id/activate', validators.idParamValidator, controller.activateCategory);
+router.delete('/:id', validators.idParamValidator, controller.deleteCategory);
 
 module.exports = router;
