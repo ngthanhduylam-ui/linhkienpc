@@ -102,21 +102,13 @@ function buildSaleSnapshot(item) {
         }
       ]);
     }
-    if (item.manual_unit_price === undefined) {
-      throw new AppError('manual_unit_price is required when the product has no reference price.', 400, 'MANUAL_UNIT_PRICE_REQUIRED', [
-        {
-          sku: item.sku,
-          product_id: item.product_id,
-          field: 'manual_unit_price',
-          issue: 'required'
-        }
-      ]);
-    }
-    finalUnitPrice = requestMoneyToBigInt(item.manual_unit_price, 'manual_unit_price', item);
+    finalUnitPrice = item.manual_unit_price === undefined
+      ? null
+      : requestMoneyToBigInt(item.manual_unit_price, 'manual_unit_price', item);
   }
 
-  const lineTotal = finalUnitPrice * BigInt(item.quantity);
-  if (lineTotal > MAX_MONEY_AMOUNT) {
+  const lineTotal = finalUnitPrice === null ? null : finalUnitPrice * BigInt(item.quantity);
+  if (lineTotal !== null && lineTotal > MAX_MONEY_AMOUNT) {
     throw new AppError('line_total exceeds supported amount.', 400, 'MONEY_AMOUNT_OVERFLOW', [
       {
         sku: item.sku,

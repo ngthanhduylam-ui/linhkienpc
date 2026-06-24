@@ -191,9 +191,13 @@ function digitsToMoneyInput(value) {
   return numberValue.toLocaleString("vi-VN");
 }
 
-function moneyInputToNumber(value) {
+function hasMoneyInputDigits(value) {
+  return /\d/.test(String(value ?? ""));
+}
+
+function moneyInputToNumber(value, { emptyValue = 0 } = {}) {
   const digits = String(value ?? "").replace(/\D/g, "");
-  if (!digits) return 0;
+  if (!digits) return emptyValue;
   const numberValue = Number(digits);
   return Number.isSafeInteger(numberValue) && numberValue <= MAX_MONEY_AMOUNT ? numberValue : null;
 }
@@ -223,13 +227,18 @@ function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [isOpen, onClose]);
 
-  const parsedDraft = moneyInputToNumber(draftValue);
+  const parsedDraft = moneyInputToNumber(draftValue, { emptyValue: hasReferencePrice ? 0 : null });
+  const hasDraftDigits = hasMoneyInputDigits(draftValue);
   const previewPrice = hasReferencePrice && parsedDraft !== null
     ? referencePrice - parsedDraft
     : parsedDraft;
 
   function applyDraft() {
     if (parsedDraft === null) {
+      if (!hasReferencePrice && !hasDraftDigits) {
+        onApply({ discountAmount: 0, manualUnitPrice: null });
+        return;
+      }
       setDraftError("Giá trị tiền vượt giới hạn hỗ trợ.");
       return;
     }
@@ -304,7 +313,9 @@ function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
             <div className="flex justify-between gap-4 border-t border-slate-100 pt-3">
               <span className="text-slate-500">Đơn giá sau giảm</span>
               <span className={`font-bold tabular-nums ${previewPrice !== null && previewPrice >= 0 ? "text-slate-950" : "text-red-600"}`}>
-                {previewPrice !== null && previewPrice >= 0 ? formatSalePrice(previewPrice) : "Không hợp lệ"}
+                {previewPrice !== null && previewPrice >= 0
+                  ? formatSalePrice(previewPrice)
+                  : hasReferencePrice || hasDraftDigits ? "Không hợp lệ" : "Chưa thiết lập"}
               </span>
             </div>
             {draftError && <p className="text-xs font-medium text-red-600">{draftError}</p>}
@@ -823,8 +834,12 @@ export function StockOutBulkPage() {
         ) {
           return `Dòng ${index + 1}: chiết khấu không hợp lệ.`;
         }
-      } else if (getFinalUnitPrice(item) === null) {
-        return `Dòng ${index + 1}: sản phẩm chưa có giá, vui lòng nhập giá bán thực tế.`;
+      } else if (
+        item.manualUnitPrice !== null
+        && item.manualUnitPrice !== undefined
+        && getFinalUnitPrice(item) === null
+      ) {
+        return `Dòng ${index + 1}: giá bán thực tế không hợp lệ.`;
       }
       if (getSafeLineTotal(item).overflow) {
         return `Dòng ${index + 1}: thành tiền vượt giới hạn hỗ trợ.`;
@@ -868,6 +883,8 @@ export function StockOutBulkPage() {
           sale_note: saleNote !== "" ? saleNote : null,
           discount_amount: Number(item.discountAmount || 0),
           ...(getReferencePrice(item) === null
+            && item.manualUnitPrice !== null
+            && item.manualUnitPrice !== undefined
             ? { manual_unit_price: Number(item.manualUnitPrice) }
             : {})
         };
