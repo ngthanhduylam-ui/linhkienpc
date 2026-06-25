@@ -8,11 +8,18 @@ import {
   listActiveProducts,
   searchActiveProducts
 } from "../services/inventoryOperations.service";
+import {
+  MAX_POS_ORDERS,
+  removePosOrderDraftsStorage,
+  readPosOrderDraftsStorage,
+  writePosOrderDraftsStorage
+} from "../utils/posOrderDrafts";
 import { RECENT_PRODUCTS_KEY, readRecentItems, saveRecentItem } from "../utils/recentItems";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
 const MAX_MONEY_AMOUNT = 999999999999999;
+const POS_DRAFT_RESTORED_MESSAGE = "Đã khôi phục các đơn bán hàng chưa hoàn tất.";
 
 function normalizeWarrantyValue(value) {
   if (value === NO_NOTE_WARRANTY_VALUE) return NO_NOTE_WARRANTY_VALUE;
@@ -375,13 +382,281 @@ function hasOrderDraft(order) {
   return Boolean(order?.cartItems?.length || order?.selectedCustomer || order?.saleNote?.trim());
 }
 
+function safeString(value, maxLength = 255) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
+}
+
+function safeNullableString(value, maxLength = 255) {
+  const text = safeString(value, maxLength);
+  return text || null;
+}
+
+function safePositiveInteger(value) {
+  const numberValue = Number(value);
+  return Number.isSafeInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function safeNonNegativeInteger(value) {
+  const numberValue = Number(value);
+  return Number.isSafeInteger(numberValue) && numberValue >= 0 ? numberValue : null;
+}
+
+function safeMoneyValue(value, { nullable = false } = {}) {
+  if (nullable && (value === null || value === undefined || value === "")) return null;
+  if (typeof value !== "number") return undefined;
+  return Number.isSafeInteger(value) && value >= 0 && value <= MAX_MONEY_AMOUNT ? value : undefined;
+}
+
+function sanitizeCustomerDraft(customer) {
+  if (!customer || typeof customer !== "object") return null;
+  const id = safePositiveInteger(customer.id);
+  const name = safeString(customer.name, 255);
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    phone: safeNullableString(customer.phone, 50),
+    address: safeNullableString(customer.address, 500),
+    is_active: customer.is_active === false ? false : true
+  };
+}
+
+function sanitizeProductDraft(product, sku, maxQuantity) {
+  const productSource = product && typeof product === "object" ? product : {};
+  const salePrice = safeMoneyValue(productSource.sale_price, { nullable: true });
+  if (salePrice === undefined) return null;
+  const productId = safePositiveInteger(productSource.id);
+  const productName = safeString(productSource.name, 255) || sku;
+  const imageId = safePositiveInteger(productSource.primary_image?.id);
+
+  return {
+    ...(productId ? { id: productId } : {}),
+    sku,
+    name: productName,
+    sale_price: salePrice,
+    total_quantity: safeNonNegativeInteger(productSource.total_quantity) ?? maxQuantity,
+    is_active: productSource.is_active === false ? false : true,
+    primary_image: imageId ? { id: imageId } : null
+  };
+}
+
+function sanitizeCartItemDraft(item, usedCartKeys) {
+  if (!item || typeof item !== "object") return null;
+
+  const sku = safeString(item.sku || item.product?.sku, 120);
+  const quantity = safePositiveInteger(item.quantity);
+  const restoredMaxQuantity = safePositiveInteger(item.maxQuantity);
+  const maxQuantity = Math.max(quantity || 0, restoredMaxQuantity || 0);
+  const discountAmount = safeMoneyValue(item.discountAmount ?? 0);
+  const manualUnitPrice = safeMoneyValue(item.manualUnitPrice, { nullable: true });
+  const saleNote = safeString(item.saleNote, 500);
+  const warrantyNote = item.warrantyNote === NO_NOTE_WARRANTY_VALUE
+    ? NO_NOTE_WARRANTY_VALUE
+    : safeString(item.warrantyNote, 255);
+  const warrantyLabel = safeString(item.warrantyLabel, 255) || warrantyNote || "Không ghi chú";
+
+  if (
+    !sku
+    || !quantity
+    || !maxQuantity
+    || discountAmount === undefined
+    || manualUnitPrice === undefined
+    || (warrantyNote !== NO_NOTE_WARRANTY_VALUE && !warrantyNote)
+  ) return null;
+
+  const cartKey = getCartKey(sku, { normalizedValue: normalizeWarrantyValue(warrantyNote) });
+  if (usedCartKeys.has(cartKey)) return null;
+
+  const product = sanitizeProductDraft(item.product, sku, maxQuantity);
+  if (!product) return null;
+
+  usedCartKeys.add(cartKey);
+  return {
+    cartKey,
+    product,
+    sku,
+    warrantyNote,
+    warrantyLabel,
+    maxQuantity,
+    quantity,
+    discountAmount,
+    manualUnitPrice,
+    saleNote
+  };
+}
+
+function sanitizeOrderDraft(order, fallbackOrderId) {
+  if (!order || typeof order !== "object") return null;
+  const id = safePositiveInteger(order.id) || fallbackOrderId;
+  // De-duplicate cart rows only inside this order; never merge items across different order tabs.
+  const usedCartKeys = new Set();
+  const cartItems = Array.isArray(order.cartItems)
+    ? order.cartItems
+      .map((item) => sanitizeCartItemDraft(item, usedCartKeys))
+      .filter(Boolean)
+    : [];
+  const selectedCustomer = sanitizeCustomerDraft(order.selectedCustomer);
+  const saleNote = safeString(order.saleNote, 500);
+  const normalizedOrder = {
+    id,
+    label: safeString(order.label, 40) || `Đơn ${id}`,
+    cartItems,
+    selectedCustomer,
+    saleNote
+  };
+
+  return hasOrderDraft(normalizedOrder) ? normalizedOrder : null;
+}
+
+function buildInitialOrderStateFromDrafts() {
+  const storedState = readPosOrderDraftsStorage();
+  if (!storedState) return null;
+  if (!Array.isArray(storedState.orders)) {
+    removePosOrderDraftsStorage();
+    return null;
+  }
+
+  const usedOrderIds = new Set();
+  const restoredOrders = [];
+
+  for (const rawOrder of storedState.orders) {
+    if (restoredOrders.length >= MAX_POS_ORDERS) break;
+    const fallbackOrderId = restoredOrders.length + 1;
+    const order = sanitizeOrderDraft(rawOrder, fallbackOrderId);
+    if (!order) continue;
+
+    let orderId = order.id;
+    while (usedOrderIds.has(orderId)) orderId += 1;
+    usedOrderIds.add(orderId);
+    restoredOrders.push({
+      ...order,
+      id: orderId,
+      label: order.label || `Đơn ${orderId}`
+    });
+  }
+
+  if (!restoredOrders.length) {
+    removePosOrderDraftsStorage();
+    return null;
+  }
+
+  const requestedActiveOrderId = safePositiveInteger(storedState.activeOrderId);
+  const activeOrderId = restoredOrders.some((order) => order.id === requestedActiveOrderId)
+    ? requestedActiveOrderId
+    : restoredOrders[0].id;
+  const maxOrderId = Math.max(...restoredOrders.map((order) => order.id));
+  const requestedNextOrderNumber = safePositiveInteger(storedState.nextOrderNumber);
+  const nextOrderNumber = Math.max(requestedNextOrderNumber || 1, maxOrderId + 1);
+
+  return {
+    orders: restoredOrders,
+    activeOrderId,
+    nextOrderNumber,
+    restored: true
+  };
+}
+
+function buildPersistableCustomer(customer) {
+  if (!customer) return null;
+  return sanitizeCustomerDraft(customer);
+}
+
+function buildPersistableProduct(product, fallbackSku) {
+  if (!product || typeof product !== "object") return null;
+  const sku = safeString(product.sku || fallbackSku, 120);
+  const salePrice = product.sale_price === null || product.sale_price === undefined
+    ? null
+    : safeMoneyValue(Number(product.sale_price));
+  if (!sku || salePrice === undefined) return null;
+
+  const imageId = safePositiveInteger(product.primary_image?.id);
+  return {
+    id: safePositiveInteger(product.id),
+    sku,
+    name: safeString(product.name, 255) || sku,
+    sale_price: salePrice,
+    total_quantity: safeNonNegativeInteger(product.total_quantity),
+    is_active: product.is_active === false ? false : true,
+    primary_image: imageId ? { id: imageId } : null
+  };
+}
+
+function buildPersistableCartItem(item) {
+  const sku = safeString(item?.sku, 120);
+  const quantity = safePositiveInteger(item?.quantity);
+  const maxQuantity = safePositiveInteger(item?.maxQuantity);
+  const discountAmount = safeMoneyValue(Number(item?.discountAmount || 0));
+  const manualUnitPrice = item?.manualUnitPrice === null || item?.manualUnitPrice === undefined
+    ? null
+    : safeMoneyValue(Number(item.manualUnitPrice));
+  const product = buildPersistableProduct(item?.product, sku);
+
+  if (
+    !sku
+    || !quantity
+    || !maxQuantity
+    || discountAmount === undefined
+    || manualUnitPrice === undefined
+    || !product
+  ) return null;
+
+  return {
+    sku,
+    product,
+    warrantyNote: item.warrantyNote === NO_NOTE_WARRANTY_VALUE
+      ? NO_NOTE_WARRANTY_VALUE
+      : safeString(item.warrantyNote, 255),
+    warrantyLabel: safeString(item.warrantyLabel, 255),
+    maxQuantity,
+    quantity,
+    discountAmount,
+    manualUnitPrice,
+    saleNote: safeString(item.saleNote, 500)
+  };
+}
+
+function buildPersistableOrderState(orders, activeOrderId, nextOrderNumber) {
+  const draftOrders = orders
+    .filter(hasOrderDraft)
+    .slice(0, MAX_POS_ORDERS)
+    .map((order) => ({
+      id: safePositiveInteger(order.id),
+      label: safeString(order.label, 40),
+      cartItems: (order.cartItems || []).map(buildPersistableCartItem).filter(Boolean),
+      selectedCustomer: buildPersistableCustomer(order.selectedCustomer),
+      saleNote: safeString(order.saleNote, 500)
+    }))
+    .filter(hasOrderDraft);
+
+  const activeDraftOrder = draftOrders.find((order) => Number(order.id) === Number(activeOrderId));
+
+  return {
+    orders: draftOrders,
+    activeOrderId: activeDraftOrder?.id || draftOrders[0]?.id || null,
+    nextOrderNumber: safePositiveInteger(nextOrderNumber) || 1
+  };
+}
+
 export function StockOutBulkPage() {
+  const initialOrderStateRef = useRef();
+  if (initialOrderStateRef.current === undefined) {
+    initialOrderStateRef.current = buildInitialOrderStateFromDrafts();
+  }
+  const initialOrderState = initialOrderStateRef.current;
+  const restoredDraftNoticeRef = useRef(Boolean(initialOrderState?.restored));
+  const didMountDraftPersistenceRef = useRef(false);
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orders, setOrders] = useState(() => [createEmptyOrder(1)]);
-  const [activeOrderId, setActiveOrderId] = useState(1);
-  const [nextOrderNumber, setNextOrderNumber] = useState(2);
+  const [orders, setOrders] = useState(() => initialOrderState?.orders || [createEmptyOrder(1)]);
+  const [activeOrderId, setActiveOrderId] = useState(() => initialOrderState?.activeOrderId || 1);
+  const [nextOrderNumber, setNextOrderNumber] = useState(() => initialOrderState?.nextOrderNumber || 2);
+  const ordersRef = useRef(orders);
+  const activeOrderIdRef = useRef(activeOrderId);
+  const nextOrderNumberRef = useRef(nextOrderNumber);
+  const draftPersistenceTimerRef = useRef(null);
+  const draftPersistenceVersionRef = useRef(0);
   const [searchInput, setSearchInput] = useState("");
   const dropdownContainerRef = useRef(null);
   const orderTabRefs = useRef({});
@@ -400,6 +675,9 @@ export function StockOutBulkPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [activePriceEditorKey, setActivePriceEditorKey] = useState("");
+  ordersRef.current = orders;
+  activeOrderIdRef.current = activeOrderId;
+  nextOrderNumberRef.current = nextOrderNumber;
 
   const activeOrder = useMemo(
     () => orders.find((order) => order.id === activeOrderId) || orders[0],
@@ -407,6 +685,41 @@ export function StockOutBulkPage() {
   );
   const cartItems = activeOrder?.cartItems || [];
   const selectedCustomer = activeOrder?.selectedCustomer || null;
+
+  useEffect(() => {
+    if (!restoredDraftNoticeRef.current) return;
+    restoredDraftNoticeRef.current = false;
+    setSuccess(POS_DRAFT_RESTORED_MESSAGE);
+  }, []);
+
+  useEffect(() => {
+    if (!didMountDraftPersistenceRef.current) {
+      didMountDraftPersistenceRef.current = true;
+      return;
+    }
+
+    const persistenceVersion = draftPersistenceVersionRef.current + 1;
+    draftPersistenceVersionRef.current = persistenceVersion;
+    if (draftPersistenceTimerRef.current) {
+      window.clearTimeout(draftPersistenceTimerRef.current);
+      draftPersistenceTimerRef.current = null;
+    }
+    const timer = window.setTimeout(() => {
+      if (draftPersistenceVersionRef.current !== persistenceVersion) return;
+      writePosOrderDraftsStorage(buildPersistableOrderState(orders, activeOrderId, nextOrderNumber));
+      if (draftPersistenceTimerRef.current === timer) {
+        draftPersistenceTimerRef.current = null;
+      }
+    }, 350);
+    draftPersistenceTimerRef.current = timer;
+
+    return () => {
+      if (draftPersistenceTimerRef.current === timer) {
+        window.clearTimeout(timer);
+        draftPersistenceTimerRef.current = null;
+      }
+    };
+  }, [activeOrderId, nextOrderNumber, orders]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 250);
@@ -583,6 +896,7 @@ export function StockOutBulkPage() {
   const showEmptyState = !isLoading && !searchInput.trim() && products.length === 0;
   const totalCartQuantity = cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const cartTotalDisplay = getCartTotalDisplay(getCartTotalState(cartItems));
+  const hasReachedMaxOrders = orders.length >= MAX_POS_ORDERS;
 
   function resetSharedSearchState() {
     productSearchRequestRef.current += 1;
@@ -595,8 +909,42 @@ export function StockOutBulkPage() {
     suppressDropdownOnFocusRef.current = false;
   }
 
+  function setOrdersState(updater) {
+    setOrders((prev) => {
+      const nextOrders = typeof updater === "function" ? updater(prev) : updater;
+      ordersRef.current = nextOrders;
+      return nextOrders;
+    });
+  }
+
+  function setActiveOrderIdState(orderId) {
+    activeOrderIdRef.current = orderId;
+    setActiveOrderId(orderId);
+  }
+
+  function setNextOrderNumberState(updater) {
+    setNextOrderNumber((prev) => {
+      const nextValue = typeof updater === "function" ? updater(prev) : updater;
+      nextOrderNumberRef.current = nextValue;
+      return nextValue;
+    });
+  }
+
+  function persistOrderDraftsImmediately(
+    nextOrders,
+    nextActiveOrderId = activeOrderIdRef.current,
+    nextOrderNumberValue = nextOrderNumberRef.current
+  ) {
+    draftPersistenceVersionRef.current += 1;
+    if (draftPersistenceTimerRef.current) {
+      window.clearTimeout(draftPersistenceTimerRef.current);
+      draftPersistenceTimerRef.current = null;
+    }
+    writePosOrderDraftsStorage(buildPersistableOrderState(nextOrders, nextActiveOrderId, nextOrderNumberValue));
+  }
+
   function updateActiveOrder(updater) {
-    setOrders((prev) => prev.map((order) => (
+    setOrdersState((prev) => prev.map((order) => (
       order.id === activeOrderId ? { ...order, ...updater(order) } : order
     )));
   }
@@ -613,20 +961,33 @@ export function StockOutBulkPage() {
     setSuccess("");
   }
 
-  function clearOrder(orderId) {
-    setOrders((prev) => prev.map((order) => (
-      order.id === orderId
-        ? { ...order, cartItems: [], selectedCustomer: null, saleNote: "" }
-        : order
-    )));
+  function clearOrder(orderId, { persistImmediately = false } = {}) {
+    setOrdersState((prev) => {
+      const nextOrders = prev.map((order) => (
+        order.id === orderId
+          ? { ...order, cartItems: [], selectedCustomer: null, saleNote: "" }
+          : order
+      ));
+
+      if (persistImmediately) {
+        persistOrderDraftsImmediately(nextOrders);
+      }
+
+      return nextOrders;
+    });
   }
 
   function handleCreateOrder() {
     if (isSubmitting) return;
-    const newOrder = createEmptyOrder(nextOrderNumber);
-    setOrders((prev) => [...prev, newOrder]);
-    setActiveOrderId(newOrder.id);
-    setNextOrderNumber((current) => current + 1);
+    const currentOrders = ordersRef.current;
+    if (currentOrders.length >= MAX_POS_ORDERS) {
+      setError(`Đã đạt tối đa ${MAX_POS_ORDERS} đơn.`);
+      return;
+    }
+    const newOrder = createEmptyOrder(nextOrderNumberRef.current);
+    setOrdersState((prev) => (prev.length >= MAX_POS_ORDERS ? prev : [...prev, newOrder]));
+    setActiveOrderIdState(newOrder.id);
+    setNextOrderNumberState((current) => current + 1);
     resetSharedSearchState();
     setError("");
     setSuccess("");
@@ -636,7 +997,7 @@ export function StockOutBulkPage() {
   function handleSwitchOrder(orderId) {
     if (isSubmitting) return;
     if (orderId === activeOrderId) return;
-    setActiveOrderId(orderId);
+    setActiveOrderIdState(orderId);
     resetSharedSearchState();
     setError("");
     setSuccess("");
@@ -645,7 +1006,8 @@ export function StockOutBulkPage() {
 
   function handleCloseOrder(orderId) {
     if (isSubmitting) return;
-    const order = orders.find((item) => item.id === orderId);
+    const currentOrders = ordersRef.current;
+    const order = currentOrders.find((item) => item.id === orderId);
     if (!order) return;
 
     if (hasOrderDraft(order)) {
@@ -653,8 +1015,8 @@ export function StockOutBulkPage() {
       if (!shouldClose) return;
     }
 
-    if (orders.length === 1) {
-      clearOrder(orderId);
+    if (currentOrders.length === 1) {
+      clearOrder(orderId, { persistImmediately: true });
       resetSharedSearchState();
       setError("");
       setSuccess("");
@@ -662,13 +1024,17 @@ export function StockOutBulkPage() {
       return;
     }
 
-    const orderIndex = orders.findIndex((item) => item.id === orderId);
-    const remainingOrders = orders.filter((item) => item.id !== orderId);
-    setOrders(remainingOrders);
-    if (activeOrderId === orderId) {
-      const nextActiveOrder = remainingOrders[Math.max(0, orderIndex - 1)] || remainingOrders[0];
-      setActiveOrderId(nextActiveOrder.id);
+    const orderIndex = currentOrders.findIndex((item) => item.id === orderId);
+    const remainingOrders = currentOrders.filter((item) => item.id !== orderId);
+    const currentActiveOrderId = activeOrderIdRef.current;
+    const nextActiveOrder = currentActiveOrderId === orderId
+      ? remainingOrders[Math.max(0, orderIndex - 1)] || remainingOrders[0]
+      : remainingOrders.find((item) => item.id === currentActiveOrderId) || remainingOrders[0];
+    setOrdersState(remainingOrders);
+    if (currentActiveOrderId !== nextActiveOrder.id) {
+      setActiveOrderIdState(nextActiveOrder.id);
     }
+    persistOrderDraftsImmediately(remainingOrders, nextActiveOrder.id);
     resetSharedSearchState();
     setError("");
     setSuccess("");
@@ -898,7 +1264,7 @@ export function StockOutBulkPage() {
       setDebouncedSearch("");
       setIsProductDropdownOpen(false);
       setInventoryBySku({});
-      clearOrder(submittedOrderId);
+      clearOrder(submittedOrderId, { persistImmediately: true });
       const voucherText = result?.voucher_code ? ` Mã phiếu: ${result.voucher_code}.` : "";
       setSuccess(`Bán tại quầy thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.${voucherText}`);
       focusProductSearch();
@@ -1135,7 +1501,14 @@ export function StockOutBulkPage() {
                   </div>
                 );
               })}
-              <button type="button" disabled={isSubmitting} onClick={handleCreateOrder} className="flex h-full w-14 shrink-0 items-center justify-center border-r border-[#0b67c7] bg-[#0B74E5] text-3xl font-light text-white shadow-inner hover:bg-[#0966ca] disabled:cursor-not-allowed disabled:opacity-60" aria-label="Tạo đơn mới">
+              <button
+                type="button"
+                disabled={isSubmitting || hasReachedMaxOrders}
+                onClick={handleCreateOrder}
+                className="flex h-full w-14 shrink-0 items-center justify-center border-r border-[#0b67c7] bg-[#0B74E5] text-3xl font-light text-white shadow-inner hover:bg-[#0966ca] disabled:cursor-not-allowed disabled:opacity-60"
+                title={hasReachedMaxOrders ? `Đã đạt tối đa ${MAX_POS_ORDERS} đơn` : "Tạo đơn mới"}
+                aria-label={hasReachedMaxOrders ? `Đã đạt tối đa ${MAX_POS_ORDERS} đơn` : "Tạo đơn mới"}
+              >
                 +
               </button>
             </div>
