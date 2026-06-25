@@ -1,93 +1,81 @@
-# VI TÍNH PHƯỚC TÀI POS - Database
+# VI TÍNH PHƯỚC TÀI POS - Database Notes
 
-Cập nhật gần nhất: **23/06/2026**
+Cập nhật gần nhất: **26/06/2026**
 
 MySQL dùng `utf8mb4`. Migration runner đọc `database/migrations/*.sql`, ghi file đã chạy vào `schema_migrations` và skip khi chạy lại.
 
-## Bảng chính
-
-### Auth
+## Core tables
 
 - `admins`: tài khoản admin, bcrypt `password_hash`.
 - `admin_refresh_tokens`: refresh token hash, expiry và revoke state.
-
-### Product
-
-- `categories`: `code`, `name`, `description`, `is_active`.
+- `categories`: loại sản phẩm.
 - `products`: SKU, tên, category, mô tả, `sale_price`, trạng thái.
-- `product_images`: metadata file gốc/thumbnail và `sort_order` 1-3.
-
-`products.sale_price DECIMAL(15,0) NULL`:
-
-- `NULL`: chưa thiết lập.
-- `0`: giá hợp lệ.
-- Check không âm.
-
-### Inventory
-
-- `product_inventory_balances`: nguồn tổng tồn hiện tại, unique theo `product_id`.
+- `product_images`: metadata ảnh; file nằm trên filesystem.
+- `customers`, `suppliers`.
+- `product_inventory_balances`: nguồn tổng tồn hiện tại.
 - `stock_transactions`: ledger IN/OUT; `note` là warranty/inventory group.
 - `inventory_note_adjustments`: chuyển quantity giữa group, không đổi total.
 - `inventory_quantity_adjustments`: tăng/giảm quantity theo group.
-
-`inventory_quantity_adjustments.from_quantity/to_quantity` biểu diễn tồn group trước/sau thao tác. Service hiện khóa balance trước khi tính ledger để chống stale snapshot.
-
-### Vouchers
-
 - `stock_vouchers`: header phiếu IN/OUT, đối tác, người tạo, thời gian, `total_amount`.
 - `stock_voucher_items`: snapshot dòng phiếu bán.
 
-Các field snapshot:
+## Price rules
+
+`products.sale_price DECIMAL(15,0) NULL`:
+
+- `NULL`: chưa thiết lập giá tham chiếu.
+- `0`: giá tham chiếu hợp lệ.
+- dương: giá tham chiếu VND.
+
+Money columns use `DECIMAL(15,0)`, maximum supported value `999999999999999`.
+
+## POS voucher snapshots
+
+`stock_voucher_items` includes:
 
 ```text
 voucher_id
-stock_transaction_id
 product_id
 sku_snapshot
-product_name_snapshot
+name_snapshot
 warranty_note_snapshot
 sale_note_snapshot
 quantity
+reference_unit_price
+discount_amount
 unit_price
 line_total
 ```
 
-- `warranty_note_snapshot`: group tồn đã chọn.
-- `sale_note_snapshot`: Serial/Ghi chú bán hàng, không dùng tính tồn.
-- `unit_price`, `line_total`, `total_amount` nullable để tương thích giá thiếu và phiếu legacy.
+Rules:
 
-### Partners
+- `reference_unit_price` snapshots `products.sale_price`; can be `NULL`.
+- `discount_amount` is fixed VND discount per unit; default `0`.
+- `unit_price` is final selling price per unit; can be `NULL` when no configured price and no manual price.
+- `line_total` can be `NULL` for optional-price sales without known line total.
+- `stock_vouchers.total_amount` is `NULL` if any line total is `NULL`.
+- Legacy vouchers may have missing snapshots and must remain readable.
 
-- `customers`: name, phone, address, active.
-- `suppliers`: name, phone, address, active.
+## Inventory note groups
 
-### Legacy
+Group availability is derived from:
 
-- `warranty_batches`
-- `inventory_balances`
+1. `stock_transactions`;
+2. `inventory_quantity_adjustments`;
+3. `inventory_note_adjustments`.
 
-Workflow hiện tại không dùng hai bảng này làm nguồn tồn chính. Không xóa nếu chưa có migration cleanup riêng.
+Previous note-group discrepancy was fixed and should not be treated as active backlog.
 
-## Cách tính tồn theo group
+## Public Lookup stock filter
 
-Group ledger được tổng hợp từ:
+Public search/list join `product_inventory_balances` and only return:
 
-1. `stock_transactions`: IN cộng, OUT trừ.
-2. `inventory_quantity_adjustments`: INCREASE cộng, DECREASE trừ.
-3. `inventory_note_adjustments`: trừ source, cộng destination.
-
-Sau đó đối chiếu với `product_inventory_balances.quantity`; phần total chưa có group được đưa vào group không ghi chú. Nếu tổng group lớn hơn balance, service cảnh báo integrity.
-
-## Public stock rule
-
-Public search/list join `product_inventory_balances` và chỉ trả:
-
-```sql
-p.is_active = 1
-AND COALESCE(pib.quantity, 0) > 0
+```text
+products.is_active = 1
+product_inventory_balances.quantity > 0
 ```
 
-Admin/POS/Inventory Check không áp dụng filter này.
+Admin/POS/Inventory Check do not apply this public zero-stock hiding rule.
 
 ## Migrations hiện có
 
@@ -112,25 +100,27 @@ Admin/POS/Inventory Check không áp dụng filter này.
 018_add_phase_2a_sale_price_snapshot_schema.sql
 019_add_sale_note_snapshot_to_stock_voucher_items.sql
 020_create_product_images.sql
+021_add_pos_line_discount_snapshots.sql
 ```
 
-## Migration 018-020
+Important recent migrations:
 
 - `018`: thêm `products.sale_price`, `stock_vouchers.total_amount`, tạo `stock_voucher_items`.
 - `019`: thêm `stock_voucher_items.sale_note_snapshot`.
 - `020`: tạo `product_images`.
+- `021`: thêm `reference_unit_price`, `discount_amount` và backfill reference price từ legacy `unit_price`.
 
 ## Backup
 
-Database:
+Production backup currently targets a separate Samsung SSD:
 
-```text
-/home/vitinhphuoctai/backup_linhkienpc.sh
-/home/vitinhphuoctai/backups
-/home/vitinhphuoctai/backup.log
-23:00 daily, retention 14 days
-```
-
-Ảnh nằm tại `/opt/linhkienpc/uploads/products` và không có trong MySQL backup. Backup ảnh sang HDD riêng hiện chưa tự động hóa.
+- database backup;
+- uploads backup;
+- backend configuration backup;
+- manifest;
+- SHA256 checksums;
+- restore guide;
+- 30-day retention;
+- cron at 23:00.
 
 Không chạy migration production nếu chưa backup, chưa test local hoặc chưa xác định rollback.

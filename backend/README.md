@@ -1,83 +1,52 @@
 # VI TÍNH PHƯỚC TÀI POS - Backend
 
-Cập nhật gần nhất: **23/06/2026**
-
 Express API cho admin POS/inventory và Public Lookup.
 
-## Stack
+## Runtime
 
-- Node.js 18+
-- Express 4
-- MySQL via `mysql2`
-- JWT, bcrypt
-- `express-rate-limit`
-- Multer và Sharp cho product images
+- Node.js / Express.
+- MySQL.
+- JWT access token + refresh token hash.
+- File uploads for product images.
 
-## Local setup
+## Local
 
-```powershell
-cd backend
+```bash
 npm install
-Copy-Item .env.example .env
-npm run db:setup
 npm run dev
 ```
 
-Scripts:
+Database setup for a fresh local environment:
 
-```text
-npm start
-npm run dev
-npm run migrate
-npm run seed
+```bash
 npm run db:setup
+npm run migrate
 ```
 
 `db:setup` phù hợp local mới. Production dùng migration runner và không seed tùy tiện.
 
-## API
+## Main modules
 
-Base:
-
-```text
-/api/v1
-```
-
-Public:
-
-```text
-GET /health
-GET /public/products
-GET /public/products/:sku/inventory
-GET /public/products/:sku/images
-GET /public/categories
-```
-
-Protected admin modules:
-
-```text
-auth
-categories
-products/images
-customers
-suppliers
-stock-in/out
-inventory-check
-stock-vouchers
-inventory
-```
-
-Xem [API](../docs/api.md).
+- auth;
+- category;
+- product;
+- customer;
+- supplier;
+- stock-in/out;
+- inventory-check;
+- stock-vouchers;
+- inventory;
+- public lookup.
 
 ## Database
 
 - Migration table: `schema_migrations`.
-- Current migrations: `001` đến `020`.
+- Current migrations: `001` đến `021`.
 - Total stock: `product_inventory_balances`.
 - Group ledger: stock transactions + note adjustments + quantity adjustments.
 - Voucher snapshots: `stock_vouchers`, `stock_voucher_items`.
 
-Xem [Database](../docs/database.md).
+See `docs/DATABASE.md`.
 
 ## Product images
 
@@ -89,13 +58,33 @@ PRODUCT_IMAGE_MAX_BYTES=15728640
 PRODUCT_IMAGE_MAX_COUNT=3
 ```
 
-Production:
+Production upload root:
 
 ```text
 /opt/linhkienpc/uploads/products
 ```
 
 Filesystem giữ originals/thumbnails; MySQL chỉ giữ metadata.
+
+## POS pricing behavior
+
+Backend is the source of truth for stock-out pricing:
+
+- reads `products.sale_price`;
+- distinguishes `sale_price = NULL` from `sale_price = 0`;
+- allows sales with no configured price and no manual price;
+- accepts `manual_unit_price` only when no reference price exists;
+- validates `discount_amount` as fixed VND per unit;
+- calculates `unit_price`, `line_total` and `total_amount`;
+- stores `reference_unit_price`, `discount_amount`, `unit_price`, `line_total`.
+
+Client request must not send backend-calculated fields:
+
+- `reference_unit_price`;
+- `final_unit_price`;
+- `unit_price`;
+- `line_total`;
+- `total_amount`.
 
 ## Security
 
@@ -110,12 +99,12 @@ Filesystem giữ originals/thumbnails; MySQL chỉ giữ metadata.
 
 ## Business boundaries
 
-Backend hiện có giá bán mặc định và snapshot tiền phiếu bán, nhưng chưa có:
+Backend hiện có sale price tham chiếu, optional POS pricing và fixed VND discount snapshots. Chưa có:
 
-- giá nhập;
-- discount;
+- giá nhập / cost price;
 - payment/debt;
 - invoice/accounting/reporting;
+- order-wide discount;
 - giá theo warranty group.
 
-Next task về discount VND theo dòng phải có thiết kế API/schema riêng; không tự thêm field trước khi được duyệt.
+POS draft persistence was attempted in `3dd615e` and reverted by `f736ca2`; do not treat it as implemented.

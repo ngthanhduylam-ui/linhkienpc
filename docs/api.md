@@ -1,41 +1,20 @@
-# VI TÍNH PHƯỚC TÀI POS - API
+# VI TÍNH PHƯỚC TÀI POS - API Notes
 
-Cập nhật gần nhất: **23/06/2026**
+Cập nhật gần nhất: **26/06/2026**
 
-Base URL:
-
-```text
-/api/v1
-```
+Base path production: `/api/v1`
 
 Admin endpoints, trừ login/refresh/logout, cần Bearer access token theo route/middleware thực tế.
 
-## Public
+## Public Lookup
 
 ```text
-GET /health
 GET /public/products
 GET /public/products/:sku/inventory
-GET /public/products/:sku/images
-GET /public/products/:sku/images/:imageId/thumbnail
-GET /public/products/:sku/images/:imageId/download
 GET /public/categories
 ```
 
-### `GET /public/products`
-
-Query chính: `q`, `page`, `limit`.
-
-- Search rỗng trả danh sách rỗng.
-- Tối đa 8 token, logic AND, không cần liền nhau hoặc đúng thứ tự.
-- Token match tên, SKU hoặc warranty note.
-- Chỉ trả product active có tổng tồn lớn hơn 0.
-- Count và pagination dùng cùng filter tồn.
-- Không trả `sale_price`, snapshot tiền hoặc `sale_note`.
-
-### Public inventory detail
-
-`GET /public/products/:sku/inventory` giữ hành vi tương thích hiện tại: product active tồn 0 vẫn có thể được tra cứu trực tiếp. Public Lookup UI tạo kết quả bằng endpoint search/list, không dùng detail để bypass filter.
+Public search/list chỉ trả product active có tổng tồn lớn hơn 0. Public không trả `sale_price`, snapshot tiền hoặc `sale_note`.
 
 ## Admin auth
 
@@ -47,42 +26,49 @@ GET  /admin/auth/me
 ```
 
 - Login rate limit 10 request/15 phút/IP.
-- Vượt giới hạn trả 429, code `AUTH_LOGIN_RATE_LIMITED`.
-- Limiter không áp dụng refresh/logout hoặc endpoint khác.
+- Refresh token lưu dạng hash.
 
 ## Categories
 
 ```text
-GET   /admin/categories
-POST  /admin/categories
-GET   /admin/categories/:id
-PATCH /admin/categories/:id
-PATCH /admin/categories/:id/deactivate
-PATCH /admin/categories/:id/activate
+GET    /admin/categories
+POST   /admin/categories
+GET    /admin/categories/:id
+PATCH  /admin/categories/:id
+PATCH  /admin/categories/:id/deactivate
+PATCH  /admin/categories/:id/activate
+DELETE /admin/categories/:id
 ```
+
+Category management hiện hỗ trợ:
+
+- tạo category;
+- đổi tên/update category;
+- deactivate/activate;
+- xóa category chỉ khi chưa có product sử dụng.
+
+`DELETE /admin/categories/:id` trả HTTP 409 với code `CATEGORY_IN_USE` nếu còn product liên kết.
 
 ## Products
 
 ```text
-GET   /admin/products
-POST  /admin/products
-GET   /admin/products/:id
-PATCH /admin/products/:id
-PATCH /admin/products/:id/deactivate
-PATCH /admin/products/:id/activate
+GET    /admin/products
+POST   /admin/products
+GET    /admin/products/:id
+PATCH  /admin/products/:id
+PATCH  /admin/products/:id/deactivate
+PATCH  /admin/products/:id/activate
 ```
 
-Admin product API trả `sale_price` dạng number hoặc `null`. Giá hợp lệ là số nguyên 0..999999999999999.
+Admin product API trả `sale_price` dạng number hoặc `null`. Giá hợp lệ là số nguyên `0..999999999999999`.
 
-Search admin hỗ trợ multi-token và category name. POS dùng:
+Admin search hỗ trợ multi-token AND và category name. POS dùng:
 
 ```text
 GET /admin/products?q=<keyword>&page=1&limit=12&is_active=true
 ```
 
-Admin search vẫn có thể trả product hết hàng.
-
-### Product images
+## Product images
 
 ```text
 GET    /admin/products/:id/images
@@ -94,12 +80,9 @@ GET    /admin/products/:id/images/:imageId/download
 DELETE /admin/products/:id/images/:imageId
 ```
 
-- Upload multipart field `images`.
-- Tối đa 3 ảnh, 15 MB/file.
-- JPEG/PNG/WebP hợp lệ.
-- Backend giữ file gốc và tạo thumbnail WebP 720px.
+Maximum: 3 images/product.
 
-## Customers
+## Customers / Suppliers
 
 ```text
 GET   /admin/customers
@@ -109,11 +92,7 @@ PATCH /admin/customers/:id
 PATCH /admin/customers/:id/deactivate
 PATCH /admin/customers/:id/activate
 GET   /admin/customers/:id/transactions
-```
 
-## Suppliers
-
-```text
 GET   /admin/suppliers
 POST  /admin/suppliers
 PATCH /admin/suppliers/:id
@@ -143,13 +122,22 @@ Bulk stock-out payload hiện tại:
       "sku": "2nd.main.asus.b760m.k",
       "quantity": 1,
       "warranty_note": "BH 7.28",
-      "sale_note": "Serial ABC"
+      "sale_note": "Serial ABC",
+      "discount_amount": 100000,
+      "manual_unit_price": 0
     }
   ]
 }
 ```
 
-Frontend không gửi `unit_price`, `line_total`, `total_amount`. Backend lấy `products.sale_price`, validate stock và snapshot voucher trong cùng transaction.
+Rules:
+
+- `discount_amount` là fixed VND discount trên mỗi đơn vị, mặc định `0`.
+- `manual_unit_price` chỉ hợp lệ khi product không có `sale_price`.
+- Product `sale_price = NULL` vẫn bán được dù không gửi `manual_unit_price`; money snapshots có thể là `NULL`.
+- Product `sale_price = 0` là configured reference price hợp lệ.
+- Frontend không gửi `reference_unit_price`, `final_unit_price`, `unit_price`, `line_total`, `total_amount`.
+- Backend lấy `products.sale_price`, validate stock/money/discount và snapshot voucher trong cùng transaction.
 
 ## Inventory Check
 
@@ -158,16 +146,11 @@ GET  /admin/inventory-check/products
 GET  /admin/inventory-check/products/:sku
 POST /admin/inventory-check/note-move
 POST /admin/inventory-check/quantity-adjust
+GET  /admin/inventory
 ```
 
 - `note-move`: chuyển group, không đổi total.
 - `quantity-adjust`: tăng/giảm total và selected group; history lưu group quantity trước/sau.
-
-Inventory overview:
-
-```text
-GET /admin/inventory
-```
 
 ## Stock vouchers
 
@@ -185,29 +168,17 @@ items[].name
 items[].warranty_note
 items[].sale_note
 items[].quantity
+items[].reference_unit_price
+items[].discount_amount
 items[].unit_price
 items[].line_total
 ```
 
-Legacy voucher có thể trả money/sale note `null`.
+Legacy voucher hoặc optional-price sale có thể trả money/sale note `null`.
 
-## Warranty batch legacy
-
-```text
-GET   /admin/products/:productId/batches
-POST  /admin/products/:productId/batches
-GET   /admin/batches/:id
-PATCH /admin/batches/:id
-PATCH /admin/batches/:id/deactivate
-PATCH /admin/batches/:id/activate
-```
-
-Không phải workflow chính của POS hiện tại.
-
-## Nguyên tắc mở rộng API
+## Boundaries
 
 - Không thêm price/payment/debt/invoice vào public.
 - Stock-in chưa có giá nhập.
-- Warranty group không phải bảng giá.
-- Discount VND theo dòng là next task, chưa có contract API.
 - Không thay đổi inventory payload/schema nếu chưa có phase được duyệt.
+- Payment/debt/cost/reporting vẫn deferred.

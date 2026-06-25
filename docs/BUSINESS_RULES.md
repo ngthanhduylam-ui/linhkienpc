@@ -1,6 +1,6 @@
 # VI TÍNH PHƯỚC TÀI POS - Quy tắc nghiệp vụ
 
-Cập nhật gần nhất: **23/06/2026**
+Cập nhật gần nhất: **26/06/2026**
 
 ## 1. Phạm vi
 
@@ -10,16 +10,18 @@ Hệ thống phục vụ:
 - Product Admin.
 - Nhập hàng, bán tại quầy và kiểm hàng.
 - Khách hàng, nhà cung cấp.
-- Phiếu nhập, phiếu bán và mẫu in bảo hành.
+- Phiếu nhập, phiếu bán, voucher detail và print page hiện hữu.
+- Giá bán tham chiếu, optional POS pricing và fixed VND discount theo dòng.
 
-Không hiện có: giá nhập, discount, payment, debt, invoice, accounting hoặc financial reporting.
+Chưa hiện có: giá nhập/giá vốn, payment, debt, invoice, accounting hoặc financial reporting.
 
 ## 2. Product và SKU
 
 - SKU unique, chỉ dùng chữ thường, số và dấu chấm.
 - Product thuộc một `category_id`; UI gọi là **Loại sản phẩm**.
 - Category bắt buộc khi create/update.
-- Form có thể gợi ý category từ token thứ hai của SKU. Đây chỉ là gợi ý; lựa chọn thủ công luôn được ưu tiên.
+- Có thể rename category tại chỗ; product giữ nguyên `category_id`.
+- Chỉ xóa category khi chưa có product sử dụng.
 - `sale_price DECIMAL(15,0) NULL`: `NULL` là chưa thiết lập, `0` là giá hợp lệ.
 - Tối đa 3 ảnh/product; ảnh `sort_order=1` là ảnh chính.
 
@@ -28,23 +30,15 @@ Không hiện có: giá nhập, discount, payment, debt, invoice, accounting ho�
 - Search product hỗ trợ tối đa 8 token theo logic AND.
 - Token không cần liền nhau hoặc đúng thứ tự; mỗi token có thể match field khác nhau.
 - Compact search bỏ dấu chấm/gạch ngang cơ bản để hỗ trợ model như `b360m-d` và `b360md`.
-- Chưa có alias/compatibility/fuzzy engine đầy đủ.
 - POS search gọi server, không fetch toàn bộ pages.
 
 ## 4. Public Lookup
 
 - Route UI `/`, API `GET /api/v1/public/products`.
 - Search rỗng không trả toàn bộ product.
-- Search/list chỉ trả product thỏa:
-
-```sql
-p.is_active = 1
-AND COALESCE(pib.quantity, 0) > 0
-```
-
+- Search/list chỉ trả product active có tổng tồn lớn hơn 0.
 - Product active tồn 0 hoặc chưa có balance không xuất hiện.
 - Khi stock-in/adjustment làm tồn lớn hơn 0, product tự xuất hiện lại.
-- Public detail trực tiếp `GET /public/products/:sku/inventory` hiện vẫn trả product active tồn 0 để giữ tương thích.
 - Public không trả `sale_price`, `unit_price`, `line_total`, `total_amount` hoặc `sale_note`.
 
 ## 5. Tồn kho và nhóm bảo hành
@@ -57,7 +51,7 @@ AND COALESCE(pib.quantity, 0) > 0
   - `inventory_quantity_adjustments`.
 - Nhóm rỗng là **Không ghi chú**.
 - Warranty group chỉ quản lý tồn, không quyết định giá.
-- `sale_note` tách biệt hoàn toàn khỏi warranty group.
+- Previous note-group discrepancy đã được sửa; không còn là active backlog.
 
 ## 6. Stock-in
 
@@ -77,9 +71,16 @@ AND COALESCE(pib.quantity, 0) > 0
 - Same SKU + khác group là hai dòng.
 - `sale_note` thuộc cart row nhưng không tham gia merge key.
 - Quantity không vượt tổng tồn hoặc tồn của group.
-- Backend lấy `products.sale_price`; frontend không được quyết định snapshot tiền hiện tại.
-- Nếu một item thiếu giá: `unit_price=NULL`, `line_total=NULL`; voucher có item thiếu giá thì `total_amount=NULL`.
-- `sale_price=0` vẫn snapshot và hiển thị là `0 ₫`.
+- Backend lấy `products.sale_price`; frontend không được quyết định snapshot tiền.
+
+Pricing rules:
+
+- `sale_price = NULL`, không gửi `manual_unit_price`: bán được; `reference_unit_price=NULL`, `discount_amount=0`, `unit_price=NULL`, `line_total=NULL`.
+- `sale_price = NULL`, có `manual_unit_price`: bán được; `unit_price=manual_unit_price`, `line_total=manual_unit_price × quantity`.
+- `sale_price = 0`: là giá tham chiếu hợp lệ; final price có thể là `0`.
+- `discount_amount` là số tiền VND giảm trên mỗi đơn vị.
+- Discount không được vượt reference price.
+- Voucher có bất kỳ `line_total=NULL` thì `total_amount=NULL`.
 - `sale_note` được trim, chuỗi rỗng lưu `NULL`, tối đa 500 ký tự.
 
 ## 8. Inventory Check
@@ -96,9 +97,11 @@ AND COALESCE(pib.quantity, 0) > 0
 
 - Bulk stock-in/out tạo `stock_vouchers`.
 - Phiếu OUT mới dùng `stock_voucher_items` để snapshot SKU, tên, warranty note, sale note, quantity và tiền.
+- Money snapshots gồm `reference_unit_price`, `discount_amount`, `unit_price`, `line_total`.
 - Voucher detail ưu tiên snapshot; legacy fallback không crash.
+- Voucher detail đã responsive và gộp thông tin giá/thành tiền cho phiếu OUT.
 - Phiếu IN không hiển thị giá nhập giả.
-- Mẫu in A4 chỉ hỗ trợ OUT, gọi `window.print()`, không lưu PDF.
+- Print work mới đang paused; print page hiện hữu không phải trọng tâm chỉnh tiếp.
 - Voucher là phiếu nghiệp vụ/bảo hành, không phải invoice thanh toán.
 
 ## 10. Khách hàng và nhà cung cấp
@@ -107,19 +110,16 @@ AND COALESCE(pib.quantity, 0) > 0
 - Inactive record không xuất hiện trong selector mặc định.
 - Không có debt, tax, tags hoặc địa chỉ hành chính tách riêng.
 
-## 11. Giá và phase tiếp theo
+## 11. POS draft persistence
 
-Quyết định chưa code:
+Unfinished POS tabs hiện không persist qua F5/browser restart.
 
-- `products.sale_price` là giá tham chiếu.
-- Click đơn giá tại POS mở popup nhỏ.
-- Nhập `discount_amount` bằng số tiền VND, không dùng phần trăm.
-- `discount_amount` là số tiền giảm trên mỗi đơn vị sản phẩm của dòng hàng, không phải tổng số tiền giảm của cả dòng.
-- Đơn giá cuối = giá tham chiếu - `discount_amount`.
-- Thành tiền dòng = đơn giá cuối x số lượng.
-- Frontend gửi `discount_amount`; backend không tin `final_unit_price`, `line_total` hoặc `total_amount`.
-- Backend tự đọc giá tham chiếu hợp lệ, validate discount, tính lại tiền và lưu snapshot.
-- Không gắn giá với warranty group.
+```text
+3dd615e feat: persist unfinished POS order drafts
+f736ca2 Revert "feat: persist unfinished POS order drafts"
+```
+
+Không coi draft persistence là complete. Nếu làm lại phải có browser tests cho close/sell one tab, preserve sibling tabs và refresh ngay sau thao tác.
 
 ## 12. Auth
 

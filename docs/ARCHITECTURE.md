@@ -1,6 +1,6 @@
 # VI TÍNH PHƯỚC TÀI POS - Architecture
 
-Cập nhật gần nhất: **23/06/2026**
+Cập nhật gần nhất: **26/06/2026**
 
 ## Tổng quan
 
@@ -116,9 +116,13 @@ items[].sku
 items[].quantity
 items[].warranty_note
 items[].sale_note
+items[].discount_amount
+items[].manual_unit_price?
 ```
 
-POS không gửi field tiền. Backend lấy `products.sale_price`, tính và snapshot vào:
+POS không gửi field tiền do backend tính như `reference_unit_price`, `final_unit_price`, `unit_price`, `line_total` hoặc `total_amount`.
+
+Backend lấy `products.sale_price`, phân biệt `NULL` và `0`, validate discount/manual price, tính và snapshot vào:
 
 ```text
 stock_voucher_items:
@@ -127,12 +131,16 @@ stock_voucher_items:
   warranty_note_snapshot
   sale_note_snapshot
   quantity
+  reference_unit_price
+  discount_amount
   unit_price
   line_total
 
 stock_vouchers:
   total_amount
 ```
+
+Nếu một dòng không có giá tham chiếu và không nhập manual price, `unit_price`, `line_total` và `total_amount` có thể là `NULL`.
 
 `stock_transactions.note` chỉ phục vụ nhóm tồn.
 
@@ -166,5 +174,6 @@ PRODUCT_UPLOAD_ROOT/
 - Nginx là public entry point.
 - Backend và MySQL không expose trực tiếp.
 - Upload ảnh nằm ngoài Git repo.
-- Database backup không bao gồm file ảnh.
+- Production backup SSD hiện bao gồm database, uploads, backend configuration, manifest, SHA256 checksums và restore guide.
 - Không có payment, debt, cost, invoice hoặc reporting architecture ở phase hiện tại.
+- POS draft persistence đã revert ở `f736ca2`; hiện không có architecture persist unfinished tabs qua reload.

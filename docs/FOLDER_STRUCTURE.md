@@ -1,6 +1,6 @@
 # Cấu trúc thư mục hiện tại
 
-Cập nhật gần nhất: **23/06/2026**
+Cập nhật gần nhất: **26/06/2026**
 
 ```text
 linhkienpc/
@@ -85,7 +85,7 @@ Các file `*.edit-master-data-backup` và `*.delivery-note-backup` là bản bac
 
 ```text
 database/
-├─ migrations/          001..020
+├─ migrations/          001..021
 ├─ schema/              schema từng bảng + schema.sql
 ├─ seeds/
 └─ scripts/
