@@ -271,7 +271,7 @@ export function TransactionVoucherPrintPage() {
             <thead>
               <tr>
                 <th className="voucher-print-index-col">STT</th>
-                <th>Tên sản phẩm / Serial / Ghi chú</th>
+                <th>Tên sản phẩm</th>
                 <th className="voucher-print-qty-col">SL</th>
                 <th className="voucher-print-money-col">Đơn giá</th>
                 <th className="voucher-print-money-col">Chiết khấu</th>
@@ -306,16 +306,17 @@ export function TransactionVoucherPrintPage() {
               )}
             </tbody>
           </table>
-        </section>
-
-        <section className="voucher-print-summary">
-          <div className="voucher-print-summary-grid">
-            <span>Tổng tiền hàng</span>
-            <strong>{formatPrintMoney(grossGoodsTotal)}</strong>
-            <span>Tổng chiết khấu</span>
-            <strong>{totalDiscount > 0 ? formatPrintMoney(totalDiscount) : ""}</strong>
-            <span>Tổng cộng</span>
-            <strong>{formatPrintMoney(voucher.total_amount)}</strong>
+          <div className="voucher-print-summary-row">
+            <div className="voucher-print-summary-box">
+              <div className="voucher-print-summary-grid">
+                <span>Tổng tiền hàng</span>
+                <strong>{formatPrintMoney(grossGoodsTotal)}</strong>
+                <span>Tổng chiết khấu</span>
+                <strong>{totalDiscount > 0 ? formatPrintMoney(totalDiscount) : ""}</strong>
+                <span>Tổng cộng</span>
+                <strong>{formatPrintMoney(voucher.total_amount)}</strong>
+              </div>
+            </div>
           </div>
         </section>
 

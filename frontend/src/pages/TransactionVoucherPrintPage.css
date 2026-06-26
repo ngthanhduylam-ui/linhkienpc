@@ -3,7 +3,7 @@
 }
 
 .voucher-print-page {
-  font-family: Arial, Tahoma, sans-serif;
+  font-family: "Times New Roman", Times, serif;
   font-size: 12px;
   font-weight: 400;
   line-height: 1.45;
@@ -35,7 +35,7 @@
 .voucher-print-shop {
   min-width: 0;
   text-align: center;
-  color: #1f2937;
+  color: #000;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -61,7 +61,7 @@
 }
 
 .voucher-print-info-line span {
-  color: #475569;
+  color: #000;
   white-space: nowrap;
 }
 
@@ -72,7 +72,7 @@
 }
 
 .voucher-print-title {
-  margin-top: 5mm;
+  margin-top: 4mm;
   text-align: center;
   color: #0f172a;
   font-size: 22px;
@@ -83,8 +83,8 @@
 .voucher-print-customer {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2.6mm 8mm;
-  margin-top: 5mm;
+  gap: 2mm 8mm;
+  margin-top: 4mm;
   padding: 0;
   font-size: 12px;
 }
@@ -121,7 +121,7 @@
 }
 
 .voucher-print-table-wrap {
-  margin-top: 5mm;
+  margin-top: 4mm;
 }
 
 .voucher-print-table {
@@ -134,7 +134,7 @@
 .voucher-print-table th,
 .voucher-print-table td {
   border: 1px solid #0f172a;
-  padding: 2.6mm 2.2mm;
+  padding: 2mm 2mm;
   vertical-align: top;
 }
 
@@ -173,38 +173,43 @@
 
 .voucher-print-sale-note {
   display: block;
-  margin-top: 1mm;
-  color: #475569;
-  font-size: 11px;
+  margin-top: 0.5mm;
+  color: #000;
+  font-size: 9.5px;
   font-weight: 500;
+  line-height: 1.2;
 }
 
 .voucher-print-empty-row {
   padding: 10mm 2mm;
   text-align: center;
-  color: #64748b;
+  color: #000;
 }
 
-.voucher-print-summary {
+.voucher-print-summary-row {
   display: flex;
   justify-content: flex-end;
-  margin-top: -1px;
+  margin-top: 1.5mm;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
+.voucher-print-summary-box {
+  width: 74mm;
+  border: 1px solid #0f172a;
+  box-sizing: border-box;
+}
+
 .voucher-print-summary-grid {
   display: grid;
-  grid-template-columns: 36mm 38mm;
+  grid-template-columns: minmax(0, 1fr) 30mm;
   gap: 1.8mm 6mm;
-  border: 1px solid #0f172a;
-  border-top: 0;
-  padding: 2.8mm 3.2mm;
+  padding: 2.4mm 3.2mm;
   font-size: 12px;
 }
 
 .voucher-print-summary-grid span {
-  color: #334155;
+  color: #000;
   font-weight: 600;
 }
 
@@ -224,14 +229,12 @@
 }
 
 .voucher-print-notice {
-  margin-top: 3mm;
+  margin-top: 2mm;
   border: 1px solid #cbd5e1;
-  padding: 3mm 4mm;
-  color: #334155;
+  padding: 2mm 3mm;
+  color: #000;
   font-size: 11px;
-  line-height: 1.45;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  line-height: 1.35;
 }
 
 .voucher-print-notice p {
@@ -249,14 +252,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18mm;
-  margin-top: 4mm;
+  margin-top: 3mm;
   text-align: center;
-  break-inside: avoid;
-  page-break-inside: avoid;
 }
 
 .voucher-print-signatures div {
-  min-height: 20mm;
+  min-height: 14mm;
 }
 
 .voucher-print-signatures p {
@@ -265,14 +266,13 @@
 }
 
 .voucher-print-signatures span {
-  color: #64748b;
+  color: #000;
   font-size: 10px;
   font-style: italic;
 }
 
 @page {
-  size: A4;
-  margin: 10mm;
+  margin: 7mm;
 }
 
 @media print {
@@ -313,11 +313,7 @@
     box-shadow: none;
   }
 
-  .voucher-print-header,
-  .voucher-print-customer,
-  .voucher-print-summary,
-  .voucher-print-notice,
-  .voucher-print-signatures {
+  .voucher-print-summary-row {
     break-inside: avoid;
     page-break-inside: avoid;
   }
