@@ -1,59 +1,140 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import ptcLogoUrl from "../assets/ptc-logo.png";
 import { getStockVoucherRequest } from "../services/inventoryOperations.service";
-import { formatWarrantyNote } from "../utils/warrantyNote";
 import "./TransactionVoucherPrintPage.css";
 
-function formatDateTime(value) {
-  if (!value) return "-";
+const SHOP_INFO = {
+  name: "Vi Tính Phước Tài",
+  address: "98/14 đường số 5, P.17, Q. Gò Vấp",
+  phone: "0933712571",
+  email: "vitinhphuoctai@gmail.com"
+};
+
+const FOOTER_NOTICE = [
+  "Quý khách vui lòng kiểm tra hàng hóa và thông tin trên phiếu trước khi ký nhận.",
+  "Hàng đã mua không trả lại, trừ trường hợp được cửa hàng chấp thuận.",
+  "Sản phẩm bảo hành theo điều kiện của nhà sản xuất hoặc nhà phân phối.",
+  "Không bảo hành các trường hợp rách tem, cháy nổ, vào nước, móp méo, lỗi vật lý hoặc sử dụng sai quy định.",
+  "Sản phẩm bán ra có thể kèm tem và số serial để phục vụ đối chiếu."
+];
+
+function parseDate(value) {
+  if (!value) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("vi-VN", {
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDate(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  return date.toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
-    year: "numeric",
+    year: "numeric"
+  });
+}
+
+function formatTime(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  return date.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit"
   });
 }
 
-function formatMoney(value) {
-  if (value === null || value === undefined) return "Chưa xác định";
-
-  const numberValue = Number(value);
-  if (!Number.isFinite(numberValue)) return "Chưa xác định";
-
-  return `${numberValue.toLocaleString("vi-VN")} ₫`;
-}
-
 function formatText(value) {
-  if (value === null || value === undefined || String(value).trim() === "") return "-";
-  return String(value);
-}
-
-function formatNote(note) {
-  if (note === null || note === undefined || String(note).trim() === "") return "-";
-  return formatWarrantyNote(note);
-}
-
-function getSaleNote(item) {
-  if (item?.sale_note === null || item?.sale_note === undefined) return "";
-  return String(item.sale_note).trim();
-}
-
-function getSnapshotSku(item) {
-  return item?.sku || item?.product?.sku || "-";
+  if (value === null || value === undefined || String(value).trim() === "") return "";
+  return String(value).trim();
 }
 
 function getSnapshotProductName(item) {
-  return item?.product_name || item?.product?.name || "-";
+  return formatText(item?.product_name || item?.product?.name) || "-";
+}
+
+function getSaleNote(item) {
+  return formatText(item?.sale_note);
+}
+
+function getNumericMoney(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function formatPrintMoney(value) {
+  const numberValue = getNumericMoney(value);
+  if (numberValue === null) return "";
+  return `${numberValue.toLocaleString("vi-VN")} ₫`;
+}
+
+function getNumericQuantity(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function formatPrintQuantity(value) {
+  const numberValue = getNumericQuantity(value);
+  if (numberValue === null) return "";
+  return numberValue.toLocaleString("vi-VN");
+}
+
+function getPrintableUnitPrice(item) {
+  if (item?.reference_unit_price !== null && item?.reference_unit_price !== undefined) {
+    return item.reference_unit_price;
+  }
+  if (item?.unit_price !== null && item?.unit_price !== undefined) {
+    return item.unit_price;
+  }
+  return null;
+}
+
+function getPrintableDiscount(item) {
+  const discountAmount = getNumericMoney(item?.discount_amount);
+  return discountAmount !== null && discountAmount > 0 ? discountAmount : null;
+}
+
+function calculateGrossGoodsTotal(items) {
+  let total = 0;
+
+  for (const item of items) {
+    const unitPrice = getNumericMoney(getPrintableUnitPrice(item));
+    const quantity = getNumericQuantity(item?.quantity);
+    if (unitPrice === null || quantity === null) return null;
+    total += unitPrice * quantity;
+  }
+
+  return total;
+}
+
+function calculateTotalDiscount(items) {
+  return items.reduce((sum, item) => {
+    const discountAmount = getPrintableDiscount(item);
+    const quantity = getNumericQuantity(item?.quantity);
+    if (discountAmount === null || quantity === null) return sum;
+    return sum + discountAmount * quantity;
+  }, 0);
 }
 
 function InfoLine({ label, value }) {
+  if (!value) return null;
   return (
-    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
-      <span className="font-semibold text-slate-700">{label}</span>
-      <span className="min-w-0 text-slate-900">{value}</span>
+    <div className="voucher-print-info-line">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function CustomerInfoLine({ label, value }) {
+  return (
+    <div className="voucher-print-customer-line">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -132,9 +213,18 @@ export function TransactionVoucherPrintPage() {
 
   const partner = voucher.partner || {};
   const items = voucher.items || [];
+  const customerName = formatText(partner.name) || "Khách lẻ";
+  const customerLines = [
+    { label: "Tên khách hàng", value: customerName },
+    { label: "Số điện thoại", value: formatText(partner.phone) },
+    { label: "Địa chỉ", value: formatText(partner.address) },
+    { label: "Ghi chú", value: formatText(voucher.note) }
+  ];
+  const grossGoodsTotal = calculateGrossGoodsTotal(items);
+  const totalDiscount = calculateTotalDiscount(items);
 
   return (
-    <main className="voucher-print-screen min-h-screen bg-white px-4 py-6 text-slate-950 sm:px-8">
+    <main className="voucher-print-screen min-h-screen bg-slate-100 px-4 py-6 text-slate-950 sm:px-8">
       <div className="voucher-print-controls mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center justify-between gap-3 print:hidden">
         <Link to={`/admin/transaction-history/${voucherId}`} className="text-sm font-semibold text-brand-700 hover:text-brand-900">
           ← Quay lại chi tiết phiếu
@@ -148,81 +238,68 @@ export function TransactionVoucherPrintPage() {
         </button>
       </div>
 
-      <article className="voucher-print-page mx-auto min-h-[297mm] max-w-[210mm] bg-white p-8 text-sm shadow-sm ring-1 ring-slate-200 print:min-h-0 print:max-w-none print:p-0 print:shadow-none print:ring-0">
-        <header className="voucher-print-header border-b-2 border-slate-900 pb-5 text-center">
-          <p className="text-lg font-bold tracking-wide">VI TÍNH PHƯỚC TÀI</p>
-          <h1 className="mt-4 text-2xl font-bold tracking-wide">PHIẾU BÁN HÀNG KIÊM BẢO HÀNH</h1>
+      <article className="voucher-print-page mx-auto max-w-[210mm] bg-white p-[12mm] text-[12px] shadow-sm ring-1 ring-slate-200 print:max-w-none print:p-0 print:shadow-none print:ring-0">
+        <header className="voucher-print-header">
+          <div className="voucher-print-logo-box">
+            <img src={ptcLogoUrl} alt="Phước Tài Computer" />
+          </div>
+
+          <div className="voucher-print-shop">
+            <p className="voucher-print-shop-name">{SHOP_INFO.name}</p>
+            <p>{SHOP_INFO.address}</p>
+            <p>{SHOP_INFO.phone}</p>
+            <p>{SHOP_INFO.email}</p>
+          </div>
+
+          <div className="voucher-print-meta">
+            <InfoLine label="Số phiếu" value={formatText(voucher.voucher_code || `#${voucher.id}`)} />
+            <InfoLine label="Ngày" value={formatDate(voucher.occurred_at)} />
+            <InfoLine label="Giờ" value={formatTime(voucher.occurred_at)} />
+          </div>
         </header>
 
-        <section className="voucher-print-info mt-6 grid gap-5 md:grid-cols-2">
-          <div className="space-y-2">
-            <InfoLine label="Mã phiếu" value={formatText(voucher.voucher_code || `#${voucher.id}`)} />
-            <InfoLine label="Ngày bán" value={formatDateTime(voucher.occurred_at)} />
-            <InfoLine label="Người bán" value={formatText(voucher.admin?.username)} />
-          </div>
-          <div className="space-y-2">
-            <InfoLine label="Khách hàng" value={formatText(partner.name)} />
-            <InfoLine label="Số điện thoại" value={formatText(partner.phone)} />
-            <InfoLine label="Địa chỉ" value={formatText(partner.address)} />
-          </div>
+        <h1 className="voucher-print-title">PHIẾU BÁN &amp; GIAO HÀNG</h1>
+
+        <section className="voucher-print-customer">
+          {customerLines.map((line) => (
+            <CustomerInfoLine key={line.label} label={line.label} value={line.value} />
+          ))}
         </section>
 
-        <section className="voucher-print-table-wrap mt-7 overflow-visible border border-slate-900">
-          <table className="voucher-print-table w-full border-collapse text-left text-xs">
+        <section className="voucher-print-table-wrap">
+          <table className="voucher-print-table">
             <thead>
-              <tr className="bg-slate-100">
-                <th className="w-10 border border-slate-900 px-2 py-2 text-center">STT</th>
-                <th className="w-28 border border-slate-900 px-2 py-2">SKU</th>
-                <th className="border border-slate-900 px-2 py-2">Tên sản phẩm</th>
-                <th className="w-36 border border-slate-900 px-2 py-2">Bảo hành/Ghi chú</th>
-                <th className="w-16 border border-slate-900 px-2 py-2 text-right">Số lượng</th>
-                <th className="w-32 border border-slate-900 px-2 py-2 text-right">Thông tin giá</th>
-                <th className="w-28 border border-slate-900 px-2 py-2 text-right">Thành tiền</th>
+              <tr>
+                <th className="voucher-print-index-col">STT</th>
+                <th>Tên sản phẩm / Serial / Ghi chú</th>
+                <th className="voucher-print-qty-col">SL</th>
+                <th className="voucher-print-money-col">Đơn giá</th>
+                <th className="voucher-print-money-col">Chiết khấu</th>
+                <th className="voucher-print-money-col">Thành tiền</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => {
                 const saleNote = getSaleNote(item);
-                const hasReferencePrice = item.reference_unit_price !== null && item.reference_unit_price !== undefined;
-                const discountAmount = Number(item.discount_amount || 0);
 
                 return (
-                  <tr key={item.stock_voucher_item_id || item.transaction_id || index} className="voucher-print-row align-top">
-                    <td className="border border-slate-900 px-2 py-2 text-center">{index + 1}</td>
-                    <td className="break-words border border-slate-900 px-2 py-2">{getSnapshotSku(item)}</td>
-                    <td className="border border-slate-900 px-2 py-2 font-semibold">
+                  <tr key={item.stock_voucher_item_id || item.transaction_id || index}>
+                    <td className="voucher-print-index-col">{index + 1}</td>
+                    <td className="voucher-print-product-cell">
                       <span className="voucher-print-product-name">{getSnapshotProductName(item)}</span>
-                      {saleNote && (
-                        <span className="voucher-print-sale-note mt-1 block text-[11px] font-normal leading-4 text-slate-700">
-                          <span className="font-semibold">Serial / Ghi chú:</span> {saleNote}
-                        </span>
-                      )}
+                      {saleNote && <span className="voucher-print-sale-note">{saleNote}</span>}
                     </td>
-                    <td className="border border-slate-900 px-2 py-2">
-                      {formatNote(item.warranty_note === null || item.warranty_note === undefined ? item.note : item.warranty_note)}
-                    </td>
-                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{Number(item.quantity || 0)}</td>
-                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">
-                      {hasReferencePrice && discountAmount > 0 && (
-                        <span className="block text-[10px] font-normal text-slate-600">
-                          Tham chiếu: {formatMoney(item.reference_unit_price)}
-                        </span>
-                      )}
-                      {discountAmount > 0 && (
-                        <span className="block text-[10px] font-normal text-slate-600">
-                          Giảm: −{formatMoney(item.discount_amount)}
-                        </span>
-                      )}
-                      <span className="block font-semibold">Bán: {formatMoney(item.unit_price)}</span>
-                    </td>
-                    <td className="border border-slate-900 px-2 py-2 text-right tabular-nums">{formatMoney(item.line_total)}</td>
+                    <td className="voucher-print-qty-col">{formatPrintQuantity(item.quantity)}</td>
+                    <td className="voucher-print-money-col">{formatPrintMoney(getPrintableUnitPrice(item))}</td>
+                    <td className="voucher-print-money-col">{formatPrintMoney(getPrintableDiscount(item))}</td>
+                    <td className="voucher-print-money-col">{formatPrintMoney(item.line_total)}</td>
                   </tr>
                 );
               })}
 
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="border border-slate-900 px-2 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="voucher-print-empty-row">
                     Phiếu chưa có dòng sản phẩm.
                   </td>
                 </tr>
@@ -231,30 +308,35 @@ export function TransactionVoucherPrintPage() {
           </table>
         </section>
 
-        <section className="voucher-print-total mt-5 flex justify-end">
-          <div className="grid min-w-[260px] grid-cols-[1fr_auto] gap-x-5 border-t-2 border-slate-900 pt-3 text-base">
-            <span className="font-bold">Tổng tiền</span>
-            <span className="text-right font-bold tabular-nums">{formatMoney(voucher.total_amount)}</span>
+        <section className="voucher-print-summary">
+          <div className="voucher-print-summary-grid">
+            <span>Tổng tiền hàng</span>
+            <strong>{formatPrintMoney(grossGoodsTotal)}</strong>
+            <span>Tổng chiết khấu</span>
+            <strong>{totalDiscount > 0 ? formatPrintMoney(totalDiscount) : ""}</strong>
+            <span>Tổng cộng</span>
+            <strong>{formatPrintMoney(voucher.total_amount)}</strong>
           </div>
         </section>
 
-        <section className="voucher-print-notes mt-7 rounded-sm border border-slate-300 p-4 text-sm">
-          <p className="font-semibold text-slate-900">Lưu ý bảo hành</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-700">
-            <li>Vui lòng giữ phiếu để được hỗ trợ bảo hành.</li>
-            <li>Bảo hành theo điều kiện của từng sản phẩm và nội dung ghi trên phiếu.</li>
+        <section className="voucher-print-signatures">
+          <div>
+            <p>Người bán</p>
+            <span>(Ký và ghi rõ họ tên)</span>
+          </div>
+          <div>
+            <p>Khách hàng</p>
+            <span>(Kiểm tra và ký nhận)</span>
+          </div>
+        </section>
+
+        <section className="voucher-print-notice">
+          <p>Lưu ý:</p>
+          <ul>
+            {FOOTER_NOTICE.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
           </ul>
-        </section>
-
-        <section className="voucher-print-signatures mt-10 grid grid-cols-2 gap-10 text-center">
-          <div className="min-h-28">
-            <p className="font-bold">Khách hàng</p>
-            <p className="mt-1 text-xs italic text-slate-500">(Ký và ghi rõ họ tên)</p>
-          </div>
-          <div className="min-h-28">
-            <p className="font-bold">Người bán</p>
-            <p className="mt-1 text-xs italic text-slate-500">(Ký và ghi rõ họ tên)</p>
-          </div>
         </section>
       </article>
     </main>
