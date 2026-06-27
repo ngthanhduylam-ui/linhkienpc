@@ -40,6 +40,7 @@ exports.bulkStockOut = asyncHandler(async (req, res) => {
   const result = await stockTxService.bulkStockOut({
     adminId: req.auth.adminId,
     customerId: req.body.customer_id,
+    note: req.body.note,
     items: req.body.items
   });
 

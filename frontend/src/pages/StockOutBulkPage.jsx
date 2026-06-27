@@ -367,12 +367,12 @@ function createEmptyOrder(orderNumber) {
     label: `Đơn ${orderNumber}`,
     cartItems: [],
     selectedCustomer: null,
-    saleNote: ""
+    orderNote: ""
   };
 }
 
 function hasOrderDraft(order) {
-  return Boolean(order?.cartItems?.length || order?.selectedCustomer || order?.saleNote?.trim());
+  return Boolean(order?.cartItems?.length || order?.selectedCustomer || order?.orderNote?.trim());
 }
 
 export function StockOutBulkPage() {
@@ -407,6 +407,7 @@ export function StockOutBulkPage() {
   );
   const cartItems = activeOrder?.cartItems || [];
   const selectedCustomer = activeOrder?.selectedCustomer || null;
+  const orderNote = activeOrder?.orderNote || "";
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 250);
@@ -613,10 +614,17 @@ export function StockOutBulkPage() {
     setSuccess("");
   }
 
+  function updateActiveOrderNote(note) {
+    if (isSubmitting) return;
+    updateActiveOrder(() => ({ orderNote: note }));
+    setError("");
+    setSuccess("");
+  }
+
   function clearOrder(orderId) {
     setOrders((prev) => prev.map((order) => (
       order.id === orderId
-        ? { ...order, cartItems: [], selectedCustomer: null, saleNote: "" }
+        ? { ...order, cartItems: [], selectedCustomer: null, orderNote: "" }
         : order
     )));
   }
@@ -808,6 +816,10 @@ export function StockOutBulkPage() {
       return "Vui lòng thêm ít nhất một sản phẩm vào đơn bán tại quầy.";
     }
 
+    if (typeof orderNote === "string" && orderNote.trim().length > 500) {
+      return "Ghi chú đơn hàng không được vượt quá 500 ký tự.";
+    }
+
     for (const [index, item] of cartItems.entries()) {
       if (!Number.isInteger(Number(item.quantity)) || Number(item.quantity) <= 0) {
         return `Dòng ${index + 1}: số lượng bán phải là số nguyên dương.`;
@@ -872,8 +884,10 @@ export function StockOutBulkPage() {
       return;
     }
 
+    const trimmedOrderNote = typeof orderNote === "string" ? orderNote.trim() : "";
     const payload = {
       ...(selectedCustomer?.id ? { customer_id: Number(selectedCustomer.id) } : {}),
+      ...(trimmedOrderNote !== "" ? { note: trimmedOrderNote } : {}),
       items: cartItems.map((item) => {
         const saleNote = typeof item.saleNote === "string" ? item.saleNote.trim() : "";
         return {
@@ -1275,6 +1289,23 @@ export function StockOutBulkPage() {
             </div>
 
             <div className="flex-1 overflow-auto p-3">
+              <div className="mb-3">
+                <label htmlFor="pos-order-note" className="mb-1 block text-sm font-semibold text-slate-700">
+                  Ghi chú đơn hàng
+                </label>
+                <textarea
+                  id="pos-order-note"
+                  value={orderNote}
+                  onChange={(event) => updateActiveOrderNote(event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  disabled={isSubmitting}
+                  placeholder="Nhập ghi chú chung cho đơn..."
+                  className="block w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                />
+                <p className="mt-1 text-right text-[11px] text-slate-400">{orderNote.length}/500</p>
+              </div>
+
               <div className="divide-y divide-slate-200 border-y border-slate-200 text-sm text-slate-700">
                 <div className="flex items-center justify-between gap-3 py-2">
                   <span>Tổng số dòng</span>

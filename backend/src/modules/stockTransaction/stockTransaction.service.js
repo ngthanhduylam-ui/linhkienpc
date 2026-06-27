@@ -164,6 +164,27 @@ function normalizeSaleNote(note) {
   return trimmed ? trimmed : null;
 }
 
+function normalizeVoucherNote(note) {
+  if (note === undefined || note === null) {
+    return null;
+  }
+
+  if (typeof note !== 'string') {
+    throw new AppError('note must be a string or null.', 400, 'VALIDATION_ERROR', [
+      { field: 'note', issue: 'note must be a string or null' }
+    ]);
+  }
+
+  const trimmed = note.trim();
+  if (trimmed.length > 500) {
+    throw new AppError('note must be at most 500 characters.', 400, 'VALIDATION_ERROR', [
+      { field: 'note', issue: 'note must be at most 500 characters' }
+    ]);
+  }
+
+  return trimmed || null;
+}
+
 async function resolveProductBySku(connection, sku) {
   const [rows] = await connection.query(
     `
@@ -266,14 +287,14 @@ async function resolveProductsBySku(connection, items) {
   return productMap;
 }
 
-async function createStockVoucher(connection, { voucherType, adminId, customerId = null, supplierId = null }) {
+async function createStockVoucher(connection, { voucherType, adminId, customerId = null, supplierId = null, note = null }) {
   const [result] = await connection.query(
     `
       INSERT INTO stock_vouchers
-        (voucher_type, customer_id, supplier_id, created_by_admin_id)
-      VALUES (?, ?, ?, ?)
+        (voucher_type, customer_id, supplier_id, note, created_by_admin_id)
+      VALUES (?, ?, ?, ?, ?)
     `,
-    [voucherType, customerId, supplierId, adminId]
+    [voucherType, customerId, supplierId, note, adminId]
   );
 
   const voucherId = result.insertId;
@@ -618,7 +639,7 @@ function aggregateQuantity(map, key, quantity) {
   map.set(key, Number(map.get(key) || 0) + Number(quantity || 0));
 }
 
-async function bulkStockOut({ adminId, customerId = null, items = [] }) {
+async function bulkStockOut({ adminId, customerId = null, note = null, items = [] }) {
   if (!Array.isArray(items) || items.length < 1 || items.length > 100) {
     throw new AppError('items must be a non-empty array with at most 100 items.', 400, 'VALIDATION_ERROR');
   }
@@ -635,6 +656,7 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
     await connection.beginTransaction();
 
     const resolvedCustomerId = await resolveCustomerId(connection, customerId);
+    const voucherNote = normalizeVoucherNote(note);
     const productMap = await resolveProductsBySku(connection, items);
     const resolvedItems = items.map((item, index) => {
       const product = productMap.get(item.sku.trim().toLowerCase());
@@ -668,7 +690,8 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
     const voucher = await createStockVoucher(connection, {
       voucherType: 'OUT',
       adminId,
-      customerId: resolvedCustomerId
+      customerId: resolvedCustomerId,
+      note: voucherNote
     });
 
     const productIds = [...new Set(resolvedItems.map((item) => item.product_id))].sort((a, b) => a - b);
@@ -872,6 +895,7 @@ async function bulkStockOut({ adminId, customerId = null, items = [] }) {
       voucher_code: voucher.voucher_code,
       total_amount: moneyToResponse(totalAmount),
       customer_id: resolvedCustomerId,
+      note: voucherNote,
       items: responseItems
     };
   } catch (error) {

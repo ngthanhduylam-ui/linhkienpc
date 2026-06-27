@@ -70,7 +70,7 @@ function bulkStockInBodyValidator(req, res, next) {
 
 function bulkStockOutBodyValidator(req, res, next) {
   const details = [];
-  const { customer_id: customerId, items } = req.body || {};
+  const { customer_id: customerId, items, note } = req.body || {};
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'total_amount')) {
     details.push({
@@ -83,6 +83,12 @@ function bulkStockOutBodyValidator(req, res, next) {
     if (typeof customerId !== 'number' || !Number.isInteger(customerId) || customerId < 1) {
       details.push({ field: 'body.customer_id', issue: 'customer_id must be a positive integer' });
     }
+  }
+
+  if (note !== undefined && note !== null && typeof note !== 'string') {
+    details.push({ field: 'body.note', issue: 'note must be a string or null' });
+  } else if (typeof note === 'string' && note.trim().length > 500) {
+    details.push({ field: 'body.note', issue: 'note must be at most 500 characters' });
   }
 
   if (!Array.isArray(items)) {
