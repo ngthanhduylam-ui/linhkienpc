@@ -198,6 +198,16 @@ export function TransactionVoucherDetailPage() {
             {voucher && <VoucherTypeBadge type={voucher.voucher_type} />}
           </div>
         </div>
+        {isSaleVoucher && voucher?.id && (
+          <Link
+            to={`/admin/transaction-history/${voucher.id}/print`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-brand-700 bg-white px-4 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+          >
+            In phiếu
+          </Link>
+        )}
       </div>
 
       {isLoading && (

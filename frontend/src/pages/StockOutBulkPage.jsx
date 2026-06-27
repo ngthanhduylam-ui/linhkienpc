@@ -388,6 +388,7 @@ export function StockOutBulkPage() {
   const searchInputRef = useRef(null);
   const suppressDropdownOnFocusRef = useRef(false);
   const productSearchRequestRef = useRef(0);
+  const submitInFlightRef = useRef(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchProducts, setSearchProducts] = useState([]);
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
@@ -870,10 +871,10 @@ export function StockOutBulkPage() {
     setProducts(productItems);
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (isSubmitting) return;
+  async function submitOrder({ printAfterSuccess = false, printTab = null } = {}) {
+    if (isSubmitting || submitInFlightRef.current) return;
 
+    submitInFlightRef.current = true;
     setError("");
     setSuccess("");
     const submittedOrderId = activeOrderId;
@@ -914,7 +915,17 @@ export function StockOutBulkPage() {
       setInventoryBySku({});
       clearOrder(submittedOrderId);
       const voucherText = result?.voucher_code ? ` Mã phiếu: ${result.voucher_code}.` : "";
-      setSuccess(`Bán tại quầy thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.${voucherText}`);
+      if (printAfterSuccess && result?.voucher_id && printTab && !printTab.closed) {
+        printTab.location.href = `/admin/transaction-history/${result.voucher_id}/print`;
+        setSuccess(`Bán tại quầy thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.${voucherText} Đã mở phiếu in.`);
+      } else if (printAfterSuccess) {
+        if (printTab && !printTab.closed) {
+          printTab.close();
+        }
+        setSuccess(`Bán tại quầy thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.${voucherText} Không mở được tab in, vui lòng in từ lịch sử giao dịch.`);
+      } else {
+        setSuccess(`Bán tại quầy thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.${voucherText}`);
+      }
       focusProductSearch();
 
       try {
@@ -923,10 +934,29 @@ export function StockOutBulkPage() {
         setError("Bán thành công nhưng chưa làm mới tồn kho. Vui lòng tải lại trang.");
       }
     } catch (err) {
+      if (printAfterSuccess && printTab && !printTab.closed) {
+        printTab.close();
+      }
       setError(err?.message || "Bán tại quầy thất bại.");
     } finally {
+      submitInFlightRef.current = false;
       setIsSubmitting(false);
     }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    await submitOrder();
+  }
+
+  function handleSubmitAndPrint() {
+    if (isSubmitting || isLoading || cartItems.length === 0) return;
+    const printTab = window.open("", "_blank");
+    if (printTab) {
+      printTab.document.title = "Đang tạo phiếu in...";
+      printTab.document.body.innerHTML = "<p style=\"font-family: sans-serif; padding: 16px;\">Đang tạo phiếu in...</p>";
+    }
+    submitOrder({ printAfterSuccess: true, printTab });
   }
 
   return (
@@ -1327,7 +1357,15 @@ export function StockOutBulkPage() {
               {success && <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
             </div>
 
-            <div className="sticky bottom-0 shrink-0 border-t border-slate-300 bg-white p-2.5">
+            <div className="sticky bottom-0 shrink-0 space-y-2 border-t border-slate-300 bg-white p-2.5">
+              <button
+                type="button"
+                onClick={handleSubmitAndPrint}
+                disabled={isSubmitting || isLoading || cartItems.length === 0}
+                className="h-10 w-full rounded-md border border-brand-700 bg-white px-5 text-sm font-bold uppercase tracking-wide text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Đang xử lý..." : "Bán & In phiếu"}
+              </button>
               <button
                 type="submit"
                 disabled={isSubmitting || isLoading || cartItems.length === 0}

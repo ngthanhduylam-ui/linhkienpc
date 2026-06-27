@@ -173,7 +173,7 @@ export function TransactionHistoryPage() {
         </div>
 
         <div className="mt-4 overflow-hidden rounded-md border border-slate-200">
-          <div className="hidden grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_120px] gap-3 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
+          <div className="hidden grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_150px] gap-3 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
             <span>Mã phiếu</span>
             <span>Loại phiếu</span>
             <span>Ngày tạo</span>
@@ -199,7 +199,7 @@ export function TransactionHistoryPage() {
           {!isLoading && vouchers.map((voucher) => (
             <div
               key={voucher.id}
-              className="border-t border-slate-100 px-4 py-3 text-sm hover:bg-blue-50/50 lg:grid lg:grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_120px] lg:items-center lg:gap-3"
+              className="border-t border-slate-100 px-4 py-3 text-sm hover:bg-blue-50/50 lg:grid lg:grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_150px] lg:items-center lg:gap-3"
             >
               <div className="min-w-0">
                 <Link
@@ -218,7 +218,17 @@ export function TransactionHistoryPage() {
               </div>
               <p className="mt-2 font-semibold tabular-nums text-slate-900 lg:mt-0">{Number(voucher.total_quantity || 0)}</p>
               <p className="mt-2 text-slate-700 lg:mt-0">{voucher.admin?.username || "-"}</p>
-              <div className="mt-3 lg:mt-0 lg:text-right">
+              <div className="mt-3 flex flex-wrap justify-start gap-2 lg:mt-0 lg:justify-end">
+                {voucher.voucher_type === "OUT" && (
+                  <Link
+                    to={`/admin/transaction-history/${voucher.id}/print`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-8 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    In phiếu
+                  </Link>
+                )}
                 <Link
                   to={`/admin/transaction-history/${voucher.id}`}
                   className="inline-flex h-8 items-center rounded-md border border-brand-600 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
