@@ -5,6 +5,15 @@ import {
   listOnlineListingProductImages,
   listOnlineListingProducts
 } from "../services/onlineListing.service";
+import {
+  ONLINE_LISTING_TITLE_MAX_LENGTH,
+  buildOnlineListingDescription,
+  buildSuggestedOnlineListingTitle,
+  formatMoneyInputValue,
+  getNoteGroupLabel,
+  getOnlinePriceInputFromProduct,
+  parseOnlinePriceInput
+} from "../utils/onlineListingDraft";
 
 const PRODUCT_PAGE_SIZE = 20;
 
@@ -23,7 +32,7 @@ function getSalePriceTone(value) {
 }
 
 function formatNoteLabel(group) {
-  return group?.label || group?.note || "Không ghi chú";
+  return getNoteGroupLabel(group);
 }
 
 function ProductListItem({ product, isSelected, onSelect }) {
@@ -91,11 +100,32 @@ export function OnlineListingPage() {
   const [imageError, setImageError] = useState("");
   const [downloadingImageId, setDownloadingImageId] = useState(null);
   const [downloadError, setDownloadError] = useState("");
+  const [onlinePriceInput, setOnlinePriceInput] = useState("");
+  const [selectedNoteGroupIndex, setSelectedNoteGroupIndex] = useState("");
+  const [titleDraft, setTitleDraft] = useState("");
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [isTitleEdited, setIsTitleEdited] = useState(false);
+  const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState("");
+  const [copyError, setCopyError] = useState("");
   const imageRequestIdRef = useRef(0);
+  const copyFeedbackTimerRef = useRef(null);
 
   const selectedNoteGroups = useMemo(
     () => (selectedProduct?.note_groups || []).filter((group) => Number(group.quantity || 0) > 0),
     [selectedProduct]
+  );
+  const selectedNoteGroup = selectedNoteGroupIndex === "" ? null : selectedNoteGroups[Number(selectedNoteGroupIndex)] || null;
+  const onlinePrice = useMemo(() => parseOnlinePriceInput(onlinePriceInput), [onlinePriceInput]);
+  const suggestedTitle = useMemo(() => buildSuggestedOnlineListingTitle(selectedProduct), [selectedProduct]);
+  const generatedDescription = useMemo(
+    () => buildOnlineListingDescription({
+      product: selectedProduct,
+      onlinePrice: onlinePrice.error ? null : onlinePrice.value,
+      selectedNoteGroup,
+      hasImages: images.length > 0
+    }),
+    [images.length, onlinePrice.error, onlinePrice.value, selectedNoteGroup, selectedProduct]
   );
 
   useEffect(() => {
@@ -106,6 +136,12 @@ export function OnlineListingPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
+  useEffect(() => () => {
+    if (copyFeedbackTimerRef.current) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     imageRequestIdRef.current += 1;
@@ -113,6 +149,14 @@ export function OnlineListingPage() {
     setImages([]);
     setImageError("");
     setDownloadError("");
+    setOnlinePriceInput("");
+    setSelectedNoteGroupIndex("");
+    setTitleDraft("");
+    setDescriptionDraft("");
+    setIsTitleEdited(false);
+    setIsDescriptionEdited(false);
+    setCopyFeedback("");
+    setCopyError("");
 
     async function loadProducts() {
       setIsLoadingProducts(true);
@@ -179,10 +223,100 @@ export function OnlineListingPage() {
     };
   }, [selectedProduct]);
 
+  useEffect(() => {
+    if (!selectedProduct || isDescriptionEdited) return;
+    setDescriptionDraft(generatedDescription);
+  }, [generatedDescription, isDescriptionEdited, selectedProduct]);
+
   function handleClearSearch() {
     setSearchInput("");
     setDebouncedSearch("");
     setPage(1);
+  }
+
+  function resetDraftForProduct(product) {
+    const nextTitle = buildSuggestedOnlineListingTitle(product);
+    const nextPriceInput = getOnlinePriceInputFromProduct(product);
+    const nextPrice = parseOnlinePriceInput(nextPriceInput);
+
+    setOnlinePriceInput(nextPriceInput);
+    setSelectedNoteGroupIndex("");
+    setTitleDraft(nextTitle);
+    setDescriptionDraft(buildOnlineListingDescription({
+      product,
+      onlinePrice: nextPrice.error ? null : nextPrice.value,
+      selectedNoteGroup: null,
+      hasImages: false
+    }));
+    setIsTitleEdited(false);
+    setIsDescriptionEdited(false);
+    setCopyFeedback("");
+    setCopyError("");
+  }
+
+  function handleSelectProduct(product) {
+    imageRequestIdRef.current += 1;
+    setSelectedProduct(product);
+    setImages([]);
+    setImageError("");
+    setDownloadError("");
+    resetDraftForProduct(product);
+  }
+
+  function handleOnlinePriceChange(event) {
+    setOnlinePriceInput(event.target.value);
+  }
+
+  function handleOnlinePriceBlur() {
+    const parsed = parseOnlinePriceInput(onlinePriceInput);
+    if (!onlinePriceInput.trim() || parsed.error || parsed.value === null) return;
+    setOnlinePriceInput(formatMoneyInputValue(parsed.value));
+  }
+
+  function handleNoteGroupChange(event) {
+    setSelectedNoteGroupIndex(event.target.value);
+  }
+
+  function handleTitleChange(event) {
+    setTitleDraft(event.target.value);
+    setIsTitleEdited(event.target.value !== suggestedTitle);
+  }
+
+  function handleDescriptionChange(event) {
+    setDescriptionDraft(event.target.value);
+    setIsDescriptionEdited(event.target.value !== generatedDescription);
+  }
+
+  function handleRestoreTitle() {
+    setTitleDraft(suggestedTitle);
+    setIsTitleEdited(false);
+  }
+
+  function handleRegenerateDescription() {
+    const confirmed = window.confirm("Tạo lại mô tả sẽ thay thế nội dung đang sửa. Tiếp tục?");
+    if (!confirmed) return;
+    setDescriptionDraft(generatedDescription);
+    setIsDescriptionEdited(false);
+  }
+
+  async function copyText(text, successMessage) {
+    if (copyFeedbackTimerRef.current) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+      copyFeedbackTimerRef.current = null;
+    }
+
+    setCopyFeedback("");
+    setCopyError("");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback(successMessage);
+      copyFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopyFeedback("");
+        copyFeedbackTimerRef.current = null;
+      }, 1800);
+    } catch {
+      setCopyError("Không thể sao chép. Vui lòng kiểm tra quyền clipboard của trình duyệt.");
+    }
   }
 
   async function handleDownloadImage(image) {
@@ -275,7 +409,7 @@ export function OnlineListingPage() {
                     key={product.id}
                     product={product}
                     isSelected={Number(selectedProduct?.id) === Number(product.id)}
-                    onSelect={setSelectedProduct}
+                    onSelect={handleSelectProduct}
                   />
                 ))
               )}
@@ -380,23 +514,160 @@ export function OnlineListingPage() {
 
               <section>
                 <h4 className="text-sm font-semibold text-slate-900">Nhóm bảo hành / ghi chú</h4>
-                {selectedNoteGroups.length > 0 ? (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {selectedNoteGroups.map((group) => (
-                      <div
-                        key={`${group.note_key || group.note || "empty"}-${group.quantity}`}
-                        className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
-                      >
-                        <span className="break-words font-medium text-slate-700">{formatNoteLabel(group)}</span>
-                        <span className="shrink-0 font-bold text-brand-800">{Number(group.quantity || 0)}</span>
-                      </div>
-                    ))}
+                <div className="mt-3 space-y-2">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                    <input
+                      type="radio"
+                      name="online-listing-note-group"
+                      value=""
+                      checked={selectedNoteGroupIndex === ""}
+                      onChange={handleNoteGroupChange}
+                      className="h-4 w-4"
+                    />
+                    <span className="font-medium text-slate-700">Không đưa bảo hành/ghi chú vào tin</span>
+                  </label>
+
+                  {selectedNoteGroups.length > 0 ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {selectedNoteGroups.map((group, index) => (
+                        <label
+                          key={`${group.note_key || group.note || "empty"}-${group.quantity}`}
+                          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                        >
+                          <span className="flex min-w-0 items-center gap-3">
+                            <input
+                              type="radio"
+                              name="online-listing-note-group"
+                              value={String(index)}
+                              checked={selectedNoteGroupIndex === String(index)}
+                              onChange={handleNoteGroupChange}
+                              className="h-4 w-4 shrink-0"
+                            />
+                            <span className="break-words font-medium text-slate-700">{formatNoteLabel(group)}</span>
+                          </span>
+                          <span className="shrink-0 font-bold text-brand-800">{Number(group.quantity || 0)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-md border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-500">
+                      Chưa có tồn kho theo nhóm bảo hành / ghi chú.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold text-slate-900">Bản nháp Chợ Tốt</h4>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Nội dung chỉ nằm trên trình duyệt trong phiên làm việc này, chưa lưu vào hệ thống.
+                    </p>
                   </div>
-                ) : (
-                  <p className="mt-3 rounded-md border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-500">
-                    Chưa có tồn kho theo nhóm bảo hành / ghi chú.
-                  </p>
-                )}
+                  {(copyFeedback || copyError) && (
+                    <p className={`text-sm font-medium ${copyError ? "text-red-700" : "text-emerald-700"}`}>
+                      {copyError || copyFeedback}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Giá đăng online</label>
+                      <input
+                        inputMode="numeric"
+                        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        placeholder="Để trống nếu chưa nhập giá"
+                        value={onlinePriceInput}
+                        onChange={handleOnlinePriceChange}
+                        onBlur={handleOnlinePriceBlur}
+                      />
+                      {onlinePrice.error ? (
+                        <p className="mt-1 text-xs font-medium text-red-600">{onlinePrice.error}</p>
+                      ) : onlinePrice.value === 0 ? (
+                        <p className="mt-1 text-xs font-medium text-amber-700">
+                          Giá đang để 0 đ. Hãy kiểm tra trước khi sao chép nội dung.
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Giá này chỉ dùng cho tin đăng, không làm thay đổi giá bán tại cửa hàng.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <label className="block text-sm font-medium text-slate-700">Tiêu đề</label>
+                        <span className={`text-xs ${titleDraft.length > ONLINE_LISTING_TITLE_MAX_LENGTH ? "text-amber-700" : "text-slate-500"}`}>
+                          {titleDraft.length}/{ONLINE_LISTING_TITLE_MAX_LENGTH}
+                        </span>
+                      </div>
+                      <input
+                        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        value={titleDraft}
+                        onChange={handleTitleChange}
+                      />
+                      {titleDraft.length > ONLINE_LISTING_TITLE_MAX_LENGTH && (
+                        <p className="mt-1 text-xs font-medium text-amber-700">
+                          Tiêu đề đang dài hơn giới hạn nội bộ tạm dùng, chưa phải giới hạn chính thức của Chợ Tốt.
+                        </p>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => copyText(titleDraft, "Đã sao chép tiêu đề")}
+                          className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          Sao chép tiêu đề
+                        </button>
+                        {isTitleEdited && (
+                          <button
+                            type="button"
+                            onClick={handleRestoreTitle}
+                            className="h-9 rounded-md border border-brand-200 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                          >
+                            Khôi phục tiêu đề gợi ý
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label className="block text-sm font-medium text-slate-700">Mô tả</label>
+                      {isDescriptionEdited && (
+                        <span className="text-xs font-medium text-amber-700">Đã sửa thủ công</span>
+                      )}
+                    </div>
+                    <textarea
+                      className="min-h-72 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-brand-500"
+                      value={descriptionDraft}
+                      onChange={handleDescriptionChange}
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => copyText(descriptionDraft, "Đã sao chép mô tả")}
+                        className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                      >
+                        Sao chép mô tả
+                      </button>
+                      {isDescriptionEdited && (
+                        <button
+                          type="button"
+                          onClick={handleRegenerateDescription}
+                          className="h-9 rounded-md border border-brand-200 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                          title="Tạo lại mô tả sẽ thay thế nội dung đang sửa."
+                        >
+                          Tạo lại mô tả
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </section>
             </article>
           )}
