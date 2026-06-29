@@ -1,0 +1,15 @@
+(function initPhuocTaiChoTotConstants(globalScope) {
+  globalScope.PHUOC_TAI_CHO_TOT = {
+    LOG_PREFIX: "[PhuocTai ChoTot Helper]",
+    SOURCE: "vitinh-phuoc-tai-pos",
+    POS_TRANSFER_TYPE: "PHUOC_TAI_CHO_TOT_TRANSFER_DRAFT",
+    POS_RESULT_TYPE: "PHUOC_TAI_CHO_TOT_TRANSFER_RESULT",
+    RUNTIME_TRANSFER_DRAFT: "PHUOC_TAI_RUNTIME_TRANSFER_DRAFT",
+    RUNTIME_GET_PENDING_DRAFT: "PHUOC_TAI_RUNTIME_GET_PENDING_DRAFT",
+    RUNTIME_FILL_PROGRESS: "PHUOC_TAI_RUNTIME_FILL_PROGRESS",
+    RUNTIME_FILL_RESULT: "PHUOC_TAI_RUNTIME_FILL_RESULT",
+    POSTING_URL: "https://www.chotot.com/dang-tin",
+    MAX_DESCRIPTION_LENGTH: 1500,
+    RECENT_REQUEST_LIMIT: 20
+  };
+})(typeof globalThis !== "undefined" ? globalThis : self);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { resolveApiAssetUrl } from "../api/apiClient";
 import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import {
   downloadOnlineListingProductImage,
@@ -16,6 +17,99 @@ import {
 } from "../utils/onlineListingDraft";
 
 const PRODUCT_PAGE_SIZE = 20;
+const POS_DRAFT_SOURCE = "vitinh-phuoc-tai-pos";
+const TRANSFER_MESSAGE_TYPE = "PHUOC_TAI_CHO_TOT_TRANSFER_DRAFT";
+const TRANSFER_RESULT_MESSAGE_TYPE = "PHUOC_TAI_CHO_TOT_TRANSFER_RESULT";
+const CHOTOT_MINIMUM_PRICE = 1000;
+const CHOTOT_PROGRESS_MESSAGES = {
+  OPENING_CHOTOT: "Đang mở hoặc chuyển sang tab Chợ Tốt.",
+  FORM_ALREADY_OPEN: "Đã nhận diện form đăng tin Chợ Tốt.",
+  CATEGORY_STEP_SKIPPED: "Form đăng tin đang mở, tiện ích bỏ qua bước chọn danh mục.",
+  DESCRIPTION_FILLED: "Mô tả đã được điền trên Chợ Tốt.",
+  WAITING_FOR_MANUAL_IMAGE: "Mô tả đã được điền. Vui lòng thêm ít nhất một ảnh trên Chợ Tốt, tiện ích sẽ tiếp tục tự động.",
+  IMAGE_DETECTED: "Đã nhận diện ảnh trên form Chợ Tốt.",
+  FILLING_REMAINING_FIELDS: "Đang điền các trường còn lại trên Chợ Tốt.",
+  STEP_REMAINING_FIELDS_START: "Đang bắt đầu điền các trường còn lại trên Chợ Tốt.",
+  CATEGORY_DETAIL_ALREADY_SET: "Danh mục chi tiết đã có sẵn trên form.",
+  STEP_TITLE_FIND_START: "Đang tìm ô tiêu đề...",
+  STEP_TITLE_FOUND: "Đã tìm thấy ô tiêu đề.",
+  STEP_TITLE_FILL_START: "Đang điền tiêu đề...",
+  STEP_TITLE_FILLED: "Đã điền tiêu đề.",
+  STEP_TITLE_VERIFY_START: "Đang kiểm tra lại tiêu đề...",
+  TITLE_VALUE_CORRECT: "Tiêu đề đang đúng.",
+  TITLE_RESTORED: "Đã khôi phục tiêu đề.",
+  STEP_PRICE_FIND_START: "Đang tìm ô giá...",
+  STEP_PRICE_FOUND: "Đã tìm thấy ô giá.",
+  PRICE_FIELD_FOUND: "Đã tìm thấy ô giá.",
+  PRICE_LABEL_FOUND: "Đã tìm thấy nhãn Giá bán.",
+  PRICE_CONTAINER_FOUND: "Đã tìm thấy vùng Giá bán.",
+  PRICE_INPUT_FOUND: "Đã tìm thấy ô nhập giá.",
+  PRICE_SCOPE_VERIFIED: "Đã xác nhận đúng ô Giá bán.",
+  STEP_PRICE_FILL_START: "Đang điền giá...",
+  STEP_PRICE_FILLED: "Đã điền giá.",
+  PRICE_VERIFY_SUCCESS: "Đã xác nhận giá đã được điền.",
+  PRICE_VALIDATION_CLEARED: "Thông báo lỗi giá đã biến mất.",
+  TITLE_STILL_CORRECT: "Tiêu đề vẫn đúng sau khi điền giá.",
+  PRICE_FILLED: "Đã điền giá.",
+  STEP_CONDITION_START: "Đang chọn tình trạng...",
+  STEP_CONDITION_FILLED: "Đã chọn tình trạng.",
+  STEP_COMPONENT_TYPE_START: "Đang chọn loại linh kiện...",
+  STEP_COMPONENT_TYPE_FILLED: "Đã chọn loại linh kiện.",
+  STEP_DEVICE_START: "Đang chọn thiết bị...",
+  STEP_DEVICE_FILLED: "Đã chọn thiết bị.",
+  STEP_WARRANTY_START: "Đang kiểm tra thông tin bảo hành...",
+  STEP_WARRANTY_FILLED: "Đã điền thông tin bảo hành.",
+  STEP_WARRANTY_SKIPPED: "Bảo hành chưa được điền tự động, vui lòng kiểm tra thủ công.",
+  READY_FOR_MANUAL_REVIEW: "Đã điền thông tin. Vui lòng kiểm tra lại và tự bấm Đăng tin nếu phù hợp."
+};
+const CHOTOT_ERROR_MESSAGES = {
+  INVALID_PAYLOAD: "Dữ liệu gửi sang tiện ích chưa hợp lệ. Vui lòng thử lại.",
+  EXTENSION_CONTEXT_INVALIDATED: "Tiện ích vừa được tải lại. Vui lòng tải lại trang POS và thử lại.",
+  EXTENSION_COMMUNICATION_FAILED: "Không kết nối được với tiện ích Chrome. Hãy kiểm tra tiện ích đã được bật.",
+  DUPLICATE_REQUEST: "Yêu cầu này đã được gửi trước đó. Hãy tạo lại thao tác gửi nếu cần.",
+  DRAFT_RETRIEVAL_TIMEOUT: "Tiện ích chưa lấy được dữ liệu tin đăng. Vui lòng thử gửi lại.",
+  DRAFT_RETRIEVAL_FAILED: "Tiện ích không lấy được dữ liệu tin đăng. Vui lòng thử gửi lại.",
+  NO_PENDING_DRAFT: "Không tìm thấy dữ liệu tin đăng đang chờ trong tiện ích. Vui lòng gửi lại từ POS.",
+  UNSUPPORTED_PAGE: "Trang Chợ Tốt hiện tại chưa phải trang đăng tin được hỗ trợ.",
+  LOGIN_REQUIRED: "Chợ Tốt đang yêu cầu đăng nhập. Vui lòng đăng nhập rồi thử lại.",
+  CAPTCHA_OR_VERIFICATION_REQUIRED: "Chợ Tốt đang yêu cầu xác minh. Vui lòng xử lý thủ công trên Chợ Tốt.",
+  PAYMENT_REQUIRED: "Chợ Tốt đang yêu cầu thanh toán hoặc bước ngoài phạm vi tiện ích.",
+  CATEGORY_NOT_FOUND: "Tiện ích chưa tìm thấy bước chọn danh mục phù hợp. Nếu form đăng tin đã mở, hãy thử tải lại tiện ích rồi gửi lại.",
+  DESCRIPTION_FIELD_NOT_FOUND: "Tiện ích chưa tìm thấy ô mô tả trên Chợ Tốt.",
+  DESCRIPTION_FILL_FAILED: "Tiện ích chưa xác nhận được mô tả đã được điền. Vui lòng kiểm tra trên Chợ Tốt.",
+  DESCRIPTION_STATE_NOT_PERSISTED: "Chợ Tốt đã xóa nội dung vừa điền. Vui lòng thử lại hoặc nhập mô tả thủ công.",
+  MANUAL_IMAGE_TIMEOUT: "Tiện ích đã chờ ảnh quá lâu. Vui lòng thêm ảnh trên Chợ Tốt rồi gửi lại nếu cần.",
+  TITLE_FIELD_NOT_FOUND: "Sau khi có ảnh, tiện ích chưa tìm thấy ô tiêu đề.",
+  TITLE_FIELD_SCOPE_MISMATCH: "Tiện ích phát hiện ô tiêu đề không đúng vùng nhập liệu. Vui lòng kiểm tra form Chợ Tốt.",
+  TITLE_STATE_NOT_PERSISTED: "Chợ Tốt đã xóa tiêu đề vừa điền. Vui lòng thử lại hoặc nhập tiêu đề thủ công.",
+  PRICE_FIELD_NOT_FOUND: "Sau khi có ảnh, tiện ích chưa tìm thấy ô giá.",
+  PRICE_FIELD_SCOPE_MISMATCH: "Tiện ích phát hiện ô giá không đúng vùng Giá bán, nên đã dừng để tránh ghi nhầm.",
+  PRICE_BELOW_CHOTOT_MINIMUM: "Giá đăng Chợ Tốt phải từ 1.000 đ trở lên.",
+  PRICE_STATE_NOT_PERSISTED: "Chợ Tốt đã xóa giá vừa điền. Vui lòng thử lại hoặc nhập giá thủ công.",
+  CONDITION_FIELD_NOT_FOUND: "Tiện ích chưa tìm thấy trường tình trạng sản phẩm trên Chợ Tốt.",
+  CONDITION_OPTION_NOT_FOUND: "Tiện ích chưa chọn được tình trạng sản phẩm trên Chợ Tốt.",
+  COMPONENT_TYPE_FIELD_NOT_FOUND: "Tiện ích chưa tìm thấy trường loại linh kiện trên Chợ Tốt.",
+  COMPONENT_TYPE_OPTION_NOT_FOUND: "Tiện ích chưa chọn được loại linh kiện trên Chợ Tốt.",
+  DEVICE_FIELD_NOT_FOUND: "Tiện ích chưa tìm thấy trường thiết bị trên Chợ Tốt.",
+  DEVICE_OPTION_NOT_FOUND: "Tiện ích chưa chọn được thiết bị trên Chợ Tốt.",
+  FORBIDDEN_ACTION_BLOCKED: "Tiện ích đã chặn một thao tác không an toàn trên Chợ Tốt. Vui lòng kiểm tra thủ công.",
+  UNEXPECTED_FILL_ERROR: "Tiện ích gặp lỗi khi điền form. Vui lòng kiểm tra trên Chợ Tốt."
+};
+const CONDITION_OPTIONS = [
+  { value: "", label: "Chọn tình trạng" },
+  { value: "new", label: "Mới" },
+  { value: "used_not_repaired", label: "Đã sử dụng (chưa sửa chữa)" },
+  { value: "used_repaired", label: "Đã sử dụng (qua sửa chữa)" }
+];
+const DEVICE_OPTIONS = [
+  { value: "unknown", label: "Chọn thiết bị" },
+  { value: "mainboard", label: "Mainboard" },
+  { value: "cpu", label: "CPU" },
+  { value: "vga", label: "VGA" },
+  { value: "psu", label: "Nguồn máy tính - PSU" },
+  { value: "hdd", label: "Ổ cứng HDD" },
+  { value: "ssd", label: "Ổ cứng SSD" }
+];
 
 function formatSalePrice(value) {
   if (value === null || value === undefined) return "Chưa thiết lập";
@@ -36,6 +130,46 @@ function getProductQueueStatus(product) {
     return { label: "Thiếu giá", className: "bg-red-50 text-red-700 ring-red-100" };
   }
   return { label: "Có thể chuẩn bị", className: "bg-emerald-50 text-emerald-700 ring-emerald-100" };
+}
+
+function suggestDeviceType(product) {
+  const haystack = [
+    product?.category?.code,
+    product?.category?.name,
+    product?.category_name,
+    product?.name
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (/\b(cpu|processor|ryzen|intel core|i[3579]-?\d{3,5})\b/.test(haystack)) return "cpu";
+  if (/\b(vga|gpu|card màn hình|card man hinh|gtx|rtx|radeon)\b/.test(haystack)) return "vga";
+  if (/\b(mainboard|main board|bo mạch chủ|bo mach chu|motherboard)\b/.test(haystack)) return "mainboard";
+  if (/\b(psu|nguồn|nguon|power supply)\b/.test(haystack)) return "psu";
+  if (/\b(ssd|solid state)\b/.test(haystack)) return "ssd";
+  if (/\b(hdd|ổ cứng hdd|o cung hdd|hard disk)\b/.test(haystack)) return "hdd";
+  return "unknown";
+}
+
+function getWarrantyPolicy(selectedNoteGroup) {
+  if (!selectedNoteGroup) return "";
+  const label = getNoteGroupLabel(selectedNoteGroup);
+  return label.toLowerCase() === "hbh" ? "Hết bảo hành" : label;
+}
+
+function getChoTotProgressMessage(message) {
+  if (message.code === "READY_FOR_MANUAL_REVIEW") {
+    return "Đã điền xong. Vui lòng kiểm tra và bấm Đăng tin thủ công.";
+  }
+  if (!CHOTOT_PROGRESS_MESSAGES[message.code] && /^[A-Z0-9_]+$/.test(message.message || "")) {
+    return "Tiện ích đang xử lý trên Chợ Tốt.";
+  }
+  return CHOTOT_PROGRESS_MESSAGES[message.code] || message.message || "Đã gửi yêu cầu sang tiện ích Chợ Tốt.";
+}
+
+function getChoTotErrorMessage(message) {
+  if (!CHOTOT_ERROR_MESSAGES[message.error] && /^[A-Z0-9_]+$/.test(message.message || "")) {
+    return "Tiện ích gặp lỗi khi xử lý form Chợ Tốt. Vui lòng kiểm tra lại.";
+  }
+  return CHOTOT_ERROR_MESSAGES[message.error] || message.message || "Không gửi được draft sang Chợ Tốt. Hãy kiểm tra extension.";
 }
 
 function ProductListItem({ product, isSelected, onSelect }) {
@@ -121,6 +255,8 @@ export function OnlineListingPage() {
   const [downloadingImageId, setDownloadingImageId] = useState(null);
   const [downloadError, setDownloadError] = useState("");
   const [onlinePriceInput, setOnlinePriceInput] = useState("");
+  const [condition, setCondition] = useState("");
+  const [deviceType, setDeviceType] = useState("unknown");
   const [quickSellingNote, setQuickSellingNote] = useState("");
   const [selectedNoteGroupIndex, setSelectedNoteGroupIndex] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
@@ -133,6 +269,7 @@ export function OnlineListingPage() {
   const [prepareError, setPrepareError] = useState("");
   const imageRequestIdRef = useRef(0);
   const copyFeedbackTimerRef = useRef(null);
+  const transferRequestIdRef = useRef("");
 
   const selectedNoteGroups = useMemo(
     () => (selectedProduct?.note_groups || []).filter((group) => Number(group.quantity || 0) > 0),
@@ -151,18 +288,22 @@ export function OnlineListingPage() {
   );
   const readiness = useMemo(() => {
     const hasTitle = titleDraft.trim().length > 0;
-    const hasPrice = !onlinePrice.error && onlinePrice.value !== null && onlinePrice.value !== undefined;
+    const hasPrice = !onlinePrice.error && Number(onlinePrice.value || 0) >= CHOTOT_MINIMUM_PRICE;
     const hasDescription = descriptionDraft.trim().length > 0;
     const hasImages = images.length > 0;
+    const hasCondition = Boolean(condition);
+    const hasDevice = deviceType && deviceType !== "unknown";
     const missing = [
       !hasTitle ? "tiêu đề" : "",
-      !hasPrice ? "giá" : "",
+      !hasPrice ? "giá Chợ Tốt từ 1.000 đ" : "",
       !hasDescription ? "mô tả" : "",
-      !hasImages ? "ảnh" : ""
+      !hasImages ? "ảnh" : "",
+      !hasCondition ? "tình trạng" : "",
+      !hasDevice ? "thiết bị" : ""
     ].filter(Boolean);
 
-    return { hasTitle, hasPrice, hasDescription, hasImages, missing, isReady: missing.length === 0 };
-  }, [descriptionDraft, images.length, onlinePrice.error, onlinePrice.value, titleDraft]);
+    return { hasTitle, hasPrice, hasDescription, hasImages, hasCondition, hasDevice, missing, isReady: missing.length === 0 };
+  }, [condition, descriptionDraft, deviceType, images.length, onlinePrice.error, onlinePrice.value, titleDraft]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -174,6 +315,37 @@ export function OnlineListingPage() {
 
   useEffect(() => () => {
     if (copyFeedbackTimerRef.current) window.clearTimeout(copyFeedbackTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    function handleExtensionResult(event) {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      const message = event.data || {};
+      if (message.type !== TRANSFER_RESULT_MESSAGE_TYPE) return;
+      if (message.requestId && message.requestId !== transferRequestIdRef.current) return;
+
+      if (message.code || message.error) {
+        if (message.ok) {
+          setPrepareError("");
+          setPrepareMessage(getChoTotProgressMessage(message));
+        } else {
+          setPrepareMessage("");
+          setPrepareError(getChoTotErrorMessage(message));
+        }
+        return;
+      }
+
+      if (message.ok) {
+        setPrepareError("");
+        setPrepareMessage(message.message || "Đã gửi draft sang Chợ Tốt. Vui lòng kiểm tra form trước khi đăng tin.");
+      } else {
+        setPrepareMessage("");
+        setPrepareError(message.error || "Không gửi được draft sang Chợ Tốt. Hãy kiểm tra extension.");
+      }
+    }
+
+    window.addEventListener("message", handleExtensionResult);
+    return () => window.removeEventListener("message", handleExtensionResult);
   }, []);
 
   useEffect(() => {
@@ -255,6 +427,8 @@ export function OnlineListingPage() {
 
   function resetDraftState() {
     setOnlinePriceInput("");
+    setCondition("");
+    setDeviceType("unknown");
     setQuickSellingNote("");
     setSelectedNoteGroupIndex("");
     setTitleDraft("");
@@ -276,6 +450,8 @@ export function OnlineListingPage() {
   function resetDraftForProduct(product) {
     const nextTitle = buildSuggestedOnlineListingTitle(product);
     setOnlinePriceInput(getOnlinePriceInputFromProduct(product));
+    setCondition("");
+    setDeviceType(suggestDeviceType(product));
     setQuickSellingNote("");
     setSelectedNoteGroupIndex("");
     setTitleDraft(nextTitle);
@@ -321,6 +497,18 @@ export function OnlineListingPage() {
     setPrepareError("");
   }
 
+  function handleConditionChange(event) {
+    setCondition(event.target.value);
+    setPrepareMessage("");
+    setPrepareError("");
+  }
+
+  function handleDeviceTypeChange(event) {
+    setDeviceType(event.target.value);
+    setPrepareMessage("");
+    setPrepareError("");
+  }
+
   function handleTitleChange(event) {
     setTitleDraft(event.target.value);
     setIsTitleEdited(event.target.value !== suggestedTitle);
@@ -347,6 +535,31 @@ export function OnlineListingPage() {
     setIsDescriptionEdited(false);
   }
 
+  function buildChoTotDraftPayload(requestId) {
+    return {
+      version: 1,
+      source: POS_DRAFT_SOURCE,
+      requestId,
+      productId: Number(selectedProduct.id),
+      sku: selectedProduct.sku,
+      title: titleDraft.trim(),
+      price: Number(onlinePrice.value),
+      description: descriptionDraft.trim(),
+      condition,
+      componentType: "computer_component",
+      deviceType,
+      origin: "vietnam",
+      warrantyPolicy: getWarrantyPolicy(selectedNoteGroup),
+      images: images.map((image) => ({
+        id: Number(image.id),
+        originalName: image.original_name || "",
+        mimeType: image.mime_type || "",
+        thumbnailUrl: resolveApiAssetUrl(image.thumbnail_url),
+        downloadUrl: resolveApiAssetUrl(image.download_url)
+      }))
+    };
+  }
+
   function handlePrepareChoTot() {
     setPrepareMessage("");
     setPrepareError("");
@@ -354,7 +567,15 @@ export function OnlineListingPage() {
       setPrepareError(`Còn thiếu: ${readiness.missing.join(", ")}.`);
       return;
     }
-    setPrepareMessage("Sản phẩm đã sẵn sàng để kết nối Chrome extension.");
+    if (!window.postMessage) {
+      setPrepareError("Trình duyệt không hỗ trợ gửi draft sang extension.");
+      return;
+    }
+
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    transferRequestIdRef.current = requestId;
+    window.postMessage({ type: TRANSFER_MESSAGE_TYPE, payload: buildChoTotDraftPayload(requestId) }, window.location.origin);
+    setPrepareMessage("Đã gửi yêu cầu sang Chrome extension. Nếu không có phản hồi, hãy kiểm tra extension đã được cài và bật.");
   }
 
   async function copyText(text, successMessage) {
@@ -533,6 +754,8 @@ export function OnlineListingPage() {
                       <ReadinessItem label="Giá" ok={readiness.hasPrice} />
                       <ReadinessItem label="Mô tả" ok={readiness.hasDescription} />
                       <ReadinessItem label="Ảnh" ok={readiness.hasImages} />
+                      <ReadinessItem label="Tình trạng" ok={readiness.hasCondition} />
+                      <ReadinessItem label="Thiết bị" ok={readiness.hasDevice} />
                     </div>
                   </div>
                   <button
@@ -540,7 +763,7 @@ export function OnlineListingPage() {
                     onClick={handlePrepareChoTot}
                     className="h-11 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900"
                   >
-                    Chuẩn bị đăng Chợ Tốt
+                    Gửi sang Chợ Tốt
                   </button>
                 </div>
                 {(prepareMessage || prepareError || copyFeedback || copyError) && (
@@ -556,6 +779,33 @@ export function OnlineListingPage() {
 
                 <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
                   <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">Tình trạng</label>
+                        <select
+                          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                          value={condition}
+                          onChange={handleConditionChange}
+                        >
+                          {CONDITION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">Thiết bị</label>
+                        <select
+                          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                          value={deviceType}
+                          onChange={handleDeviceTypeChange}
+                        >
+                          {DEVICE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">Giá đăng online</label>
                       <input
@@ -653,6 +903,9 @@ export function OnlineListingPage() {
                     </div>
                   </div>
                 </div>
+                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  POC hiện gửi thông tin tin đăng sang extension; upload ảnh tự động chưa được bật, vui lòng kiểm tra và thêm ảnh thủ công trên Chợ Tốt nếu cần.
+                </p>
               </section>
 
               <section className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
