@@ -4,6 +4,44 @@ export const MAX_MONEY_AMOUNT = 999999999999999;
 const MONEY_INTEGER_MESSAGE = "Giá đăng online phải là số nguyên VND không âm.";
 const MONEY_MAX_MESSAGE = "Giá đăng online vượt quá giới hạn cho phép.";
 
+function ensureSentence(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function buildLeadSentence(productName, quickSellingNote) {
+  const name = String(productName || "").trim();
+  const note = String(quickSellingNote || "").trim();
+
+  if (name && note) return ensureSentence(`${name} ${note}`);
+  return ensureSentence(name || note);
+}
+
+function normalizeForMatch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\u0111/g, "d")
+    .replace(/\u0110/g, "D")
+    .toLowerCase();
+}
+
+function quickNoteHasWarranty(value) {
+  const normalized = normalizeForMatch(value);
+  return (
+    /\b(bh|hbh)\b/.test(normalized) ||
+    normalized.includes("bao hanh") ||
+    normalized.includes("het bao hanh") ||
+    normalized.includes("con bao hanh")
+  );
+}
+
+function isNoWarrantyGroup(group) {
+  const normalized = normalizeForMatch(getNoteGroupLabel(group)).replace(/\s+/g, "");
+  return normalized === "hbh" || normalized.includes("hetbaohanh");
+}
+
 export function formatVnd(value) {
   if (value === null || value === undefined || value === "") return "";
   return `${Number(value).toLocaleString("vi-VN")} đ`;
@@ -20,15 +58,15 @@ export function parseOnlinePriceInput(value) {
     return { value: null, error: "" };
   }
 
-  const hasSeparator = /[.,\s]/.test(rawValue);
-  const isValidDigits = /^\d+$/.test(rawValue);
-  const isValidGroupedNumber = /^\d{1,3}([.,\s]\d{3})+$/.test(rawValue);
-
-  if (!isValidDigits && !(hasSeparator && isValidGroupedNumber)) {
+  if (!/^[\d.,\s]+$/.test(rawValue)) {
     return { value: null, error: MONEY_INTEGER_MESSAGE };
   }
 
   const normalizedValue = rawValue.replace(/[.,\s]/g, "");
+  if (!normalizedValue) {
+    return { value: null, error: MONEY_INTEGER_MESSAGE };
+  }
+
   const numericValue = Number(normalizedValue);
   if (!Number.isSafeInteger(numericValue) || numericValue < 0) {
     return { value: null, error: MONEY_INTEGER_MESSAGE };
@@ -55,25 +93,23 @@ export function getNoteGroupLabel(group) {
   return group?.label || group?.note || "Không ghi chú";
 }
 
-export function buildOnlineListingDescription({ product, onlinePrice, selectedNoteGroup, hasImages }) {
-  const lines = [];
+export function buildOnlineListingDescription({ product, quickSellingNote = "", selectedNoteGroup = null }) {
+  const parts = [];
   const productName = String(product?.name || "").trim();
+  const note = String(quickSellingNote || "").trim();
+  const leadSentence = buildLeadSentence(productName, note);
 
-  if (productName) {
-    lines.push(productName);
+  if (leadSentence) {
+    parts.push(leadSentence);
   }
 
-  if (onlinePrice !== null && onlinePrice !== undefined) {
-    lines.push(`Giá đăng: ${formatVnd(onlinePrice)}`);
+  if (selectedNoteGroup && !quickNoteHasWarranty(note)) {
+    if (isNoWarrantyGroup(selectedNoteGroup)) {
+      parts.push("Hết bảo hành.");
+    } else {
+      parts.push(ensureSentence(getNoteGroupLabel(selectedNoteGroup)));
+    }
   }
 
-  if (selectedNoteGroup) {
-    lines.push(`Bảo hành/ghi chú: ${getNoteGroupLabel(selectedNoteGroup)}`);
-  }
-
-  if (hasImages) {
-    lines.push("Hình ảnh sản phẩm được đính kèm trong tin.");
-  }
-
-  return lines.join("\n");
+  return parts.join(" ");
 }

@@ -18,10 +18,7 @@ import {
 const PRODUCT_PAGE_SIZE = 20;
 
 function formatSalePrice(value) {
-  if (value === null || value === undefined) {
-    return "Chưa thiết lập";
-  }
-
+  if (value === null || value === undefined) return "Chưa thiết lập";
   return `${Number(value).toLocaleString("vi-VN")} đ`;
 }
 
@@ -31,21 +28,28 @@ function getSalePriceTone(value) {
   return "text-slate-900";
 }
 
-function formatNoteLabel(group) {
-  return getNoteGroupLabel(group);
+function getProductQueueStatus(product) {
+  if (!product?.primary_image && Number(product?.image_count || 0) <= 0) {
+    return { label: "Thiếu ảnh", className: "bg-amber-50 text-amber-700 ring-amber-100" };
+  }
+  if (product?.sale_price === null || product?.sale_price === undefined) {
+    return { label: "Thiếu giá", className: "bg-red-50 text-red-700 ring-red-100" };
+  }
+  return { label: "Có thể chuẩn bị", className: "bg-emerald-50 text-emerald-700 ring-emerald-100" };
 }
 
 function ProductListItem({ product, isSelected, onSelect }) {
   const thumbnailPath = product.primary_image
     ? `/admin/products/${product.id}/images/${product.primary_image.id}/thumbnail`
     : "";
+  const status = getProductQueueStatus(product);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(product)}
       className={[
-        "grid w-full grid-cols-[56px_minmax(0,1fr)] gap-3 rounded-md border p-3 text-left transition",
+        "grid w-full grid-cols-[48px_minmax(0,1fr)] gap-3 rounded-md border px-3 py-2 text-left transition",
         isSelected
           ? "border-brand-500 bg-brand-50 ring-1 ring-brand-200"
           : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
@@ -54,17 +58,20 @@ function ProductListItem({ product, isSelected, onSelect }) {
       <AuthenticatedImage
         path={thumbnailPath}
         alt={product.name}
-        className="h-14 w-14 rounded border border-slate-200 object-contain"
+        className="h-12 w-12 rounded border border-slate-200 object-contain"
       />
       <div className="min-w-0">
-        <p className="line-clamp-2 break-words text-sm font-semibold text-slate-900">{product.name}</p>
-        <p className="mt-1 truncate text-xs text-slate-500" title={product.sku}>
+        <div className="flex items-start justify-between gap-2">
+          <p className="line-clamp-2 break-words text-sm font-semibold leading-5 text-slate-900">{product.name}</p>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${status.className}`}>
+            {status.label}
+          </span>
+        </div>
+        <p className="mt-0.5 truncate text-xs text-slate-500" title={product.sku}>
           {product.sku}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-          <span className={`font-semibold ${getSalePriceTone(product.sale_price)}`}>
-            {formatSalePrice(product.sale_price)}
-          </span>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span className={`font-semibold ${getSalePriceTone(product.sale_price)}`}>{formatSalePrice(product.sale_price)}</span>
           <span className="font-bold text-brand-800">Tồn {Number(product.total_quantity || 0)}</span>
         </div>
       </div>
@@ -74,14 +81,27 @@ function ProductListItem({ product, isSelected, onSelect }) {
 
 function DetailEmptyState() {
   return (
-    <div className="flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+    <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
       <div className="max-w-sm">
         <p className="text-base font-semibold text-slate-800">Chưa chọn sản phẩm</p>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          Tìm sản phẩm còn tồn ở danh sách bên trái, sau đó chọn một sản phẩm để xem thông tin và ảnh hiện có.
+          Chọn một sản phẩm còn tồn để chuẩn bị tiêu đề, giá, mô tả và ảnh cho hàng chờ đăng.
         </p>
       </div>
     </div>
+  );
+}
+
+function ReadinessItem({ label, ok }) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
+        ok ? "bg-emerald-50 text-emerald-700 ring-emerald-100" : "bg-slate-100 text-slate-600 ring-slate-200"
+      ].join(" ")}
+    >
+      {ok ? "✓" : "•"} {label}
+    </span>
   );
 }
 
@@ -101,6 +121,7 @@ export function OnlineListingPage() {
   const [downloadingImageId, setDownloadingImageId] = useState(null);
   const [downloadError, setDownloadError] = useState("");
   const [onlinePriceInput, setOnlinePriceInput] = useState("");
+  const [quickSellingNote, setQuickSellingNote] = useState("");
   const [selectedNoteGroupIndex, setSelectedNoteGroupIndex] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
   const [descriptionDraft, setDescriptionDraft] = useState("");
@@ -108,6 +129,8 @@ export function OnlineListingPage() {
   const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [copyError, setCopyError] = useState("");
+  const [prepareMessage, setPrepareMessage] = useState("");
+  const [prepareError, setPrepareError] = useState("");
   const imageRequestIdRef = useRef(0);
   const copyFeedbackTimerRef = useRef(null);
 
@@ -121,12 +144,25 @@ export function OnlineListingPage() {
   const generatedDescription = useMemo(
     () => buildOnlineListingDescription({
       product: selectedProduct,
-      onlinePrice: onlinePrice.error ? null : onlinePrice.value,
-      selectedNoteGroup,
-      hasImages: images.length > 0
+      quickSellingNote,
+      selectedNoteGroup
     }),
-    [images.length, onlinePrice.error, onlinePrice.value, selectedNoteGroup, selectedProduct]
+    [quickSellingNote, selectedNoteGroup, selectedProduct]
   );
+  const readiness = useMemo(() => {
+    const hasTitle = titleDraft.trim().length > 0;
+    const hasPrice = !onlinePrice.error && onlinePrice.value !== null && onlinePrice.value !== undefined;
+    const hasDescription = descriptionDraft.trim().length > 0;
+    const hasImages = images.length > 0;
+    const missing = [
+      !hasTitle ? "tiêu đề" : "",
+      !hasPrice ? "giá" : "",
+      !hasDescription ? "mô tả" : "",
+      !hasImages ? "ảnh" : ""
+    ].filter(Boolean);
+
+    return { hasTitle, hasPrice, hasDescription, hasImages, missing, isReady: missing.length === 0 };
+  }, [descriptionDraft, images.length, onlinePrice.error, onlinePrice.value, titleDraft]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -137,9 +173,7 @@ export function OnlineListingPage() {
   }, [searchInput]);
 
   useEffect(() => () => {
-    if (copyFeedbackTimerRef.current) {
-      window.clearTimeout(copyFeedbackTimerRef.current);
-    }
+    if (copyFeedbackTimerRef.current) window.clearTimeout(copyFeedbackTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -149,14 +183,7 @@ export function OnlineListingPage() {
     setImages([]);
     setImageError("");
     setDownloadError("");
-    setOnlinePriceInput("");
-    setSelectedNoteGroupIndex("");
-    setTitleDraft("");
-    setDescriptionDraft("");
-    setIsTitleEdited(false);
-    setIsDescriptionEdited(false);
-    setCopyFeedback("");
-    setCopyError("");
+    resetDraftState();
 
     async function loadProducts() {
       setIsLoadingProducts(true);
@@ -211,9 +238,7 @@ export function OnlineListingPage() {
         setImages([]);
         setImageError(error?.message || "Không thể tải ảnh sản phẩm.");
       } finally {
-        if (active && imageRequestIdRef.current === requestId) {
-          setIsLoadingImages(false);
-        }
+        if (active && imageRequestIdRef.current === requestId) setIsLoadingImages(false);
       }
     }
 
@@ -228,6 +253,20 @@ export function OnlineListingPage() {
     setDescriptionDraft(generatedDescription);
   }, [generatedDescription, isDescriptionEdited, selectedProduct]);
 
+  function resetDraftState() {
+    setOnlinePriceInput("");
+    setQuickSellingNote("");
+    setSelectedNoteGroupIndex("");
+    setTitleDraft("");
+    setDescriptionDraft("");
+    setIsTitleEdited(false);
+    setIsDescriptionEdited(false);
+    setCopyFeedback("");
+    setCopyError("");
+    setPrepareMessage("");
+    setPrepareError("");
+  }
+
   function handleClearSearch() {
     setSearchInput("");
     setDebouncedSearch("");
@@ -236,22 +275,17 @@ export function OnlineListingPage() {
 
   function resetDraftForProduct(product) {
     const nextTitle = buildSuggestedOnlineListingTitle(product);
-    const nextPriceInput = getOnlinePriceInputFromProduct(product);
-    const nextPrice = parseOnlinePriceInput(nextPriceInput);
-
-    setOnlinePriceInput(nextPriceInput);
+    setOnlinePriceInput(getOnlinePriceInputFromProduct(product));
+    setQuickSellingNote("");
     setSelectedNoteGroupIndex("");
     setTitleDraft(nextTitle);
-    setDescriptionDraft(buildOnlineListingDescription({
-      product,
-      onlinePrice: nextPrice.error ? null : nextPrice.value,
-      selectedNoteGroup: null,
-      hasImages: false
-    }));
+    setDescriptionDraft(buildOnlineListingDescription({ product, quickSellingNote: "", selectedNoteGroup: null }));
     setIsTitleEdited(false);
     setIsDescriptionEdited(false);
     setCopyFeedback("");
     setCopyError("");
+    setPrepareMessage("");
+    setPrepareError("");
   }
 
   function handleSelectProduct(product) {
@@ -265,6 +299,8 @@ export function OnlineListingPage() {
 
   function handleOnlinePriceChange(event) {
     setOnlinePriceInput(event.target.value);
+    setPrepareMessage("");
+    setPrepareError("");
   }
 
   function handleOnlinePriceBlur() {
@@ -273,18 +309,30 @@ export function OnlineListingPage() {
     setOnlinePriceInput(formatMoneyInputValue(parsed.value));
   }
 
-  function handleNoteGroupChange(event) {
-    setSelectedNoteGroupIndex(event.target.value);
+  function handleQuickSellingNoteChange(event) {
+    setQuickSellingNote(event.target.value);
+    setPrepareMessage("");
+    setPrepareError("");
+  }
+
+  function handleNoteGroupChange(value) {
+    setSelectedNoteGroupIndex(value);
+    setPrepareMessage("");
+    setPrepareError("");
   }
 
   function handleTitleChange(event) {
     setTitleDraft(event.target.value);
     setIsTitleEdited(event.target.value !== suggestedTitle);
+    setPrepareMessage("");
+    setPrepareError("");
   }
 
   function handleDescriptionChange(event) {
     setDescriptionDraft(event.target.value);
     setIsDescriptionEdited(event.target.value !== generatedDescription);
+    setPrepareMessage("");
+    setPrepareError("");
   }
 
   function handleRestoreTitle() {
@@ -297,6 +345,16 @@ export function OnlineListingPage() {
     if (!confirmed) return;
     setDescriptionDraft(generatedDescription);
     setIsDescriptionEdited(false);
+  }
+
+  function handlePrepareChoTot() {
+    setPrepareMessage("");
+    setPrepareError("");
+    if (!readiness.isReady) {
+      setPrepareError(`Còn thiếu: ${readiness.missing.join(", ")}.`);
+      return;
+    }
+    setPrepareMessage("Sản phẩm đã sẵn sàng để kết nối Chrome extension.");
   }
 
   async function copyText(text, successMessage) {
@@ -334,22 +392,22 @@ export function OnlineListingPage() {
   }
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-4">
       <div>
-        <h2 className="text-2xl font-semibold text-slate-900">Đăng bán online</h2>
+        <h2 className="text-2xl font-semibold text-slate-900">Hàng chờ đăng</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Chọn sản phẩm còn tồn để xem thông tin và ảnh trước khi chuẩn bị tin đăng.
+          Chọn sản phẩm còn tồn, rà nhanh phần còn thiếu và chuẩn bị nội dung để đăng Chợ Tốt ở bước sau.
         </p>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.4fr)]">
-        <aside className="min-w-0 space-y-4">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Tìm sản phẩm còn tồn</label>
+      <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.45fr)]">
+        <aside className="min-w-0 space-y-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Tìm hàng còn tồn</label>
             <div className="relative">
               <input
-                className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Tìm theo tên sản phẩm hoặc SKU"
+                className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="Tên sản phẩm hoặc SKU"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
               />
@@ -358,7 +416,7 @@ export function OnlineListingPage() {
                   type="button"
                   aria-label="Xóa tìm kiếm"
                   onClick={handleClearSearch}
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 >
                   ×
                 </button>
@@ -367,21 +425,23 @@ export function OnlineListingPage() {
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <p className="text-sm font-semibold text-slate-900">Sản phẩm</p>
-              <p className="mt-1 text-xs text-slate-500">Chỉ hiển thị sản phẩm đang hoạt động và có tồn.</p>
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2.5">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Sản phẩm còn tồn</p>
+                <p className="text-xs text-slate-500">Chọn sản phẩm để chuẩn bị tin đăng.</p>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">Trang {page}/{totalPages}</span>
             </div>
 
-            <div className="max-h-[calc(100vh-300px)] min-h-[320px] space-y-2 overflow-y-auto p-3">
+            <div className="max-h-[calc(100vh-270px)] min-h-[300px] space-y-2 overflow-y-auto p-2.5">
               {isLoadingProducts ? (
                 <div className="space-y-2">
                   {[1, 2, 3, 4].map((item) => (
-                    <div key={item} className="grid grid-cols-[56px_1fr] gap-3 rounded-md border border-slate-100 p-3">
-                      <div className="h-14 w-14 animate-pulse rounded bg-slate-100" />
+                    <div key={item} className="grid grid-cols-[48px_1fr] gap-3 rounded-md border border-slate-100 p-2">
+                      <div className="h-12 w-12 animate-pulse rounded bg-slate-100" />
                       <div className="space-y-2 py-1">
                         <div className="h-4 w-4/5 animate-pulse rounded bg-slate-100" />
                         <div className="h-3 w-1/2 animate-pulse rounded bg-slate-100" />
-                        <div className="h-3 w-2/3 animate-pulse rounded bg-slate-100" />
                       </div>
                     </div>
                   ))}
@@ -389,17 +449,13 @@ export function OnlineListingPage() {
               ) : productError ? (
                 <div className="rounded-md bg-red-50 px-3 py-3 text-sm text-red-700">{productError}</div>
               ) : products.length === 0 ? (
-                <div className="flex min-h-[260px] items-center justify-center rounded-md border border-dashed border-slate-300 px-4 py-8 text-center">
+                <div className="flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-slate-300 px-4 py-8 text-center">
                   <div>
                     <p className="text-sm font-semibold text-slate-700">
-                      {sourceProductCount > 0
-                        ? "Trang này không có sản phẩm còn tồn."
-                        : "Không có sản phẩm phù hợp."}
+                      {sourceProductCount > 0 ? "Trang này không có sản phẩm còn tồn." : "Không có sản phẩm phù hợp."}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {sourceProductCount > 0
-                        ? "Hãy thử trang khác hoặc thay đổi từ khóa tìm kiếm."
-                        : "Thử tìm bằng tên hoặc SKU khác."}
+                      {sourceProductCount > 0 ? "Hãy thử trang khác hoặc đổi từ khóa." : "Thử tìm bằng tên hoặc SKU khác."}
                     </p>
                   </div>
                 </div>
@@ -415,23 +471,20 @@ export function OnlineListingPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-4 py-3">
+            <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-3 py-2.5">
               <button
                 type="button"
                 disabled={page <= 1 || isLoadingProducts}
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
-                className="h-9 rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-8 rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Trước
               </button>
-              <span className="text-sm text-slate-600">
-                Trang {page} / {totalPages}
-              </span>
               <button
                 type="button"
                 disabled={page >= totalPages || isLoadingProducts}
                 onClick={() => setPage((current) => (current < totalPages ? current + 1 : current))}
-                className="h-9 rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-8 rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Sau
               </button>
@@ -443,142 +496,71 @@ export function OnlineListingPage() {
           {!selectedProduct ? (
             <DetailEmptyState />
           ) : (
-            <article className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
+            <article className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
-                  <h3 className="break-words text-xl font-semibold text-slate-900">{selectedProduct.name}</h3>
-                  <p className="mt-2 break-all text-sm text-slate-500">SKU: {selectedProduct.sku}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="break-words text-xl font-semibold text-slate-900">{selectedProduct.name}</h3>
+                    <span
+                      className={[
+                        "rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
+                        readiness.isReady
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                          : "bg-amber-50 text-amber-700 ring-amber-100"
+                      ].join(" ")}
+                    >
+                      {readiness.isReady ? "Sẵn sàng đăng" : "Chưa sẵn sàng"}
+                    </span>
+                  </div>
+                  <p className="mt-1 break-all text-sm text-slate-500">SKU: {selectedProduct.sku}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:min-w-80">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Giá bán</p>
-                    <p className={`mt-1 text-base font-bold ${getSalePriceTone(selectedProduct.sale_price)}`}>
-                      {formatSalePrice(selectedProduct.sale_price)}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tổng tồn</p>
-                    <p className="mt-1 text-base font-bold text-brand-800">
-                      {Number(selectedProduct.total_quantity || 0)}
-                    </p>
-                  </div>
+                <div className="flex flex-wrap gap-2 text-sm">
+                  <span className={`rounded-md bg-slate-50 px-3 py-2 font-semibold ${getSalePriceTone(selectedProduct.sale_price)}`}>
+                    Giá bán: {formatSalePrice(selectedProduct.sale_price)}
+                  </span>
+                  <span className="rounded-md bg-slate-50 px-3 py-2 font-bold text-brand-800">
+                    Tồn {Number(selectedProduct.total_quantity || 0)}
+                  </span>
                 </div>
               </div>
 
-              <section>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h4 className="text-sm font-semibold text-slate-900">Ảnh sản phẩm</h4>
-                  <p className="text-xs text-slate-500">Tối đa 3 ảnh hiện có</p>
-                </div>
-
-                {isLoadingImages ? (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {[1, 2, 3].map((item) => (
-                      <div key={item} className="aspect-square animate-pulse rounded-md bg-slate-100" />
-                    ))}
-                  </div>
-                ) : imageError ? (
-                  <p className="rounded-md bg-red-50 px-3 py-3 text-sm text-red-700">{imageError}</p>
-                ) : images.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
-                    Sản phẩm này chưa có ảnh.
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {images.map((image, index) => (
-                        <div key={image.id} className="min-w-0 rounded-md border border-slate-200 bg-slate-50 p-2">
-                          <AuthenticatedImage
-                            path={`/admin/products/${selectedProduct.id}/images/${image.id}/thumbnail`}
-                            alt={`${selectedProduct.name} ${index + 1}`}
-                            className="aspect-square w-full rounded border border-slate-200 bg-white object-contain"
-                          />
-                          <p className="mt-2 truncate text-xs text-slate-600" title={image.original_name}>
-                            {image.original_name}
-                          </p>
-                          <button
-                            type="button"
-                            disabled={downloadingImageId === image.id}
-                            onClick={() => handleDownloadImage(image)}
-                            className="mt-2 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {downloadingImageId === image.id ? "Đang tải..." : "Tải ảnh gốc"}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    {downloadError && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{downloadError}</p>}
-                  </>
-                )}
-              </section>
-
-              <section>
-                <h4 className="text-sm font-semibold text-slate-900">Nhóm bảo hành / ghi chú</h4>
-                <div className="mt-3 space-y-2">
-                  <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
-                    <input
-                      type="radio"
-                      name="online-listing-note-group"
-                      value=""
-                      checked={selectedNoteGroupIndex === ""}
-                      onChange={handleNoteGroupChange}
-                      className="h-4 w-4"
-                    />
-                    <span className="font-medium text-slate-700">Không đưa bảo hành/ghi chú vào tin</span>
-                  </label>
-
-                  {selectedNoteGroups.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {selectedNoteGroups.map((group, index) => (
-                        <label
-                          key={`${group.note_key || group.note || "empty"}-${group.quantity}`}
-                          className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
-                        >
-                          <span className="flex min-w-0 items-center gap-3">
-                            <input
-                              type="radio"
-                              name="online-listing-note-group"
-                              value={String(index)}
-                              checked={selectedNoteGroupIndex === String(index)}
-                              onChange={handleNoteGroupChange}
-                              className="h-4 w-4 shrink-0"
-                            />
-                            <span className="break-words font-medium text-slate-700">{formatNoteLabel(group)}</span>
-                          </span>
-                          <span className="shrink-0 font-bold text-brand-800">{Number(group.quantity || 0)}</span>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-md border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-500">
-                      Chưa có tồn kho theo nhóm bảo hành / ghi chú.
-                    </p>
-                  )}
-                </div>
-              </section>
-
-              <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+              <section className="rounded-lg bg-brand-50/40 p-3 ring-1 ring-brand-100">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h4 className="text-base font-semibold text-slate-900">Bản nháp Chợ Tốt</h4>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Nội dung chỉ nằm trên trình duyệt trong phiên làm việc này, chưa lưu vào hệ thống.
-                    </p>
+                    <h4 className="text-base font-semibold text-slate-900">Chuẩn bị tin đăng</h4>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <ReadinessItem label="Tiêu đề" ok={readiness.hasTitle} />
+                      <ReadinessItem label="Giá" ok={readiness.hasPrice} />
+                      <ReadinessItem label="Mô tả" ok={readiness.hasDescription} />
+                      <ReadinessItem label="Ảnh" ok={readiness.hasImages} />
+                    </div>
                   </div>
-                  {(copyFeedback || copyError) && (
-                    <p className={`text-sm font-medium ${copyError ? "text-red-700" : "text-emerald-700"}`}>
-                      {copyError || copyFeedback}
-                    </p>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handlePrepareChoTot}
+                    className="h-11 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900"
+                  >
+                    Chuẩn bị đăng Chợ Tốt
+                  </button>
                 </div>
+                {(prepareMessage || prepareError || copyFeedback || copyError) && (
+                  <p
+                    className={[
+                      "mt-2 text-sm font-medium",
+                      prepareError || copyError ? "text-red-700" : "text-emerald-700"
+                    ].join(" ")}
+                  >
+                    {prepareError || copyError || prepareMessage || copyFeedback}
+                  </p>
+                )}
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)]">
-                  <div className="space-y-4">
+                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
+                  <div className="space-y-3">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">Giá đăng online</label>
                       <input
                         inputMode="numeric"
-                        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                         placeholder="Để trống nếu chưa nhập giá"
                         value={onlinePriceInput}
                         onChange={handleOnlinePriceChange}
@@ -591,9 +573,7 @@ export function OnlineListingPage() {
                           Giá đang để 0 đ. Hãy kiểm tra trước khi sao chép nội dung.
                         </p>
                       ) : (
-                        <p className="mt-1 text-xs text-slate-500">
-                          Giá này chỉ dùng cho tin đăng, không làm thay đổi giá bán tại cửa hàng.
-                        </p>
+                        <p className="mt-1 text-xs text-slate-500">Chỉ dùng cho tin đăng, không đổi giá bán tại cửa hàng.</p>
                       )}
                     </div>
 
@@ -605,49 +585,46 @@ export function OnlineListingPage() {
                         </span>
                       </div>
                       <input
-                        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                         value={titleDraft}
                         onChange={handleTitleChange}
                       />
                       {titleDraft.length > ONLINE_LISTING_TITLE_MAX_LENGTH && (
                         <p className="mt-1 text-xs font-medium text-amber-700">
-                          Tiêu đề đang dài hơn giới hạn nội bộ tạm dùng, chưa phải giới hạn chính thức của Chợ Tốt.
+                          Tiêu đề dài hơn giới hạn nội bộ tạm dùng.
                         </p>
                       )}
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => copyText(titleDraft, "Đã sao chép tiêu đề")}
-                          className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                        >
-                          Sao chép tiêu đề
-                        </button>
-                        {isTitleEdited && (
-                          <button
-                            type="button"
-                            onClick={handleRestoreTitle}
-                            className="h-9 rounded-md border border-brand-200 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
-                          >
-                            Khôi phục tiêu đề gợi ý
-                          </button>
-                        )}
-                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Ghi chú bán hàng nhanh</label>
+                      <input
+                        className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                        placeholder="VD: tháo máy, hàng 2nd hết BH, bao test 7 ngày"
+                        value={quickSellingNote}
+                        onChange={handleQuickSellingNoteChange}
+                      />
                     </div>
                   </div>
 
                   <div>
                     <div className="mb-1 flex items-center justify-between gap-3">
                       <label className="block text-sm font-medium text-slate-700">Mô tả</label>
-                      {isDescriptionEdited && (
-                        <span className="text-xs font-medium text-amber-700">Đã sửa thủ công</span>
-                      )}
+                      {isDescriptionEdited && <span className="text-xs font-medium text-amber-700">Đã sửa thủ công</span>}
                     </div>
                     <textarea
-                      className="min-h-72 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-brand-500"
+                      className="min-h-44 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-brand-500"
                       value={descriptionDraft}
                       onChange={handleDescriptionChange}
                     />
                     <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => copyText(titleDraft, "Đã sao chép tiêu đề")}
+                        className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                      >
+                        Sao chép tiêu đề
+                      </button>
                       <button
                         type="button"
                         onClick={() => copyText(descriptionDraft, "Đã sao chép mô tả")}
@@ -655,17 +632,110 @@ export function OnlineListingPage() {
                       >
                         Sao chép mô tả
                       </button>
+                      {isTitleEdited && (
+                        <button
+                          type="button"
+                          onClick={handleRestoreTitle}
+                          className="h-9 rounded-md border border-brand-200 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                        >
+                          Khôi phục tiêu đề
+                        </button>
+                      )}
                       {isDescriptionEdited && (
                         <button
                           type="button"
                           onClick={handleRegenerateDescription}
                           className="h-9 rounded-md border border-brand-200 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
-                          title="Tạo lại mô tả sẽ thay thế nội dung đang sửa."
                         >
                           Tạo lại mô tả
                         </button>
                       )}
                     </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <h4 className="text-sm font-semibold text-slate-900">Ảnh sản phẩm</h4>
+                    <span className="text-xs text-slate-500">Tối đa 3 ảnh hiện có</span>
+                  </div>
+
+                  {isLoadingImages ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1, 2, 3].map((item) => (
+                        <div key={item} className="aspect-square animate-pulse rounded-md bg-slate-100" />
+                      ))}
+                    </div>
+                  ) : imageError ? (
+                    <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{imageError}</p>
+                  ) : images.length === 0 ? (
+                    <p className="rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                      Chưa có ảnh — cần bổ sung trước khi đăng.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-2">
+                        {images.map((image, index) => (
+                          <div key={image.id} className="min-w-0 rounded-md bg-slate-50 p-2">
+                            <AuthenticatedImage
+                              path={`/admin/products/${selectedProduct.id}/images/${image.id}/thumbnail`}
+                              alt={`${selectedProduct.name} ${index + 1}`}
+                              className="aspect-square w-full rounded border border-slate-200 bg-white object-contain"
+                            />
+                            <button
+                              type="button"
+                              disabled={downloadingImageId === image.id}
+                              onClick={() => handleDownloadImage(image)}
+                              className="mt-1.5 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {downloadingImageId === image.id ? "Đang tải..." : "Tải ảnh gốc"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      {downloadError && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{downloadError}</p>}
+                    </>
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">Bảo hành / ghi chú</h4>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleNoteGroupChange("")}
+                      className={[
+                        "rounded-full px-3 py-1.5 text-xs font-semibold ring-1",
+                        selectedNoteGroupIndex === ""
+                          ? "bg-brand-700 text-white ring-brand-700"
+                          : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                      ].join(" ")}
+                    >
+                      Không đưa bảo hành
+                    </button>
+                    {selectedNoteGroups.map((group, index) => (
+                      <button
+                        key={`${group.note_key || group.note || "empty"}-${group.quantity}`}
+                        type="button"
+                        onClick={() => handleNoteGroupChange(String(index))}
+                        className={[
+                          "rounded-full px-3 py-1.5 text-xs font-semibold ring-1",
+                          selectedNoteGroupIndex === String(index)
+                            ? "bg-brand-700 text-white ring-brand-700"
+                            : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                        ].join(" ")}
+                      >
+                        {getNoteGroupLabel(group)}
+                        <span className="ml-1 opacity-70">({Number(group.quantity || 0)})</span>
+                      </button>
+                    ))}
+                    {selectedNoteGroups.length === 0 && (
+                      <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                        Không có nhóm ghi chú
+                      </span>
+                    )}
                   </div>
                 </div>
               </section>
