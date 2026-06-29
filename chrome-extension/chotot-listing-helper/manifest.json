@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Phuoc Tai ChoTot Listing Helper",
+  "version": "0.1.0",
+  "description": "Proof of concept helper to transfer POS online listing drafts into Cho Tot posting forms.",
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "https://www.chotot.com/*",
+    "https://*.chotot.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:*/*", "http://127.0.0.1:*/*"],
+      "js": ["shared/constants.js", "content/pos-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.chotot.com/*", "https://*.chotot.com/*"],
+      "js": ["shared/constants.js", "content/chotot-fill.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
