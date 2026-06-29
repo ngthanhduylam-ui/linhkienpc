@@ -8,6 +8,7 @@ const inventoryItems = [
 
 const mainItems = [
   { label: "Sản phẩm", to: "/admin/products" },
+  { label: "Đăng bán online", to: "/admin/online-listing" },
   { label: "Nhà cung cấp", to: "/admin/suppliers" },
   { label: "Khách hàng", to: "/admin/customers" },
   { label: "Lịch sử giao dịch", to: "/admin/transaction-history" }

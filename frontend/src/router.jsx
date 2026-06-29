@@ -5,6 +5,7 @@ import { AdminLoginPage } from "./pages/AdminLoginPage";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage";
 import { CustomerListPage } from "./pages/CustomerListPage";
 import { InventoryCheckPage } from "./pages/InventoryCheckPage";
+import { OnlineListingPage } from "./pages/OnlineListingPage";
 import { ProductFormPage } from "./pages/ProductFormPage";
 import { ProductManagementPage } from "./pages/ProductManagementPage";
 import { PublicSearchPage } from "./pages/PublicSearchPage";
@@ -48,6 +49,7 @@ export const appRouter = createBrowserRouter([
           { path: "stock-out-single", element: <StockOutPage /> },
           { path: "stock-out-bulk", element: <Navigate to="/admin/stock-out" replace /> },
           { path: "inventory-check", element: <InventoryCheckPage /> },
+          { path: "online-listing", element: <OnlineListingPage /> },
           { path: "transaction-history", element: <TransactionHistoryPage /> },
           { path: "transaction-history/:voucherId", element: <TransactionVoucherDetailPage /> }
         ]
