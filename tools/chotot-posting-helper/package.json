@@ -1,0 +1,17 @@
+{
+  "name": "phuoc-tai-chotot-posting-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-only Playwright helper for preparing Cho Tot posting forms.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/browser.js && node --check src/image-fetcher.js && node --check src/chotot-image-upload.js && node --check src/config.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -10,9 +10,10 @@ import {
   ONLINE_LISTING_TITLE_MAX_LENGTH,
   buildOnlineListingDescription,
   buildSuggestedOnlineListingTitle,
-  formatMoneyInputValue,
+  digitsToMoneyInput,
   getNoteGroupLabel,
   getOnlinePriceInputFromProduct,
+  moneyInputToDigits,
   parseOnlinePriceInput
 } from "../utils/onlineListingDraft";
 
@@ -21,6 +22,7 @@ const POS_DRAFT_SOURCE = "vitinh-phuoc-tai-pos";
 const TRANSFER_MESSAGE_TYPE = "PHUOC_TAI_CHO_TOT_TRANSFER_DRAFT";
 const TRANSFER_RESULT_MESSAGE_TYPE = "PHUOC_TAI_CHO_TOT_TRANSFER_RESULT";
 const CHOTOT_MINIMUM_PRICE = 1000;
+const CHOTOT_HELPER_BASE_URL = "http://127.0.0.1:17321";
 const CHOTOT_PROGRESS_MESSAGES = {
   OPENING_CHOTOT: "Đang mở hoặc chuyển sang tab Chợ Tốt.",
   FORM_ALREADY_OPEN: "Đã nhận diện form đăng tin Chợ Tốt.",
@@ -172,6 +174,107 @@ function getChoTotErrorMessage(message) {
   return CHOTOT_ERROR_MESSAGES[message.error] || message.message || "Không gửi được draft sang Chợ Tốt. Hãy kiểm tra extension.";
 }
 
+function getHelperErrorMessage(code) {
+  const messages = {
+    HELPER_OFFLINE: "Không kết nối được helper trên laptop.",
+    NO_IMAGE: "Sản phẩm chưa có ảnh được chọn để gửi sang Chợ Tốt.",
+    INVALID_PAYLOAD: "Dữ liệu gửi sang helper chưa hợp lệ.",
+    POS_ORIGIN_NOT_ALLOWED: "Helper chưa cho phép origin POS hiện tại.",
+    DUPLICATE_REQUEST: "Yêu cầu này đã được gửi trước đó.",
+    REQUEST_IN_PROGRESS: "Helper đang xử lý một tin khác. Vui lòng chờ hoàn tất rồi thử lại.",
+    CHOTOT_TAB_CLOSED_BEFORE_READY: "Cửa sổ Chợ Tốt đã đóng trước khi tin đăng sẵn sàng. Vui lòng thử lại.",
+    IMAGE_FETCH_FAILED: "Helper không tải được ảnh từ POS.",
+    IMAGE_PREPARATION_COUNT_MISMATCH: "Helper chưa chuẩn bị đủ file ảnh trước khi gửi sang Chợ Tốt.",
+    IMAGE_NOT_AVAILABLE: "Ảnh công khai chưa sẵn sàng hoặc không tồn tại.",
+    IMAGE_INVALID_SIGNATURE: "Helper không nhận diện được định dạng ảnh.",
+    IMAGE_TOO_LARGE: "Ảnh vượt giới hạn dung lượng helper.",
+    CHOTOT_LOGIN_REQUIRED: "Chợ Tốt cần đăng nhập hoặc xác minh thủ công.",
+    CHOTOT_POSTING_FORM_NOT_FOUND: "Helper chưa tìm thấy form đăng tin Chợ Tốt.",
+    CHOTOT_ELECTRONICS_CATEGORY_NOT_FOUND: "Không tìm thấy danh mục Đồ điện tử trên Chợ Tốt.",
+    CHOTOT_ELECTRONICS_CATEGORY_AMBIGUOUS: "Helper chưa xác định chắc chắn dòng Đồ điện tử trên Chợ Tốt.",
+    CHOTOT_COMPONENT_CATEGORY_NOT_FOUND: "Không tìm thấy danh mục Linh kiện trên Chợ Tốt.",
+    CHOTOT_POSTING_FORM_TIMEOUT: "Chợ Tốt chưa mở được biểu mẫu đăng tin.",
+    CHOTOT_WRONG_CATEGORY_FORM: "Chợ Tốt đang mở sai loại biểu mẫu. Helper đã dừng để tránh tải ảnh nhầm.",
+    CHOTOT_EXISTING_IMAGES: "Form Chợ Tốt đã có ảnh. Hãy dùng form trống để thử.",
+    IMAGE_INPUT_NOT_FOUND: "Helper chưa tìm thấy ô tải ảnh trên Chợ Tốt.",
+    IMAGE_UPLOAD_COMMAND_FAILED: "Helper chưa gửi được lệnh tải ảnh sang Chợ Tốt.",
+    IMAGE_UPLOAD_FAILED: "Helper chưa tải được ảnh lên Chợ Tốt.",
+    IMAGE_PROCESSING_PARTIAL_TIMEOUT: "Chợ Tốt đang xử lý ảnh lâu hơn bình thường. Vui lòng kiểm tra ảnh trên form.",
+    IMAGE_COUNT_MISMATCH: "Số ảnh trên Chợ Tốt chưa khớp với số ảnh đã chọn.",
+    IMAGE_THUMBNAIL_COUNT_MISMATCH: "Helper chưa xác minh được đủ số thumbnail ảnh trên Chợ Tốt.",
+    IMAGE_THUMBNAIL_VERIFICATION_TIMEOUT: "Helper chờ xác minh thumbnail ảnh quá lâu.",
+    IMAGES_VISIBLE_VERIFICATION_UNCERTAIN: "Ảnh đã xuất hiện trên Chợ Tốt nhưng helper chưa xác minh chắc chắn. Vui lòng kiểm tra trước khi tiếp tục.",
+    IMAGE_UPLOAD_REJECTED: "Chợ Tốt từ chối ảnh sau khi tải lên.",
+    IMAGE_THUMBNAIL_NOT_DETECTED: "Helper chưa xác nhận được thumbnail ảnh trên Chợ Tốt.",
+    DESCRIPTION_TOO_SHORT: "Mô tả cần tối thiểu 10 từ.",
+    DESCRIPTION_TOO_LONG: "Mô tả vượt quá 1500 ký tự.",
+    DESCRIPTION_FIELD_NOT_FOUND: "Helper chưa tìm thấy ô mô tả trên Chợ Tốt.",
+    DESCRIPTION_FIELD_SCOPE_MISMATCH: "Helper phát hiện vùng mô tả không đúng nên đã dừng để tránh ghi nhầm.",
+    DESCRIPTION_FILL_FAILED: "Helper chưa điền được mô tả trên Chợ Tốt.",
+    DESCRIPTION_CONFIRM_FAILED: "Helper chưa xác nhận được phần mô tả trên Chợ Tốt.",
+    CHOTOT_AI_RENDER_TIMEOUT: "Chợ Tốt xử lý tự động quá lâu sau khi xác nhận mô tả.",
+    REMAINING_FIELDS_TIMEOUT: "Chợ Tốt chưa mở các trường chi tiết sau khi tải ảnh và mô tả.",
+    TITLE_FIELD_NOT_FOUND: "Helper chưa tìm thấy ô tiêu đề trên Chợ Tốt.",
+    TITLE_FIELD_SCOPE_MISMATCH: "Helper phát hiện vùng tiêu đề không đúng nên đã dừng để tránh ghi nhầm.",
+    TITLE_FILL_FAILED: "Helper chưa điền được tiêu đề trên Chợ Tốt.",
+    PRICE_FIELD_NOT_FOUND: "Helper chưa tìm thấy ô giá trên Chợ Tốt.",
+    PRICE_FIELD_SCOPE_MISMATCH: "Helper phát hiện vùng giá không đúng nên đã dừng để tránh ghi nhầm.",
+    PRICE_FILL_FAILED: "Helper chưa điền được giá trên Chợ Tốt.",
+    PRICE_STATE_NOT_PERSISTED: "Chợ Tốt đã xóa giá vừa điền. Vui lòng thử lại hoặc nhập giá thủ công.",
+    CATEGORY_DETAIL_NOT_FOUND: "Helper chưa chọn được danh mục chi tiết Linh kiện trên Chợ Tốt.",
+    CONDITION_OPTION_NOT_FOUND: "Helper chưa chọn được tình trạng trên Chợ Tốt.",
+    COMPONENT_TYPE_OPTION_NOT_FOUND: "Helper chưa chọn được loại linh kiện trên Chợ Tốt.",
+    DEVICE_OPTION_NOT_FOUND: "Helper chưa chọn được thiết bị trên Chợ Tốt.",
+    CAPTCHA_DETECTED: "Chợ Tốt đang hiển thị CAPTCHA. Vui lòng xử lý thủ công.",
+    PAYMENT_OR_VERIFICATION_REQUIRED: "Chợ Tốt đang yêu cầu xác minh hoặc thanh toán. Vui lòng xử lý thủ công.",
+    FORM_VERIFICATION_FAILED: "Helper chưa xác minh được toàn bộ form sau khi điền.",
+    BROWSER_NOT_READY: "Helper chưa mở được trình duyệt đăng tin."
+  };
+  return `${messages[code] || "Helper chưa xử lý thành công yêu cầu."} (${code})`;
+}
+
+function getHelperProgressMessage(progressOrCode) {
+  const code = typeof progressOrCode === "string" ? progressOrCode : progressOrCode?.code;
+  const detail = typeof progressOrCode === "string" ? null : progressOrCode?.detail;
+  const detected = Number(detail?.detectedRealThumbnailCount ?? detail?.realThumbnailCount ?? 0);
+  const expected = Number(detail?.expectedCount ?? 0);
+  if ((code === "WAITING_FOR_IMAGE_PROCESSING" || code === "IMAGE_COUNT_PROGRESS") && expected > 0) {
+    return `Chợ Tốt đang xử lý ảnh (${detected}/${expected})...`;
+  }
+  if (code === "IMAGE_PROCESSING_PARTIAL_TIMEOUT") {
+    return "Ảnh đang được Chợ Tốt xử lý lâu hơn bình thường...";
+  }
+
+  const aiFirstMessages = {
+    IMAGE_FILES_ASSIGNED: "Đã gửi file ảnh sang Chợ Tốt. Đang chờ xử lý...",
+    WAITING_FOR_IMAGE_PROCESSING: "Chợ Tốt đang xử lý ảnh...",
+    IMAGE_COUNT_PROGRESS: "Chợ Tốt đang xử lý ảnh...",
+    IMAGES_READY: "Ảnh đã sẵn sàng trên Chợ Tốt.",
+    FAST_PRICE_WAITING: "Đang cập nhật giá đăng...",
+    FAST_PRICE_READY: "Đang cập nhật giá đăng...",
+    FAST_PRICE_FILLED: "Đã cập nhật giá đăng. Đang kiểm tra thông tin chi tiết...",
+    CHECKING_AI_DETAIL_FIELDS: "Đang kiểm tra thông tin chi tiết Chợ Tốt đã tự chọn...",
+    LISTING_NEEDS_TITLE: "Chợ Tốt chưa tạo tiêu đề. Vui lòng nhập tiêu đề thủ công.",
+    LISTING_NEEDS_ADDRESS: "Tin đăng đã được điền. Vui lòng chọn địa chỉ rồi bấm Đăng tin.",
+    LISTING_NEEDS_DETAIL_REVIEW: "Chợ Tốt còn thiếu thông tin chi tiết. Vui lòng kiểm tra trước khi đăng.",
+    LISTING_READY_FOR_MANUAL_POST: "Tin đăng đã sẵn sàng. Bạn có thể kiểm tra và bấm Đăng tin.",
+    SELLER_COMPLETED_OR_CLOSED_AFTER_READY: "Tin đăng đã được chuẩn bị. Cửa sổ Chợ Tốt đã được đóng hoặc chuyển trang."
+  };
+  if (aiFirstMessages[code]) return aiFirstMessages[code];
+
+  const messages = {
+    UPLOADING_IMAGES: "Đang tải ảnh...",
+    ALL_IMAGES_UPLOADED: "Đã tải ảnh xong. Đang điền mô tả...",
+    FILLING_DESCRIPTION: "Đang điền mô tả...",
+    DESCRIPTION_FILLED: "Đã điền mô tả. Đang chờ form chi tiết...",
+    REMAINING_FIELDS_READY: "Đang điền tiêu đề và giá...",
+    FILLING_TITLE_PRICE: "Đang điền tiêu đề và giá...",
+    FILLING_DETAIL_FIELDS: "Đang chọn thông tin chi tiết...",
+    LISTING_READY_FOR_MANUAL_REVIEW: "Đã chuẩn bị xong tin đăng. Vui lòng kiểm tra và bấm Đăng tin."
+  };
+  return messages[code] || "Helper đang xử lý trên Chợ Tốt...";
+}
+
 function ProductListItem({ product, isSelected, onSelect }) {
   const thumbnailPath = product.primary_image
     ? `/admin/products/${product.id}/images/${product.primary_image.id}/thumbnail`
@@ -250,6 +353,8 @@ export function OnlineListingPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [productError, setProductError] = useState("");
   const [images, setImages] = useState([]);
+  const [selectedImageIds, setSelectedImageIds] = useState([]);
+  const [coverImageId, setCoverImageId] = useState("");
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
   const [downloadingImageId, setDownloadingImageId] = useState(null);
@@ -267,6 +372,7 @@ export function OnlineListingPage() {
   const [copyError, setCopyError] = useState("");
   const [prepareMessage, setPrepareMessage] = useState("");
   const [prepareError, setPrepareError] = useState("");
+  const [isHelperSending, setIsHelperSending] = useState(false);
   const imageRequestIdRef = useRef(0);
   const copyFeedbackTimerRef = useRef(null);
   const transferRequestIdRef = useRef("");
@@ -290,20 +396,22 @@ export function OnlineListingPage() {
     const hasTitle = titleDraft.trim().length > 0;
     const hasPrice = !onlinePrice.error && Number(onlinePrice.value || 0) >= CHOTOT_MINIMUM_PRICE;
     const hasDescription = descriptionDraft.trim().length > 0;
-    const hasImages = images.length > 0;
+    const hasDescriptionLength = descriptionDraft.trim().split(/\s+/).filter(Boolean).length >= 10 && descriptionDraft.trim().length <= 1500;
+    const hasImages = selectedImageIds.length > 0;
     const hasCondition = Boolean(condition);
     const hasDevice = deviceType && deviceType !== "unknown";
     const missing = [
       !hasTitle ? "tiêu đề" : "",
       !hasPrice ? "giá Chợ Tốt từ 1.000 đ" : "",
       !hasDescription ? "mô tả" : "",
+      hasDescription && !hasDescriptionLength ? "mô tả 10 từ trở lên và tối đa 1500 ký tự" : "",
       !hasImages ? "ảnh" : "",
       !hasCondition ? "tình trạng" : "",
       !hasDevice ? "thiết bị" : ""
     ].filter(Boolean);
 
-    return { hasTitle, hasPrice, hasDescription, hasImages, hasCondition, hasDevice, missing, isReady: missing.length === 0 };
-  }, [condition, descriptionDraft, deviceType, images.length, onlinePrice.error, onlinePrice.value, titleDraft]);
+    return { hasTitle, hasPrice, hasDescription: hasDescription && hasDescriptionLength, hasImages, hasCondition, hasDevice, missing, isReady: missing.length === 0 };
+  }, [condition, descriptionDraft, deviceType, onlinePrice.error, onlinePrice.value, selectedImageIds.length, titleDraft]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -353,8 +461,11 @@ export function OnlineListingPage() {
     imageRequestIdRef.current += 1;
     setSelectedProduct(null);
     setImages([]);
+    setSelectedImageIds([]);
+    setCoverImageId("");
     setImageError("");
     setDownloadError("");
+    setIsHelperSending(false);
     resetDraftState();
 
     async function loadProducts() {
@@ -391,6 +502,8 @@ export function OnlineListingPage() {
     const requestId = imageRequestIdRef.current + 1;
     imageRequestIdRef.current = requestId;
     setImages([]);
+    setSelectedImageIds([]);
+    setCoverImageId("");
     setImageError("");
 
     if (!selectedProduct) {
@@ -404,10 +517,15 @@ export function OnlineListingPage() {
       try {
         const nextImages = await listOnlineListingProductImages(selectedProduct.id);
         if (!active || imageRequestIdRef.current !== requestId) return;
-        setImages(nextImages.slice(0, 3));
+        const limitedImages = nextImages.slice(0, 5);
+        setImages(limitedImages);
+        setSelectedImageIds(limitedImages.map((image) => String(image.id)));
+        setCoverImageId(limitedImages[0]?.id ? String(limitedImages[0].id) : "");
       } catch (error) {
         if (!active || imageRequestIdRef.current !== requestId) return;
         setImages([]);
+        setSelectedImageIds([]);
+        setCoverImageId("");
         setImageError(error?.message || "Không thể tải ảnh sản phẩm.");
       } finally {
         if (active && imageRequestIdRef.current === requestId) setIsLoadingImages(false);
@@ -439,6 +557,7 @@ export function OnlineListingPage() {
     setCopyError("");
     setPrepareMessage("");
     setPrepareError("");
+    setIsHelperSending(false);
   }
 
   function handleClearSearch() {
@@ -468,21 +587,18 @@ export function OnlineListingPage() {
     imageRequestIdRef.current += 1;
     setSelectedProduct(product);
     setImages([]);
+    setSelectedImageIds([]);
+    setCoverImageId("");
     setImageError("");
     setDownloadError("");
+    setIsHelperSending(false);
     resetDraftForProduct(product);
   }
 
   function handleOnlinePriceChange(event) {
-    setOnlinePriceInput(event.target.value);
+    setOnlinePriceInput(moneyInputToDigits(event.target.value));
     setPrepareMessage("");
     setPrepareError("");
-  }
-
-  function handleOnlinePriceBlur() {
-    const parsed = parseOnlinePriceInput(onlinePriceInput);
-    if (!onlinePriceInput.trim() || parsed.error || parsed.value === null) return;
-    setOnlinePriceInput(formatMoneyInputValue(parsed.value));
   }
 
   function handleQuickSellingNoteChange(event) {
@@ -535,6 +651,38 @@ export function OnlineListingPage() {
     setIsDescriptionEdited(false);
   }
 
+  function getOrderedSelectedImages() {
+    const selectedSet = new Set(selectedImageIds.map(String));
+    const selectedImages = images.filter((image) => selectedSet.has(String(image.id)));
+    const cover = selectedImages.find((image) => String(image.id) === String(coverImageId));
+    const rest = selectedImages.filter((image) => String(image.id) !== String(coverImageId));
+    return cover ? [cover, ...rest] : selectedImages;
+  }
+
+  function handleToggleImage(imageId) {
+    const id = String(imageId);
+    setSelectedImageIds((current) => {
+      const exists = current.includes(id);
+      const next = exists ? current.filter((value) => value !== id) : [...current, id].slice(0, 5);
+      if (!next.includes(String(coverImageId))) {
+        setCoverImageId(next[0] || "");
+      }
+      return next;
+    });
+    setPrepareMessage("");
+    setPrepareError("");
+  }
+
+  function handleChooseCover(imageId) {
+    const id = String(imageId);
+    if (!selectedImageIds.includes(id)) {
+      setSelectedImageIds((current) => [id, ...current].slice(0, 5));
+    }
+    setCoverImageId(id);
+    setPrepareMessage("");
+    setPrepareError("");
+  }
+
   function buildChoTotDraftPayload(requestId) {
     return {
       version: 1,
@@ -550,7 +698,7 @@ export function OnlineListingPage() {
       deviceType,
       origin: "vietnam",
       warrantyPolicy: getWarrantyPolicy(selectedNoteGroup),
-      images: images.map((image) => ({
+      images: getOrderedSelectedImages().map((image) => ({
         id: Number(image.id),
         originalName: image.original_name || "",
         mimeType: image.mime_type || "",
@@ -560,22 +708,110 @@ export function OnlineListingPage() {
     };
   }
 
-  function handlePrepareChoTot() {
+  function buildHelperListingPayload(requestId) {
+    return {
+      version: 1,
+      requestId,
+      posOrigin: getCurrentPosOrigin(),
+      product: {
+        id: Number(selectedProduct.id),
+        sku: selectedProduct.sku
+      },
+      images: getOrderedSelectedImages().map((image, index) => ({
+        id: Number(image.id),
+        position: index + 1,
+        isCover: index === 0
+      })),
+      title: titleDraft.trim(),
+      price: Number(onlinePrice.value),
+      description: descriptionDraft.trim(),
+      condition,
+      componentType: "computer_component",
+      deviceType,
+      warrantyPolicy: getWarrantyPolicy(selectedNoteGroup)
+    };
+  }
+
+  function sendDraftToExtension(requestId) {
+    if (!window.postMessage) {
+      setPrepareError("Trình duyệt không hỗ trợ gửi draft sang extension.");
+      return false;
+    }
+    transferRequestIdRef.current = requestId;
+    window.postMessage({ type: TRANSFER_MESSAGE_TYPE, payload: buildChoTotDraftPayload(requestId) }, window.location.origin);
+    return true;
+  }
+
+  async function sendListingToHelper(requestId) {
+    const healthResponse = await fetch(`${CHOTOT_HELPER_BASE_URL}/health`, { method: "GET" });
+    if (!healthResponse.ok) {
+      const error = new Error("HELPER_OFFLINE");
+      error.code = "HELPER_OFFLINE";
+      throw error;
+    }
+
+    setPrepareMessage("Đang mở Chợ Tốt...");
+    let progressTimer = null;
+    try {
+      progressTimer = window.setInterval(async () => {
+        try {
+          const progressResponse = await fetch(`${CHOTOT_HELPER_BASE_URL}/v1/progress?requestId=${encodeURIComponent(requestId)}`);
+          const progressPayload = await progressResponse.json().catch(() => null);
+          if (progressPayload?.progress?.code) {
+            setPrepareMessage(getHelperProgressMessage(progressPayload.progress));
+          }
+        } catch {
+          // Progress polling is best-effort; the main request remains authoritative.
+        }
+      }, 800);
+
+      const response = await fetch(`${CHOTOT_HELPER_BASE_URL}/v1/prepare-listing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildHelperListingPayload(requestId))
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        const error = new Error(payload?.error || "HELPER_UPLOAD_FAILED");
+        error.code = payload?.error || "HELPER_UPLOAD_FAILED";
+        throw error;
+      }
+      return payload;
+    } finally {
+      if (progressTimer) window.clearInterval(progressTimer);
+    }
+  }
+
+  async function handlePrepareChoTot() {
     setPrepareMessage("");
     setPrepareError("");
     if (!readiness.isReady) {
       setPrepareError(`Còn thiếu: ${readiness.missing.join(", ")}.`);
       return;
     }
-    if (!window.postMessage) {
-      setPrepareError("Trình duyệt không hỗ trợ gửi draft sang extension.");
-      return;
-    }
 
-    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    transferRequestIdRef.current = requestId;
-    window.postMessage({ type: TRANSFER_MESSAGE_TYPE, payload: buildChoTotDraftPayload(requestId) }, window.location.origin);
-    setPrepareMessage("Đã gửi yêu cầu sang Chrome extension. Nếu không có phản hồi, hãy kiểm tra extension đã được cài và bật.");
+    const requestId = `helper-listing-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    setIsHelperSending(true);
+    setPrepareMessage("Đang kết nối helper...");
+    try {
+      const result = await sendListingToHelper(requestId);
+      setPrepareError("");
+      setPrepareMessage(result.message || "Đã chuẩn bị xong tin đăng. Vui lòng kiểm tra và bấm Đăng tin.");
+    } catch (error) {
+      const code = error?.code || error?.message || "HELPER_UPLOAD_FAILED";
+      if (code === "HELPER_OFFLINE" || code === "Failed to fetch") {
+        const extensionRequestId = `extension-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        if (sendDraftToExtension(extensionRequestId)) {
+          setPrepareError("");
+          setPrepareMessage("Không kết nối được helper trên laptop. Đang dùng Chrome extension tạm thời; vui lòng kiểm tra Chợ Tốt thủ công.");
+        }
+      } else {
+        setPrepareMessage("");
+        setPrepareError(getHelperErrorMessage(code));
+      }
+    } finally {
+      setIsHelperSending(false);
+    }
   }
 
   async function copyText(text, successMessage) {
@@ -609,6 +845,14 @@ export function OnlineListingPage() {
       setDownloadError(error?.message || "Không thể tải ảnh gốc.");
     } finally {
       setDownloadingImageId(null);
+    }
+  }
+
+  function getCurrentPosOrigin() {
+    try {
+      return new URL(resolveApiAssetUrl("/api/v1"), window.location.origin).origin;
+    } catch {
+      return window.location.origin;
     }
   }
 
@@ -761,9 +1005,10 @@ export function OnlineListingPage() {
                   <button
                     type="button"
                     onClick={handlePrepareChoTot}
-                    className="h-11 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900"
+                    disabled={isHelperSending}
+                    className="h-11 rounded-md bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Gửi sang Chợ Tốt
+                    {isHelperSending ? "Đang gửi..." : "Gửi sang Chợ Tốt"}
                   </button>
                 </div>
                 {(prepareMessage || prepareError || copyFeedback || copyError) && (
@@ -812,9 +1057,8 @@ export function OnlineListingPage() {
                         inputMode="numeric"
                         className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                         placeholder="Để trống nếu chưa nhập giá"
-                        value={onlinePriceInput}
+                        value={digitsToMoneyInput(onlinePriceInput)}
                         onChange={handleOnlinePriceChange}
-                        onBlur={handleOnlinePriceBlur}
                       />
                       {onlinePrice.error ? (
                         <p className="mt-1 text-xs font-medium text-red-600">{onlinePrice.error}</p>
@@ -912,7 +1156,7 @@ export function OnlineListingPage() {
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <h4 className="text-sm font-semibold text-slate-900">Ảnh sản phẩm</h4>
-                    <span className="text-xs text-slate-500">Tối đa 3 ảnh hiện có</span>
+                    <span className="text-xs text-slate-500">Chọn tối đa 5 ảnh, cover gửi đầu tiên</span>
                   </div>
 
                   {isLoadingImages ? (
@@ -929,7 +1173,7 @@ export function OnlineListingPage() {
                     </p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
                         {images.map((image, index) => (
                           <div key={image.id} className="min-w-0 rounded-md bg-slate-50 p-2">
                             <AuthenticatedImage
@@ -945,9 +1189,30 @@ export function OnlineListingPage() {
                             >
                               {downloadingImageId === image.id ? "Đang tải..." : "Tải ảnh gốc"}
                             </button>
+                            <label className="mt-2 flex items-center gap-2 text-xs font-medium text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={selectedImageIds.includes(String(image.id))}
+                                onChange={() => handleToggleImage(image.id)}
+                              />
+                              Gửi ảnh này
+                            </label>
+                            <label className="mt-1 flex items-center gap-2 text-xs font-medium text-slate-700">
+                              <input
+                                type="radio"
+                                name="online-listing-cover"
+                                checked={String(coverImageId) === String(image.id)}
+                                disabled={!selectedImageIds.includes(String(image.id))}
+                                onChange={() => handleChooseCover(image.id)}
+                              />
+                              Cover
+                            </label>
                           </div>
                         ))}
                       </div>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Helper sẽ gửi ảnh cover trước, sau đó các ảnh còn lại theo thứ tự sản phẩm.
+                      </p>
                       {downloadError && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{downloadError}</p>}
                     </>
                   )}
