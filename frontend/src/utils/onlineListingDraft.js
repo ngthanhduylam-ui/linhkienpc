@@ -52,19 +52,20 @@ export function formatMoneyInputValue(value) {
   return Number(value).toLocaleString("vi-VN");
 }
 
+export function moneyInputToDigits(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+export function digitsToMoneyInput(value) {
+  const digits = moneyInputToDigits(value);
+  if (!digits) return "";
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
 export function parseOnlinePriceInput(value) {
-  const rawValue = String(value ?? "").trim();
-  if (!rawValue) {
-    return { value: null, error: "" };
-  }
-
-  if (!/^[\d.,\s]+$/.test(rawValue)) {
-    return { value: null, error: MONEY_INTEGER_MESSAGE };
-  }
-
-  const normalizedValue = rawValue.replace(/[.,\s]/g, "");
+  const normalizedValue = moneyInputToDigits(value);
   if (!normalizedValue) {
-    return { value: null, error: MONEY_INTEGER_MESSAGE };
+    return { value: null, error: "" };
   }
 
   const numericValue = Number(normalizedValue);
@@ -82,7 +83,7 @@ export function getOnlinePriceInputFromProduct(product) {
   if (!product || product.sale_price === null || product.sale_price === undefined) {
     return "";
   }
-  return formatMoneyInputValue(product.sale_price);
+  return moneyInputToDigits(product.sale_price);
 }
 
 export function buildSuggestedOnlineListingTitle(product) {

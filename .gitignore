@@ -38,3 +38,6 @@ backups/*.sql
 
 # runtime uploads
 backend/uploads/
+
+# local posting helper runtime
+tools/chotot-posting-helper/.runtime/
