@@ -16,6 +16,7 @@ import {
   updateCategoryRequest,
   updateProductRequest
 } from "../services/inventoryOperations.service";
+import imageCompressionWorkerUrl from "browser-image-compression/dist/browser-image-compression.js?url";
 
 const SKU_PATTERN = /^[a-z0-9]+(\.[a-z0-9]+)*$/i;
 const SKU_FORMAT_MESSAGE = "SKU không hợp lệ. Chỉ dùng chữ thường, số và dấu chấm.";
@@ -28,18 +29,125 @@ const CATEGORY_REQUIRED_MESSAGE = "Vui lòng chọn loại sản phẩm.";
 const CATEGORY_CODE_ALIASES = {
   main: "mainboard"
 };
-const MAX_PRODUCT_IMAGES = 3;
-const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_PRODUCT_IMAGES = 5;
+const MAX_UPLOAD_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_SOURCE_IMAGE_BYTES = 50 * 1024 * 1024;
+const IMAGE_OPTIMIZATION_TRIGGER_BYTES = 8 * 1024 * 1024;
+const MAX_OPTIMIZED_LONG_EDGE = 3840;
+const IMAGE_OPTIMIZATION_QUALITY = 0.92;
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function getImageFileError(file) {
   if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
     return `${file.name}: chỉ chấp nhận JPEG, PNG hoặc WebP.`;
   }
-  if (file.size > MAX_IMAGE_BYTES) {
-    return `${file.name}: vượt quá 15 MB.`;
+  if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+    return `Ảnh ${file.name} vượt quá giới hạn nguồn 50 MB.`;
   }
   return "";
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(Number(bytes))) return "";
+  return `${(Number(bytes) / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function withOriginalFileName(file, blob) {
+  if (blob instanceof File && blob.name === file.name && blob.lastModified === file.lastModified) {
+    return blob;
+  }
+  return new File([blob], file.name, {
+    type: blob.type || file.type,
+    lastModified: file.lastModified
+  });
+}
+
+function readImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image_dimensions_unreadable"));
+    };
+    image.src = url;
+  });
+}
+
+async function optimizeImageForUpload(file) {
+  const issue = getImageFileError(file);
+  if (issue) {
+    return { file: null, error: issue, optimized: false };
+  }
+
+  let dimensions;
+  try {
+    dimensions = await readImageDimensions(file);
+  } catch {
+    return {
+      file: null,
+      error: `Không thể đọc ảnh ${file.name}. Vui lòng chọn ảnh khác.`,
+      optimized: false
+    };
+  }
+
+  const longestEdge = Math.max(Number(dimensions.width || 0), Number(dimensions.height || 0));
+  const shouldOptimize = file.size > IMAGE_OPTIMIZATION_TRIGGER_BYTES || longestEdge > MAX_OPTIMIZED_LONG_EDGE;
+
+  if (!shouldOptimize) {
+    if (file.size > MAX_UPLOAD_IMAGE_BYTES) {
+      return {
+        file: null,
+        error: `Ảnh ${file.name} vượt quá 15 MB.`,
+        optimized: false
+      };
+    }
+    return { file, error: "", optimized: false, sourceDimensions: dimensions, outputDimensions: dimensions };
+  }
+
+  try {
+    const { default: imageCompression } = await import("browser-image-compression");
+    const compressedBlob = await imageCompression(file, {
+      maxSizeMB: MAX_UPLOAD_IMAGE_BYTES / 1024 / 1024,
+      maxWidthOrHeight: MAX_OPTIMIZED_LONG_EDGE,
+      initialQuality: IMAGE_OPTIMIZATION_QUALITY,
+      alwaysKeepResolution: false,
+      useWebWorker: true,
+      libURL: imageCompressionWorkerUrl,
+      fileType: file.type
+    });
+    const optimizedFile = withOriginalFileName(file, compressedBlob);
+    const outputDimensions = await readImageDimensions(optimizedFile);
+
+    if (optimizedFile.size > MAX_UPLOAD_IMAGE_BYTES) {
+      return {
+        file: null,
+        error: `Ảnh ${file.name} vẫn vượt quá 15 MB sau khi tối ưu (${formatFileSize(optimizedFile.size)}).`,
+        optimized: true,
+        sourceDimensions: dimensions,
+        outputDimensions
+      };
+    }
+
+    return {
+      file: optimizedFile,
+      error: "",
+      optimized: true,
+      sourceDimensions: dimensions,
+      outputDimensions
+    };
+  } catch {
+    return {
+      file: null,
+      error: `Không thể tối ưu ảnh ${file.name}. Vui lòng chọn ảnh khác.`,
+      optimized: false,
+      sourceDimensions: dimensions
+    };
+  }
 }
 
 function stripDiacritics(value) {
@@ -543,6 +651,23 @@ export function ProductFormPage() {
     ]);
   }
 
+  async function prepareImageFiles(files) {
+    const preparedFiles = [];
+    const errors = [];
+
+    for (const file of files) {
+      const result = await optimizeImageForUpload(file);
+      if (result.error) {
+        errors.push(result.error);
+      }
+      if (result.file) {
+        preparedFiles.push(result.file);
+      }
+    }
+
+    return { preparedFiles, errors };
+  }
+
   async function processSelectedImages(files) {
     if (!files.length) return;
 
@@ -552,20 +677,22 @@ export function ProductFormPage() {
       return;
     }
 
-    const validationErrors = files.map(getImageFileError).filter(Boolean);
-    const validFiles = files.filter((file) => !getImageFileError(file));
-    setImageErrors(validationErrors);
-    if (!validFiles.length) return;
+    setImageErrors([]);
+    setIsUploadingImages(true);
+    const { preparedFiles, errors } = await prepareImageFiles(files);
+    setImageErrors(errors);
+    setIsUploadingImages(false);
+    if (!preparedFiles.length) return;
 
     setError("");
     if (!isEditMode) {
-      addPendingImages(validFiles);
+      addPendingImages(preparedFiles);
       return;
     }
 
     setIsUploadingImages(true);
-    const failedFiles = [...validationErrors];
-    for (const file of validFiles) {
+    const failedFiles = [...errors];
+    for (const file of preparedFiles) {
       try {
         await uploadProductImages(id, [file]);
       } catch (err) {
@@ -612,35 +739,37 @@ export function ProductFormPage() {
     });
   }
 
-  function replacePendingImage(key, file) {
-    const issue = getImageFileError(file);
-    if (issue) {
-      setImageErrors([issue]);
+  async function replacePendingImage(key, file) {
+    setImageErrors([]);
+    setIsUploadingImages(true);
+    const result = await optimizeImageForUpload(file);
+    setIsUploadingImages(false);
+    if (result.error || !result.file) {
+      setImageErrors([result.error || `Không thể tối ưu ảnh ${file.name}. Vui lòng chọn ảnh khác.`]);
       return;
     }
-    setImageErrors([]);
     setPendingImages((current) => current.map((image) => {
       if (image.key !== key) return image;
       URL.revokeObjectURL(image.previewUrl);
       return {
         ...image,
-        file,
-        key: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
-        previewUrl: URL.createObjectURL(file)
+        file: result.file,
+        key: `${result.file.name}-${result.file.size}-${result.file.lastModified}-${crypto.randomUUID()}`,
+        previewUrl: URL.createObjectURL(result.file)
       };
     }));
   }
 
   async function handleReplaceStoredImage(image, file) {
-    const issue = getImageFileError(file);
-    if (issue) {
-      setImageErrors([issue]);
-      return;
-    }
     setImageErrors([]);
     setIsUploadingImages(true);
     try {
-      setProductImages(await replaceProductImage(id, image.id, file));
+      const result = await optimizeImageForUpload(file);
+      if (result.error || !result.file) {
+        setImageErrors([result.error || `Không thể tối ưu ảnh ${file.name}. Vui lòng chọn ảnh khác.`]);
+        return;
+      }
+      setProductImages(await replaceProductImage(id, image.id, result.file));
     } catch (err) {
       setImageErrors([`${file.name}: ${err?.message || "Thay ảnh thất bại."}`]);
     } finally {
@@ -1062,7 +1191,7 @@ export function ProductFormPage() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Ảnh sản phẩm</h2>
-                  <p className="mt-1 text-xs text-slate-500">Tối đa 3 ảnh JPEG, PNG hoặc WebP; mỗi ảnh tối đa 15 MB.</p>
+                  <p className="mt-1 text-xs text-slate-500">Tối đa 5 ảnh JPEG, PNG hoặc WebP. Ảnh lớn sẽ được tự tối ưu trước khi tải lên.</p>
                 </div>
                 <label className="inline-flex h-9 cursor-pointer items-center rounded border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50">
                   + Thêm ảnh
@@ -1093,7 +1222,7 @@ export function ProductFormPage() {
               >
                 {isUploadingImages && (
                   <p className="mb-3 rounded bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">
-                    Đang xử lý ảnh...
+                    Đang tối ưu / tải ảnh...
                   </p>
                 )}
                 {imageErrors.length > 0 && (
@@ -1159,14 +1288,15 @@ export function ProductFormPage() {
                           </div>
                           <p className="mt-2 truncate text-xs text-slate-600" title={image.file.name}>{image.file.name}</p>
                           <div className="mt-2 flex gap-1">
-                            <button type="button" disabled={index === 0} onClick={() => movePendingImage(index, -1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">←</button>
-                            <button type="button" disabled={index === pendingImages.length - 1} onClick={() => movePendingImage(index, 1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">→</button>
+                            <button type="button" disabled={index === 0 || isUploadingImages} onClick={() => movePendingImage(index, -1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">←</button>
+                            <button type="button" disabled={index === pendingImages.length - 1 || isUploadingImages} onClick={() => movePendingImage(index, 1)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40">→</button>
                             <label className="cursor-pointer rounded border border-slate-300 px-2 py-1 text-xs">
                               Thay ảnh
                               <input
                                 type="file"
                                 accept="image/jpeg,image/png,image/webp"
                                 className="sr-only"
+                                disabled={isUploadingImages}
                                 onChange={(event) => {
                                   const file = event.target.files?.[0];
                                   event.target.value = "";
@@ -1174,7 +1304,7 @@ export function ProductFormPage() {
                                 }}
                               />
                             </label>
-                            <button type="button" onClick={() => removePendingImage(image.key)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-600">Xóa</button>
+                            <button type="button" disabled={isUploadingImages} onClick={() => removePendingImage(image.key)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 disabled:opacity-40">Xóa</button>
                           </div>
                         </article>
                       );

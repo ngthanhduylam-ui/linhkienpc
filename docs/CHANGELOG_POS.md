@@ -35,7 +35,7 @@ Production currently tested stable after the revert.
 - Multi-order tabs, in-memory only.
 - Multi-token AND product search.
 - Public Lookup hides zero-stock products.
-- Product images, maximum 3 images.
+- Product images, maximum 5 images.
 - Category rename.
 - Safe deletion of unused categories.
 - Per-line fixed VND discount snapshots.

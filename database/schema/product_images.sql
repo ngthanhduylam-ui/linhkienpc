@@ -15,5 +15,5 @@ CREATE TABLE IF NOT EXISTS product_images (
     FOREIGN KEY (product_id) REFERENCES products(id)
     ON UPDATE CASCADE
     ON DELETE CASCADE,
-  CONSTRAINT chk_product_images_sort_order CHECK (sort_order BETWEEN 1 AND 3)
+  CONSTRAINT chk_product_images_sort_order CHECK (sort_order BETWEEN 1 AND 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

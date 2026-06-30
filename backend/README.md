@@ -41,7 +41,7 @@ npm run migrate
 ## Database
 
 - Migration table: `schema_migrations`.
-- Current migrations: `001` đến `021`.
+- Current migrations: `001` đến `022`.
 - Total stock: `product_inventory_balances`.
 - Group ledger: stock transactions + note adjustments + quantity adjustments.
 - Voucher snapshots: `stock_vouchers`, `stock_voucher_items`.
@@ -55,7 +55,7 @@ Default local:
 ```env
 PRODUCT_UPLOAD_ROOT=./uploads/products
 PRODUCT_IMAGE_MAX_BYTES=15728640
-PRODUCT_IMAGE_MAX_COUNT=3
+PRODUCT_IMAGE_MAX_COUNT=5
 ```
 
 Production upload root:

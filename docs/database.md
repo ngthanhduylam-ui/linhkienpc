@@ -101,6 +101,7 @@ Admin/POS/Inventory Check do not apply this public zero-stock hiding rule.
 019_add_sale_note_snapshot_to_stock_voucher_items.sql
 020_create_product_images.sql
 021_add_pos_line_discount_snapshots.sql
+022_expand_product_image_limit_to_5.sql
 ```
 
 Important recent migrations:
@@ -109,6 +110,7 @@ Important recent migrations:
 - `019`: thêm `stock_voucher_items.sale_note_snapshot`.
 - `020`: tạo `product_images`.
 - `021`: thêm `reference_unit_price`, `discount_amount` và backfill reference price từ legacy `unit_price`.
+- `022`: mở rộng giới hạn `product_images.sort_order` từ 1..3 lên 1..5.
 
 ## Backup
 

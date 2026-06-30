@@ -5,6 +5,11 @@ const envPath = path.resolve(__dirname, '../../.env');
 const backendRoot = path.resolve(__dirname, '../..');
 dotenv.config({ path: envPath });
 
+function numberFromEnv(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const required = [
   'PORT',
   'DB_HOST',
@@ -28,8 +33,8 @@ module.exports = {
   timezone: process.env.APP_TIMEZONE || 'Asia/Ho_Chi_Minh',
   productUploads: {
     root: path.resolve(backendRoot, process.env.PRODUCT_UPLOAD_ROOT || 'uploads/products'),
-    maxFileBytes: Number(process.env.PRODUCT_IMAGE_MAX_BYTES || 15 * 1024 * 1024),
-    maxImages: Math.min(3, Number(process.env.PRODUCT_IMAGE_MAX_COUNT || 3))
+    maxFileBytes: numberFromEnv(process.env.PRODUCT_IMAGE_MAX_BYTES, 15 * 1024 * 1024),
+    maxImages: Math.min(5, Math.max(1, numberFromEnv(process.env.PRODUCT_IMAGE_MAX_COUNT, 5)))
   },
   db: {
     host: process.env.DB_HOST,

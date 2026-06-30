@@ -90,7 +90,7 @@ async function prepareImage(file) {
     const metadata = await sharp(sourceBuffer, { failOn: 'error' }).metadata();
     const formatConfig = ALLOWED_FORMATS.get(metadata.format);
     if (!formatConfig || !metadata.width || !metadata.height) {
-      throw new AppError('Only valid JPEG, PNG, or WebP images are accepted.', 400, 'IMAGE_FORMAT_INVALID');
+      throw new AppError('Chỉ hỗ trợ ảnh JPEG, PNG hoặc WebP.', 400, 'IMAGE_FORMAT_INVALID');
     }
 
     const id = crypto.randomUUID();
@@ -132,8 +132,8 @@ async function uploadImages(productId, files) {
   if (files.some((file) => Number(file.size) > env.productUploads.maxFileBytes)) {
     await storage.removeFiles(files.map((file) => file.path));
     throw new AppError(
-      `Each image must not exceed ${Math.floor(env.productUploads.maxFileBytes / 1024 / 1024)} MB.`,
-      413,
+      `Mỗi ảnh không được vượt quá ${Math.floor(env.productUploads.maxFileBytes / 1024 / 1024)} MB sau khi tối ưu.`,
+      400,
       'IMAGE_FILE_TOO_LARGE'
     );
   }
@@ -156,7 +156,7 @@ async function uploadImages(productId, files) {
       const currentCount = Number(countRows[0].total || 0);
       if (currentCount + prepared.length > env.productUploads.maxImages) {
         throw new AppError(
-          `A product can have at most ${env.productUploads.maxImages} images.`,
+          `Mỗi sản phẩm chỉ được tối đa ${env.productUploads.maxImages} ảnh.`,
           400,
           'PRODUCT_IMAGE_LIMIT_EXCEEDED'
         );
@@ -212,8 +212,8 @@ async function replaceImage(productId, imageId, files) {
   if (Number(files[0].size) > env.productUploads.maxFileBytes) {
     await storage.removeFiles(files.map((file) => file.path));
     throw new AppError(
-      `Each image must not exceed ${Math.floor(env.productUploads.maxFileBytes / 1024 / 1024)} MB.`,
-      413,
+      `Mỗi ảnh không được vượt quá ${Math.floor(env.productUploads.maxFileBytes / 1024 / 1024)} MB sau khi tối ưu.`,
+      400,
       'IMAGE_FILE_TOO_LARGE'
     );
   }

@@ -23,7 +23,7 @@ Chưa hiện có: giá nhập/giá vốn, payment, debt, invoice, accounting ho�
 - Có thể rename category tại chỗ; product giữ nguyên `category_id`.
 - Chỉ xóa category khi chưa có product sử dụng.
 - `sale_price DECIMAL(15,0) NULL`: `NULL` là chưa thiết lập, `0` là giá hợp lệ.
-- Tối đa 3 ảnh/product; ảnh `sort_order=1` là ảnh chính.
+- Tối đa 5 ảnh/product; ảnh `sort_order=1` là ảnh chính.
 
 ## 3. Search
 
