@@ -85,7 +85,7 @@ Các file `*.edit-master-data-backup` và `*.delivery-note-backup` là bản bac
 
 ```text
 database/
-├─ migrations/          001..021
+├─ migrations/          001..022
 ├─ schema/              schema từng bảng + schema.sql
 ├─ seeds/
 └─ scripts/

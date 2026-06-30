@@ -50,7 +50,7 @@ Do not access production/SSH unless the user explicitly asks.
 - Product Admin add/edit/list/search/filter.
 - Product category rename.
 - Safe deletion of unused categories.
-- Product images, maximum 3 images.
+- Product images, maximum 5 images.
 - Multi-token AND product search.
 - Bulk stock-in.
 - POS full-screen `/admin/stock-out`.

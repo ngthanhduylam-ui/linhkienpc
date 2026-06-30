@@ -54,7 +54,7 @@ Không ghi secret, password, token hoặc nội dung `.env` vào tài liệu.
   - xóa an toàn category chưa có sản phẩm sử dụng;
   - category đang được product dùng trả lỗi rõ ràng, không cascade-delete.
 - `sale_price` nullable và hiển thị ở form/list.
-- Tối đa 3 ảnh/product: upload, replace, reorder, delete, thumbnail và download file gốc.
+- Tối đa 5 ảnh/product: upload, replace, reorder, delete, thumbnail và download file tối ưu.
 
 ### Product Search
 

@@ -244,7 +244,7 @@ export function SearchResultCard({ product, autoExpand = false }) {
           </div>
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
             <img
-              src={resolveApiAssetUrl(selectedImage.thumbnail_url)}
+              src={resolveApiAssetUrl(selectedImage.download_url)}
               alt={`${product.name} ${selectedImageIndex + 1}`}
               className="max-h-[70vh] max-w-full object-contain"
             />

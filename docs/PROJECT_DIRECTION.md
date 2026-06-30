@@ -30,7 +30,7 @@ Kho là nền tảng hỗ trợ bán hàng, không phải trung tâm để mở 
 Production trial đã có:
 
 - Public Lookup ẩn sản phẩm hết hàng.
-- Product Admin, product images tối đa 3 ảnh.
+- Product Admin, product images tối đa 5 ảnh.
 - Category rename và xóa an toàn category chưa dùng.
 - Stock-in, POS stock-out và Inventory Check.
 - Customer/Supplier.

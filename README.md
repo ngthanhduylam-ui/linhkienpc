@@ -37,7 +37,7 @@ Hạ tầng đã có HTTPS/Certbot, UFW, DuckDNS cron và backup MySQL lúc 23:0
 ## Chức năng chính
 
 - Public Lookup `/`: tìm nhiều token theo tên, SKU hoặc ghi chú bảo hành; chỉ hiển thị sản phẩm active có tổng tồn lớn hơn 0; không trả giá hoặc dữ liệu nội bộ.
-- Product Admin `/admin/products`: list/search/filter/pagination, giá bán mặc định nullable, ảnh sản phẩm tối đa 3 ảnh.
+- Product Admin `/admin/products`: list/search/filter/pagination, giá bán mặc định nullable, ảnh sản phẩm tối đa 5 ảnh.
 - Nhập hàng `/admin/stock-in`: bulk stock-in, supplier optional, nhóm bảo hành/ghi chú, không có giá nhập.
 - Bán tại quầy `/admin/stock-out`: full-screen POS, nhiều đơn local, server-side product search, recent products, khách hàng, giá chỉ đọc, Serial/Ghi chú theo dòng.
 - Kiểm hàng `/admin/inventory-check`: chuyển nhóm ghi chú và tăng/giảm tồn theo nhóm có lịch sử.
