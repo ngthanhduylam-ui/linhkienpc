@@ -10,12 +10,11 @@ import {
   ONLINE_LISTING_TITLE_MAX_LENGTH,
   buildOnlineListingDescription,
   buildSuggestedOnlineListingTitle,
-  digitsToMoneyInput,
   getNoteGroupLabel,
   getOnlinePriceInputFromProduct,
-  moneyInputToDigits,
   parseOnlinePriceInput
 } from "../utils/onlineListingDraft";
+import { handleMoneyInputChange } from "../utils/moneyInput";
 
 const PRODUCT_PAGE_SIZE = 20;
 const POS_DRAFT_SOURCE = "vitinh-phuoc-tai-pos";
@@ -596,7 +595,7 @@ export function OnlineListingPage() {
   }
 
   function handleOnlinePriceChange(event) {
-    setOnlinePriceInput(moneyInputToDigits(event.target.value));
+    handleMoneyInputChange(event, setOnlinePriceInput);
     setPrepareMessage("");
     setPrepareError("");
   }
@@ -1057,7 +1056,7 @@ export function OnlineListingPage() {
                         inputMode="numeric"
                         className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                         placeholder="Để trống nếu chưa nhập giá"
-                        value={digitsToMoneyInput(onlinePriceInput)}
+                        value={onlinePriceInput}
                         onChange={handleOnlinePriceChange}
                       />
                       {onlinePrice.error ? (

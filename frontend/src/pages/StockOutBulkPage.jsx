@@ -8,6 +8,11 @@ import {
   listActiveProducts,
   searchActiveProducts
 } from "../services/inventoryOperations.service";
+import {
+  formatMoneyInput,
+  handleMoneyInputChange,
+  parseMoneyInput
+} from "../utils/moneyInput";
 import { RECENT_PRODUCTS_KEY, readRecentItems, saveRecentItem } from "../utils/recentItems";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
@@ -183,23 +188,12 @@ function getCartTotalDisplay(totalState) {
   };
 }
 
-function digitsToMoneyInput(value) {
-  const digits = String(value ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-  if (!digits) return "";
-  const numberValue = Number(digits);
-  if (!Number.isSafeInteger(numberValue)) return digits;
-  return numberValue.toLocaleString("vi-VN");
-}
-
 function hasMoneyInputDigits(value) {
   return /\d/.test(String(value ?? ""));
 }
 
 function moneyInputToNumber(value, { emptyValue = 0 } = {}) {
-  const digits = String(value ?? "").replace(/\D/g, "");
-  if (!digits) return emptyValue;
-  const numberValue = Number(digits);
-  return Number.isSafeInteger(numberValue) && numberValue <= MAX_MONEY_AMOUNT ? numberValue : null;
+  return parseMoneyInput(value, { emptyValue, max: MAX_MONEY_AMOUNT });
 }
 
 function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
@@ -213,7 +207,7 @@ function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    setDraftValue(currentValue === null || currentValue === undefined ? "" : digitsToMoneyInput(currentValue));
+    setDraftValue(currentValue === null || currentValue === undefined ? "" : formatMoneyInput(currentValue));
     setDraftError("");
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [currentValue, isOpen]);
@@ -295,7 +289,7 @@ function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
                 inputMode="numeric"
                 value={draftValue}
                 onChange={(event) => {
-                  setDraftValue(digitsToMoneyInput(event.target.value));
+                  handleMoneyInputChange(event, setDraftValue);
                   setDraftError("");
                 }}
                 onKeyDown={(event) => {

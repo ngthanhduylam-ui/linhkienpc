@@ -17,6 +17,11 @@ import {
   updateProductRequest
 } from "../services/inventoryOperations.service";
 import imageCompressionWorkerUrl from "browser-image-compression/dist/browser-image-compression.js?url";
+import {
+  formatMoneyInput,
+  handleMoneyInputChange,
+  parseMoneyInput
+} from "../utils/moneyInput";
 
 const SKU_PATTERN = /^[a-z0-9]+(\.[a-z0-9]+)*$/i;
 const SKU_FORMAT_MESSAGE = "SKU không hợp lệ. Chỉ dùng chữ thường, số và dấu chấm.";
@@ -242,26 +247,12 @@ function replaceSkuConditionPrefix(sku, nextCondition) {
 
 function salePriceToInput(value) {
   if (value === null || value === undefined) return "";
-  return String(value);
+  return formatMoneyInput(value);
 }
 
 function normalizeSalePriceInput(value) {
-  const rawValue = String(value ?? "").trim();
-  if (!rawValue) {
-    return { value: null, error: "" };
-  }
-
-  const hasSeparator = /[.,]/.test(rawValue);
-  const isValidDigits = /^\d+$/.test(rawValue);
-  const isValidGroupedNumber = /^\d{1,3}([.,]\d{3})+$/.test(rawValue);
-
-  if (!isValidDigits && !(hasSeparator && isValidGroupedNumber)) {
-    return { value: null, error: SALE_PRICE_INTEGER_MESSAGE };
-  }
-
-  const normalizedValue = rawValue.replace(/[.,]/g, "");
-  const numericValue = Number(normalizedValue);
-  if (!Number.isSafeInteger(numericValue) || numericValue > MAX_SALE_PRICE) {
+  const numericValue = parseMoneyInput(value, { emptyValue: null, max: MAX_SALE_PRICE });
+  if (numericValue === null && /\d/.test(String(value ?? ""))) {
     return { value: null, error: SALE_PRICE_MAX_MESSAGE };
   }
 
@@ -1154,7 +1145,7 @@ export function ProductFormPage() {
                           className="h-10 w-full rounded border border-slate-300 px-3 pr-14 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                           value={form.sale_price}
                           inputMode="numeric"
-                          onChange={(event) => updateForm({ sale_price: event.target.value })}
+                          onChange={(event) => handleMoneyInputChange(event, (salePrice) => updateForm({ sale_price: salePrice }))}
                           placeholder="Nhập giá bán"
                         />
                         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">

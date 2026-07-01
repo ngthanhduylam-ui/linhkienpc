@@ -1,3 +1,9 @@
+import {
+  formatMoneyInput,
+  moneyInputToDigits as sharedMoneyInputToDigits,
+  parseMoneyInput
+} from "./moneyInput";
+
 export const ONLINE_LISTING_TITLE_MAX_LENGTH = 80;
 export const MAX_MONEY_AMOUNT = 999999999999999;
 
@@ -49,30 +55,23 @@ export function formatVnd(value) {
 
 export function formatMoneyInputValue(value) {
   if (value === null || value === undefined || value === "") return "";
-  return Number(value).toLocaleString("vi-VN");
+  return formatMoneyInput(value);
 }
 
 export function moneyInputToDigits(value) {
-  return String(value ?? "").replace(/\D/g, "");
+  return sharedMoneyInputToDigits(value);
 }
 
 export function digitsToMoneyInput(value) {
-  const digits = moneyInputToDigits(value);
-  if (!digits) return "";
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return formatMoneyInput(value);
 }
 
 export function parseOnlinePriceInput(value) {
-  const normalizedValue = moneyInputToDigits(value);
-  if (!normalizedValue) {
+  const numericValue = parseMoneyInput(value, { emptyValue: null, max: MAX_MONEY_AMOUNT });
+  if (numericValue === null && !/\d/.test(String(value ?? ""))) {
     return { value: null, error: "" };
   }
-
-  const numericValue = Number(normalizedValue);
-  if (!Number.isSafeInteger(numericValue) || numericValue < 0) {
-    return { value: null, error: MONEY_INTEGER_MESSAGE };
-  }
-  if (numericValue > MAX_MONEY_AMOUNT) {
+  if (numericValue === null) {
     return { value: null, error: MONEY_MAX_MESSAGE };
   }
 
@@ -83,7 +82,7 @@ export function getOnlinePriceInputFromProduct(product) {
   if (!product || product.sale_price === null || product.sale_price === undefined) {
     return "";
   }
-  return moneyInputToDigits(product.sale_price);
+  return formatMoneyInput(product.sale_price);
 }
 
 export function buildSuggestedOnlineListingTitle(product) {
