@@ -4,9 +4,78 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LINHKIENPC</title>
+    <style>
+      .pre-react-shell {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: Arial, Helvetica, sans-serif;
+        padding: 24px;
+        text-align: center;
+      }
+
+      .pre-react-shell-card {
+        width: min(100%, 420px);
+        border: 1px solid #e2e8f0;
+        border-radius: 24px;
+        background: #ffffff;
+        padding: 28px 24px;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+      }
+
+      .pre-react-shell-title {
+        margin: 0;
+        color: #075985;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+
+      .pre-react-shell-text {
+        margin: 10px 0 0;
+        color: #475569;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .pre-react-shell-spinner {
+        width: 34px;
+        height: 34px;
+        margin: 22px auto 0;
+        border: 3px solid #bae6fd;
+        border-top-color: #0284c7;
+        border-radius: 999px;
+        animation: pre-react-shell-spin 0.9s linear infinite;
+      }
+
+      @keyframes pre-react-shell-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="pre-react-shell" role="status" aria-live="polite">
+        <div class="pre-react-shell-card">
+          <p class="pre-react-shell-title">VI TÍNH PHƯỚC TÀI</p>
+          <p class="pre-react-shell-text">Đang tải tra cứu kho...</p>
+          <div class="pre-react-shell-spinner" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+    <noscript>
+      <div class="pre-react-shell">
+        <div class="pre-react-shell-card">
+          <p class="pre-react-shell-title">VI TÍNH PHƯỚC TÀI</p>
+          <p class="pre-react-shell-text">Trang tra cứu cần bật JavaScript để hoạt động.</p>
+        </div>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

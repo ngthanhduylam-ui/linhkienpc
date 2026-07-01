@@ -5,6 +5,8 @@ import { searchPublicProducts } from "../services/publicSearch.service";
 
 const SEARCH_HISTORY_KEY = "public_search_history";
 const MAX_HISTORY_ITEMS = 10;
+const PUBLIC_SEARCH_TIMEOUT_MS = 20000;
+const PUBLIC_SEARCH_ERROR_MESSAGE = "Mạng đang chậm, vui lòng thử lại.";
 
 function loadSearchHistory() {
   try {
@@ -38,6 +40,7 @@ export function PublicSearchPage() {
   const [history, setHistory] = useState(() => loadSearchHistory());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
   const inputRef = useRef(null);
   const requestIdRef = useRef(0);
 
@@ -64,23 +67,26 @@ export function PublicSearchPage() {
 
     const currentRequestId = requestIdRef.current + 1;
     requestIdRef.current = currentRequestId;
-    let isCancelled = false;
+    const abortController = new AbortController();
 
     async function runSearch() {
       setIsLoading(true);
       setError("");
       try {
-        const data = await searchPublicProducts(searchKeyword);
-        if (!isCancelled && requestIdRef.current === currentRequestId) {
+        const data = await searchPublicProducts(searchKeyword, {
+          signal: abortController.signal,
+          timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
+        });
+        if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           setResults(data);
         }
       } catch (err) {
-        if (!isCancelled && requestIdRef.current === currentRequestId) {
+        if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           setResults([]);
-          setError(err?.message || "Không thể tải dữ liệu tồn kho.");
+          setError(PUBLIC_SEARCH_ERROR_MESSAGE);
         }
       } finally {
-        if (!isCancelled && requestIdRef.current === currentRequestId) {
+        if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           setIsLoading(false);
         }
       }
@@ -88,9 +94,9 @@ export function PublicSearchPage() {
 
     runSearch();
     return () => {
-      isCancelled = true;
+      abortController.abort();
     };
-  }, [debouncedKeyword]);
+  }, [debouncedKeyword, retryCount]);
 
   function rememberKeyword(value = searchInput) {
     setHistory((currentHistory) => addKeywordToHistory(value, currentHistory));
@@ -100,6 +106,10 @@ export function PublicSearchPage() {
     const nextKeyword = value.trim();
     setDebouncedKeyword(nextKeyword);
     rememberKeyword(nextKeyword);
+  }
+
+  function handleRetrySearch() {
+    setRetryCount((current) => current + 1);
   }
 
   function handleClearSearch() {
@@ -278,7 +288,14 @@ export function PublicSearchPage() {
 
             {!isLoading && error && (
               <div className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-medium text-red-700">
-                {error}
+                <p>{error}</p>
+                <button
+                  type="button"
+                  onClick={handleRetrySearch}
+                  className="mt-3 rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+                >
+                  Thử lại
+                </button>
               </div>
             )}
 
@@ -291,8 +308,13 @@ export function PublicSearchPage() {
 
             {!isLoading && !error && results.length > 0 && (
               <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
-                {results.map((item) => (
-                  <SearchResultCard key={item.id || item.sku} product={item} autoExpand={results.length === 1} />
+                {results.map((item, index) => (
+                  <SearchResultCard
+                    key={item.id || item.sku}
+                    product={item}
+                    autoExpand={results.length === 1}
+                    eagerImage={index === 0}
+                  />
                 ))}
               </div>
             )}
