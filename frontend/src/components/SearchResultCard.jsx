@@ -4,6 +4,53 @@ import { listPublicProductImages } from "../services/publicSearch.service";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const PUBLIC_IMAGE_LIST_TIMEOUT_MS = 20000;
+const IMAGE_SHARE_UNSUPPORTED_MESSAGE =
+  "Thiết bị này chưa hỗ trợ chia sẻ ảnh trực tiếp. Bạn có thể tải ảnh xuống để gửi.";
+const IMAGE_SHARE_ERROR_MESSAGE = "Không thể chuẩn bị ảnh để chia sẻ. Bạn có thể tải ảnh xuống để gửi.";
+
+function getImageShareFileName(product, image, index) {
+  const sourceName = String(image?.original_name || "").trim();
+  if (sourceName) return sourceName;
+
+  const safeSku = String(product?.sku || "san-pham")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${safeSku || "san-pham"}-${index + 1}.jpg`;
+}
+
+async function imageToShareFile(product, image, index) {
+  const response = await fetch(resolveApiAssetUrl(image.download_url), { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("image_fetch_failed");
+  }
+
+  const blob = await response.blob();
+  if (!blob.type || !blob.type.startsWith("image/")) {
+    throw new Error("unsupported_image_type");
+  }
+
+  return new File([blob], getImageShareFileName(product, image, index), { type: blob.type });
+}
+
+function isUserShareCancellation(error) {
+  const name = String(error?.name || "");
+  const message = String(error?.message || "").toLowerCase();
+  return name === "AbortError" || message.includes("cancel") || message.includes("dismiss");
+}
+
+function getImageSharePayload(shareNavigator, files, title, text) {
+  if (!shareNavigator?.share || !shareNavigator?.canShare || files.length === 0) return null;
+
+  const allFilesPayload = { files, title, text };
+  if (shareNavigator.canShare(allFilesPayload)) return allFilesPayload;
+
+  const firstFilePayload = { files: files.slice(0, 1), title, text };
+  if (shareNavigator.canShare(firstFilePayload)) return firstFilePayload;
+
+  return null;
+}
 
 export function SearchResultCard({ product, autoExpand = false, eagerImage = false }) {
   const [expanded, setExpanded] = useState(autoExpand);
@@ -12,6 +59,8 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
+  const [shareFeedback, setShareFeedback] = useState("");
+  const [isSharingImages, setIsSharingImages] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const sortedNoteGroups = useMemo(
     () => [...(product.noteGroups || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0)),
@@ -26,6 +75,8 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
     setImages([]);
     setIsGalleryOpen(false);
     setSelectedImageIndex(null);
+    setShareFeedback("");
+    setIsSharingImages(false);
   }, [autoExpand, product.sku]);
 
   useEffect(() => {
@@ -84,6 +135,41 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
       setImageError(error?.message || "Không thể tải ảnh sản phẩm.");
     } finally {
       setIsLoadingImages(false);
+    }
+  }
+
+  async function handleShareImages(event) {
+    event.stopPropagation();
+    if (isSharingImages || images.length === 0) return;
+
+    if (!navigator.share || !navigator.canShare || typeof File === "undefined") {
+      setShareFeedback(IMAGE_SHARE_UNSUPPORTED_MESSAGE);
+      return;
+    }
+
+    setIsSharingImages(true);
+    setShareFeedback("Đang chuẩn bị...");
+    try {
+      const files = await Promise.all(images.map((image, index) => imageToShareFile(product, image, index)));
+      const title = product.name || "Ảnh sản phẩm";
+      const text = product.name || "";
+      const sharePayload = getImageSharePayload(navigator, files, title, text);
+
+      if (!sharePayload) {
+        setShareFeedback(IMAGE_SHARE_UNSUPPORTED_MESSAGE);
+        return;
+      }
+
+      await navigator.share(sharePayload);
+      setShareFeedback("");
+    } catch (error) {
+      if (isUserShareCancellation(error)) {
+        setShareFeedback("");
+      } else {
+        setShareFeedback(IMAGE_SHARE_ERROR_MESSAGE);
+      }
+    } finally {
+      setIsSharingImages(false);
     }
   }
 
@@ -158,34 +244,51 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
             {isLoadingImages && <p className="text-sm text-slate-500">Đang tải ảnh...</p>}
             {imageError && <p className="text-sm text-red-600">{imageError}</p>}
             {!isLoadingImages && !imageError && (
-              <div className="grid grid-cols-3 gap-2">
-                {images.map((image, index) => (
-                  <div key={image.id} className="min-w-0">
+              <>
+                {images.length > 0 && (
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedImageIndex(index)}
-                      className="group block w-full"
-                      aria-label={`Xem lớn ảnh ${index + 1} của ${product.name}`}
+                      onClick={handleShareImages}
+                      disabled={isSharingImages}
+                      className="min-h-9 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
                     >
-                      <img
-                        src={resolveApiAssetUrl(image.thumbnail_url)}
-                        alt={`${product.name} ${image.sort_order}`}
-                        loading="lazy"
-                        decoding="async"
-                        width="160"
-                        height="160"
-                        className="aspect-square w-full rounded-lg border border-slate-200 bg-slate-50 object-contain group-hover:border-sky-400"
-                      />
+                      {isSharingImages ? "Đang chuẩn bị..." : "Chia sẻ ảnh"}
                     </button>
-                    <a
-                      href={resolveApiAssetUrl(image.download_url)}
-                      className="mt-1 block truncate text-center text-xs font-medium text-sky-700 hover:underline"
-                    >
-                      Tải ảnh
-                    </a>
+                    {shareFeedback && (
+                      <span className="text-xs font-medium text-slate-600">{shareFeedback}</span>
+                    )}
                   </div>
-                ))}
-              </div>
+                )}
+                <div className="grid grid-cols-3 gap-2">
+                  {images.map((image, index) => (
+                    <div key={image.id} className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedImageIndex(index)}
+                        className="group block w-full"
+                        aria-label={`Xem lớn ảnh ${index + 1} của ${product.name}`}
+                      >
+                        <img
+                          src={resolveApiAssetUrl(image.thumbnail_url)}
+                          alt={`${product.name} ${image.sort_order}`}
+                          loading="lazy"
+                          decoding="async"
+                          width="160"
+                          height="160"
+                          className="aspect-square w-full rounded-lg border border-slate-200 bg-slate-50 object-contain group-hover:border-sky-400"
+                        />
+                      </button>
+                      <a
+                        href={resolveApiAssetUrl(image.download_url)}
+                        className="mt-1 block truncate text-center text-xs font-medium text-sky-700 hover:underline"
+                      >
+                        Tải ảnh
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
