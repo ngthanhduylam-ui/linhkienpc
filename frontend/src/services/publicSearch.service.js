@@ -1,15 +1,15 @@
 import { apiGet } from "../api/apiClient";
 
-export async function listPublicProductImages(sku) {
-  const response = await apiGet(`/public/products/${encodeURIComponent(sku)}/images`);
+export async function listPublicProductImages(sku, options = {}) {
+  const response = await apiGet(`/public/products/${encodeURIComponent(sku)}/images`, {}, options);
   return response?.data?.images || [];
 }
 
-export async function searchPublicProducts(keyword) {
+export async function searchPublicProducts(keyword, options = {}) {
   const trimmedKeyword = keyword?.trim();
   if (!trimmedKeyword) return [];
 
-  const response = await apiGet("/public/products", { q: trimmedKeyword, page: 1, limit: 20 });
+  const response = await apiGet("/public/products", { q: trimmedKeyword, page: 1, limit: 20 }, options);
   const products = response?.data || [];
 
   return products.map((product, index) => ({

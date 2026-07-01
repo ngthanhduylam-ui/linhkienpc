@@ -122,7 +122,9 @@ async function request(path, options = {}) {
     body,
     headers = {},
     retryOn401 = true,
-    responseType = "json"
+    responseType = "json",
+    signal,
+    timeoutMs
   } = options;
 
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
@@ -136,10 +138,34 @@ async function request(path, options = {}) {
     requestHeaders.Authorization = `Bearer ${accessToken}`;
   }
 
+  let timeoutId = null;
+  let abortController = null;
+  let fetchSignal = signal;
+
+  if (signal || timeoutMs) {
+    abortController = new AbortController();
+    fetchSignal = abortController.signal;
+
+    if (signal) {
+      if (signal.aborted) {
+        abortController.abort();
+      } else {
+        signal.addEventListener("abort", () => abortController.abort(), { once: true });
+      }
+    }
+
+    if (timeoutMs) {
+      timeoutId = window.setTimeout(() => abortController.abort(), timeoutMs);
+    }
+  }
+
   const response = await fetch(buildUrl(path, query), {
     method,
     headers: requestHeaders,
-    body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body))
+    body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body)),
+    signal: fetchSignal
+  }).finally(() => {
+    if (timeoutId) window.clearTimeout(timeoutId);
   });
 
   const canTryRefresh =

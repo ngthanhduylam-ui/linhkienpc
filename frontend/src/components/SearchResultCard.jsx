@@ -3,7 +3,9 @@ import { resolveApiAssetUrl } from "../api/apiClient";
 import { listPublicProductImages } from "../services/publicSearch.service";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
-export function SearchResultCard({ product, autoExpand = false }) {
+const PUBLIC_IMAGE_LIST_TIMEOUT_MS = 20000;
+
+export function SearchResultCard({ product, autoExpand = false, eagerImage = false }) {
   const [expanded, setExpanded] = useState(autoExpand);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [images, setImages] = useState([]);
@@ -77,7 +79,7 @@ export function SearchResultCard({ product, autoExpand = false }) {
     setIsLoadingImages(true);
     setImageError("");
     try {
-      setImages(await listPublicProductImages(product.sku));
+      setImages(await listPublicProductImages(product.sku, { timeoutMs: PUBLIC_IMAGE_LIST_TIMEOUT_MS }));
     } catch (error) {
       setImageError(error?.message || "Không thể tải ảnh sản phẩm.");
     } finally {
@@ -96,7 +98,10 @@ export function SearchResultCard({ product, autoExpand = false }) {
             <img
               src={resolveApiAssetUrl(product.primaryImage.thumbnail_url)}
               alt={product.name}
-              loading="lazy"
+              loading={eagerImage ? "eager" : "lazy"}
+              decoding="async"
+              width="80"
+              height="80"
               className="h-20 w-20 shrink-0 rounded-xl border border-slate-200 bg-slate-50 object-contain"
             />
           )}
@@ -166,6 +171,9 @@ export function SearchResultCard({ product, autoExpand = false }) {
                         src={resolveApiAssetUrl(image.thumbnail_url)}
                         alt={`${product.name} ${image.sort_order}`}
                         loading="lazy"
+                        decoding="async"
+                        width="160"
+                        height="160"
                         className="aspect-square w-full rounded-lg border border-slate-200 bg-slate-50 object-contain group-hover:border-sky-400"
                       />
                     </button>
@@ -246,6 +254,7 @@ export function SearchResultCard({ product, autoExpand = false }) {
             <img
               src={resolveApiAssetUrl(selectedImage.download_url)}
               alt={`${product.name} ${selectedImageIndex + 1}`}
+              decoding="async"
               className="max-h-[70vh] max-w-full object-contain"
             />
           </div>
