@@ -31,9 +31,33 @@ const MAX_SALE_PRICE = 999999999999999;
 const SALE_PRICE_INTEGER_MESSAGE = "Giá bán phải là số nguyên không âm.";
 const SALE_PRICE_MAX_MESSAGE = "Giá bán vượt quá giới hạn cho phép.";
 const CATEGORY_REQUIRED_MESSAGE = "Vui lòng chọn loại sản phẩm.";
-const CATEGORY_CODE_ALIASES = {
-  main: "mainboard"
+const SKU_CATEGORY_ALIASES = {
+  display: ["lcd"],
+  barebone: ["bb", "barebone"],
+  case: ["case"],
+  nguon: ["psu", "nguon"],
+  hdd: ["hdd"],
+  ssd: ["ssd"],
+  vga: ["vga"],
+  ram: ["ram"],
+  mainboard: ["main", "mainboard"],
+  cpu: ["cpu"],
+  laptop: ["lap", "laptop"]
 };
+const SKU_CATEGORY_LABELS = {
+  display: ["man hinh", "lcd"],
+  barebone: ["barebone"],
+  case: ["case"],
+  nguon: ["nguon"],
+  hdd: ["hdd"],
+  ssd: ["ssd"],
+  vga: ["vga"],
+  ram: ["ram"],
+  mainboard: ["mainboard"],
+  cpu: ["cpu"],
+  laptop: ["laptop"]
+};
+const SKU_CATEGORY_PREFIX_TOKENS = new Set(["2nd", "new", "used"]);
 const MAX_PRODUCT_IMAGES = 5;
 const MAX_UPLOAD_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_SOURCE_IMAGE_BYTES = 50 * 1024 * 1024;
@@ -186,15 +210,35 @@ function getCategoryById(categories, categoryId) {
   return categories.find((item) => Number(item.id) === Number(categoryId)) || null;
 }
 
-function getCategoryCodeFromSku(sku) {
-  const parts = String(sku || "").trim().toLowerCase().split(".");
-  const token = parts[1]?.trim() || "";
-  return CATEGORY_CODE_ALIASES[token] || token;
+function getSkuTokens(sku) {
+  return normalizeText(sku)
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
 }
 
-function getCategoryByCode(categories, code) {
-  if (!code) return null;
-  return categories.find((item) => String(item.code || "").trim().toLowerCase() === code) || null;
+function getCategoryAliasFromSku(sku) {
+  const tokens = getSkuTokens(sku);
+  for (const token of tokens) {
+    if (SKU_CATEGORY_PREFIX_TOKENS.has(token)) continue;
+    const matched = Object.entries(SKU_CATEGORY_ALIASES).find(([, aliases]) => aliases.includes(token));
+    if (matched) return matched[0];
+  }
+  return "";
+}
+
+function getCategoryByAlias(categories, alias) {
+  if (!alias) return null;
+  const labels = SKU_CATEGORY_LABELS[alias] || [alias];
+  for (const label of labels) {
+    const matchedCategory = categories.find((item) => {
+      const categoryCode = normalizeText(item.code);
+      const categoryName = normalizeText(item.name);
+      return categoryCode === label || categoryCode.startsWith(`${label}-`) || categoryName === label;
+    });
+    if (matchedCategory) return matchedCategory;
+  }
+  return null;
 }
 
 function getConditionFromSku(sku) {
@@ -273,6 +317,7 @@ export function ProductFormPage() {
   const isEditMode = Boolean(id);
   const categorySelectRef = useRef(null);
   const hasUserEditedSkuRef = useRef(false);
+  const lastClearedCategorySkuRef = useRef("");
   const pendingImagesRef = useRef([]);
 
   const [categories, setCategories] = useState([]);
@@ -412,9 +457,10 @@ export function ProductFormPage() {
   useEffect(() => {
     if (!categories.length || categorySelectionSource === "manual") return;
     if (isEditMode && !hasUserEditedSkuRef.current) return;
+    if (categorySelectionSource === "empty" && lastClearedCategorySkuRef.current === form.sku) return;
 
-    const categoryCode = getCategoryCodeFromSku(form.sku);
-    const matchedCategory = getCategoryByCode(categories, categoryCode);
+    const categoryAlias = getCategoryAliasFromSku(form.sku);
+    const matchedCategory = getCategoryByAlias(categories, categoryAlias);
     if (!matchedCategory) return;
 
     const matchedCategoryId = String(matchedCategory.id);
@@ -422,6 +468,7 @@ export function ProductFormPage() {
 
     setForm((prev) => ({ ...prev, category_id: matchedCategoryId }));
     setCategorySelectionSource("suggested");
+    lastClearedCategorySkuRef.current = "";
     setCategoryInlineInfo("Đã gợi ý từ SKU");
     clearFieldError("category_id");
   }, [categories, categorySelectionSource, form.category_id, form.sku, isEditMode]);
@@ -457,6 +504,7 @@ export function ProductFormPage() {
     const nextCategoryId = event.target.value;
     updateForm({ category_id: nextCategoryId });
     setCategorySelectionSource(nextCategoryId ? "manual" : "empty");
+    lastClearedCategorySkuRef.current = nextCategoryId ? "" : form.sku;
     setCategoryInlineInfo("");
     clearFieldError("category_id");
   }
