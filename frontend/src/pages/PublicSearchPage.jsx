@@ -4,8 +4,11 @@ import { SearchResultCard } from "../components/SearchResultCard";
 import { searchPublicProducts } from "../services/publicSearch.service";
 
 const SEARCH_HISTORY_KEY = "public_search_history";
+const IOS_INSTALL_DISMISSED_KEY = "public_ios_install_dismissed_at";
 const MAX_HISTORY_ITEMS = 10;
 const PUBLIC_SEARCH_TIMEOUT_MS = 20000;
+const PUBLIC_SEARCH_RESUME_AFTER_MS = 25000;
+const IOS_INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
 const PUBLIC_SEARCH_ERROR_MESSAGE = "Mạng đang chậm, vui lòng thử lại.";
 
 function loadSearchHistory() {
@@ -33,6 +36,34 @@ function addKeywordToHistory(searchInput, currentHistory) {
   return nextHistory;
 }
 
+function isStandaloneDisplayMode() {
+  return Boolean(
+    window.matchMedia?.("(display-mode: standalone)")?.matches ||
+    window.navigator?.standalone === true
+  );
+}
+
+function isIOSSafariInstallContext() {
+  const userAgent = window.navigator?.userAgent || "";
+  const platform = window.navigator?.platform || "";
+  const isIOSDevice = /iPad|iPhone|iPod/i.test(userAgent) || (platform === "MacIntel" && window.navigator?.maxTouchPoints > 1);
+  const isSafariCompatible =
+    /Version\/[\d.]+.*Safari/i.test(userAgent) &&
+    !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|GSA/i.test(userAgent);
+  return isIOSDevice && isSafariCompatible && !isStandaloneDisplayMode();
+}
+
+function shouldShowIOSInstallGuide() {
+  if (!isIOSSafariInstallContext()) return false;
+
+  try {
+    const dismissedAt = Number(localStorage.getItem(IOS_INSTALL_DISMISSED_KEY) || 0);
+    return !dismissedAt || Date.now() - dismissedAt >= IOS_INSTALL_DISMISS_MS;
+  } catch {
+    return true;
+  }
+}
+
 export function PublicSearchPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
@@ -41,11 +72,29 @@ export function PublicSearchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(() => shouldShowIOSInstallGuide());
   const inputRef = useRef(null);
   const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
+  const debouncedKeywordRef = useRef("");
+  const isLoadingRef = useRef(false);
+  const hiddenAtRef = useRef(0);
+  const wasPendingWhenHiddenRef = useRef(false);
+  const shouldRecoverAfterOnlineRef = useRef(false);
+  const resumeSearchKeyRef = useRef("");
+  const resumeRevalidationPendingRef = useRef(false);
+  const resultsKeywordRef = useRef("");
 
   const trimmedKeyword = searchInput.trim();
   const hasSearched = debouncedKeyword.trim().length > 0;
+
+  useEffect(() => {
+    debouncedKeywordRef.current = debouncedKeyword;
+  }, [debouncedKeyword]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -59,6 +108,10 @@ export function PublicSearchPage() {
 
     if (!searchKeyword) {
       requestIdRef.current += 1;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      resumeRevalidationPendingRef.current = false;
+      resultsKeywordRef.current = "";
       setResults([]);
       setError("");
       setIsLoading(false);
@@ -68,24 +121,38 @@ export function PublicSearchPage() {
     const currentRequestId = requestIdRef.current + 1;
     requestIdRef.current = currentRequestId;
     const abortController = new AbortController();
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = abortController;
 
     async function runSearch() {
       setIsLoading(true);
       setError("");
+      if (resultsKeywordRef.current !== searchKeyword) {
+        setResults([]);
+      }
       try {
         const data = await searchPublicProducts(searchKeyword, {
           signal: abortController.signal,
           timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
         });
         if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
+          resultsKeywordRef.current = searchKeyword;
           setResults(data);
         }
       } catch (err) {
         if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
-          setResults([]);
+          if (resultsKeywordRef.current !== searchKeyword) {
+            setResults([]);
+          }
           setError(PUBLIC_SEARCH_ERROR_MESSAGE);
         }
       } finally {
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null;
+        }
+        if (requestIdRef.current === currentRequestId) {
+          resumeRevalidationPendingRef.current = false;
+        }
         if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           setIsLoading(false);
         }
@@ -95,8 +162,88 @@ export function PublicSearchPage() {
     runSearch();
     return () => {
       abortController.abort();
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
     };
   }, [debouncedKeyword, retryCount]);
+
+  useEffect(() => {
+    function recoverCurrentSearch() {
+      const searchKeyword = debouncedKeywordRef.current.trim();
+      if (!searchKeyword) return;
+      if (resumeRevalidationPendingRef.current) return;
+
+      const resumeKey = `${searchKeyword}:${requestIdRef.current}`;
+      if (resumeSearchKeyRef.current === resumeKey) return;
+      resumeSearchKeyRef.current = resumeKey;
+      resumeRevalidationPendingRef.current = true;
+      setRetryCount((current) => current + 1);
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = Date.now();
+        wasPendingWhenHiddenRef.current = Boolean(abortControllerRef.current) || isLoadingRef.current;
+        resumeSearchKeyRef.current = "";
+        resumeRevalidationPendingRef.current = false;
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+        requestIdRef.current += 1;
+        return;
+      }
+
+      if (document.visibilityState !== "visible") return;
+
+      const hiddenDuration = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+      const shouldRecover =
+        wasPendingWhenHiddenRef.current ||
+        isLoadingRef.current ||
+        shouldRecoverAfterOnlineRef.current ||
+        hiddenDuration >= PUBLIC_SEARCH_RESUME_AFTER_MS;
+
+      wasPendingWhenHiddenRef.current = false;
+      shouldRecoverAfterOnlineRef.current = false;
+
+      if (shouldRecover) {
+        recoverCurrentSearch();
+      }
+    }
+
+    function handleOffline() {
+      shouldRecoverAfterOnlineRef.current = true;
+      if (document.visibilityState === "hidden") {
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+        requestIdRef.current += 1;
+      }
+    }
+
+    function handleOnline() {
+      shouldRecoverAfterOnlineRef.current = true;
+      if (document.visibilityState === "visible") {
+        recoverCurrentSearch();
+      }
+    }
+
+    function handlePageShow(event) {
+      if (event.persisted) {
+        recoverCurrentSearch();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, []);
 
   function rememberKeyword(value = searchInput) {
     setHistory((currentHistory) => addKeywordToHistory(value, currentHistory));
@@ -116,6 +263,7 @@ export function PublicSearchPage() {
     rememberKeyword(searchInput);
     setSearchInput("");
     setDebouncedKeyword("");
+    resultsKeywordRef.current = "";
     setResults([]);
     setError("");
     window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -140,6 +288,15 @@ export function PublicSearchPage() {
   function handleClearHistory() {
     saveSearchHistory([]);
     setHistory([]);
+  }
+
+  function handleDismissIOSInstallGuide() {
+    try {
+      localStorage.setItem(IOS_INSTALL_DISMISSED_KEY, String(Date.now()));
+    } catch {
+      // Ignore storage failures; dismiss for the current session.
+    }
+    setShowIOSInstallGuide(false);
   }
 
   return (
@@ -222,6 +379,27 @@ export function PublicSearchPage() {
               Tìm theo tên sản phẩm, SKU hoặc ghi chú bảo hành. Ví dụ: 12400f, ddr4, b365...
             </p>
           </form>
+
+          {showIOSInstallGuide && (
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-left shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-extrabold text-sky-800">Cài ứng dụng trên iPhone</p>
+                  <p className="mt-1 text-sm leading-5 text-sky-700">
+                    Nhấn Chia sẻ, sau đó chọn “Thêm vào Màn hình chính”.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDismissIOSInstallGuide}
+                  className="shrink-0 rounded-full px-2 py-1 text-sm font-bold text-sky-700 hover:bg-sky-100"
+                  aria-label="Ẩn hướng dẫn cài ứng dụng trên iPhone"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {!trimmedKeyword && (
@@ -274,7 +452,7 @@ export function PublicSearchPage() {
               </h2>
             </div>
 
-            {isLoading && (
+            {isLoading && results.length === 0 && (
               <div className="mx-auto grid max-w-5xl gap-3 md:grid-cols-2">
                 {[1, 2, 3, 4].map((skeleton) => (
                   <div key={skeleton} className="animate-pulse rounded-2xl border border-slate-200 bg-white p-4">
@@ -306,7 +484,7 @@ export function PublicSearchPage() {
               </div>
             )}
 
-            {!isLoading && !error && results.length > 0 && (
+            {!error && results.length > 0 && (
               <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
                 {results.map((item, index) => (
                   <SearchResultCard
