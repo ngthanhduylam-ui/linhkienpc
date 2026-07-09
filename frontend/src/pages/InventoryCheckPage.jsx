@@ -43,6 +43,27 @@ function normalizeNoteValue(value) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
 }
 
+function isSameProduct(left, right) {
+  if (!left || !right) return false;
+  if (left.id !== undefined && right.id !== undefined && String(left.id) === String(right.id)) return true;
+  return Boolean(left.sku && right.sku && String(left.sku) === String(right.sku));
+}
+
+function syncProductInList(items, updatedProduct) {
+  if (!updatedProduct) return items;
+  let changed = false;
+  const nextItems = items.map((item) => {
+    if (!isSameProduct(item, updatedProduct)) return item;
+    changed = true;
+    return {
+      ...item,
+      ...updatedProduct,
+      total_quantity: Number(updatedProduct.total_quantity || 0)
+    };
+  });
+  return changed ? nextItems : items;
+}
+
 export function InventoryCheckPage() {
   const [searchInput, setSearchInput] = useState("");
   const searchInputRef = useRef(null);
@@ -174,6 +195,24 @@ export function InventoryCheckPage() {
   function handleSelectProduct(product) {
     setRecentProducts(saveRecentItem(RECENT_PRODUCTS_KEY, product, 20));
     loadProductDetail(product.sku);
+  }
+
+  function syncAdjustedProduct(updatedProduct) {
+    if (!updatedProduct) return;
+
+    setProducts((current) => syncProductInList(current, updatedProduct));
+    setActiveProducts((current) => syncProductInList(current, updatedProduct));
+    setRecentProducts((current) => {
+      const nextItems = syncProductInList(current, updatedProduct);
+      if (nextItems !== current) {
+        try {
+          window.localStorage.setItem(RECENT_PRODUCTS_KEY, JSON.stringify(nextItems));
+        } catch {
+          // Recent products are optional; keep the in-memory update.
+        }
+      }
+      return nextItems;
+    });
   }
 
   const displayProducts = useMemo(() => {
@@ -321,15 +360,16 @@ export function InventoryCheckPage() {
       });
 
       const refreshed = await loadProductDetail(result?.product?.sku || detail.product.sku, { keepForms: true });
-      setDetail(
+      const nextDetail =
         refreshed || {
           ...detail,
           product: result?.product || detail.product,
           note_groups: result?.note_groups || detail.note_groups,
           recent_quantity_adjustments:
             result?.recent_quantity_adjustments || detail.recent_quantity_adjustments
-        }
-      );
+        };
+      setDetail(nextDetail);
+      syncAdjustedProduct(nextDetail?.product);
       setAdjustQuantity("");
       setAdjustReason("");
       setSuccess(
