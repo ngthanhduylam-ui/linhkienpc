@@ -321,21 +321,18 @@ async function searchPublicProducts(query) {
       page,
       limit,
       total: 0,
+      hasHiddenOutOfStockMatches: false,
       searchMode: 'fuzzy_contains'
     };
   }
 
+  const search = buildProductTokenSearch(searchTokens, { includeWarrantyNote: true });
   const whereParts = [
     'p.is_active = 1',
-    'COALESCE(pib.quantity, 0) > 0'
+    'COALESCE(pib.quantity, 0) > 0',
+    ...search.clauses
   ];
-  const params = [];
-
-  if (searchTokens.length) {
-    const search = buildProductTokenSearch(searchTokens, { includeWarrantyNote: true });
-    whereParts.push(...search.clauses);
-    params.push(...search.params);
-  }
+  const params = search.params;
 
   const whereSql = `WHERE ${whereParts.join(' AND ')}`;
 
@@ -348,6 +345,29 @@ async function searchPublicProducts(query) {
     `,
     params
   );
+  const total = Number(countRows[0].total || 0);
+  let hasHiddenOutOfStockMatches = false;
+
+  if (total === 0) {
+    const hiddenWhereSql = `WHERE ${[
+      'p.is_active = 1',
+      'COALESCE(pib.quantity, 0) = 0',
+      ...search.clauses
+    ].join(' AND ')}`;
+    const [hiddenMatchRows] = await pool.query(
+      `
+        SELECT EXISTS(
+          SELECT 1
+          FROM products p
+          LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+          ${hiddenWhereSql}
+          LIMIT 1
+        ) AS has_hidden_match
+      `,
+      params
+    );
+    hasHiddenOutOfStockMatches = Boolean(hiddenMatchRows[0]?.has_hidden_match);
+  }
 
   const [products] = await pool.query(
     `
@@ -387,7 +407,8 @@ async function searchPublicProducts(query) {
     })),
     page,
     limit,
-    total: Number(countRows[0].total || 0),
+    total,
+    hasHiddenOutOfStockMatches,
     searchMode: 'fuzzy_contains'
   };
 }

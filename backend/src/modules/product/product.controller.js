@@ -91,6 +91,7 @@ exports.searchPublicProducts = asyncHandler(async (req, res) => {
       page: result.page,
       limit: result.limit,
       total: result.total,
+      has_hidden_out_of_stock_matches: result.hasHiddenOutOfStockMatches,
       server_time: new Date().toISOString()
     }
   });

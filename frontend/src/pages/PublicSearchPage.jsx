@@ -68,6 +68,7 @@ export function PublicSearchPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [results, setResults] = useState([]);
+  const [hasHiddenOutOfStockMatches, setHasHiddenOutOfStockMatches] = useState(false);
   const [history, setHistory] = useState(() => loadSearchHistory());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -113,6 +114,7 @@ export function PublicSearchPage() {
       resumeRevalidationPendingRef.current = false;
       resultsKeywordRef.current = "";
       setResults([]);
+      setHasHiddenOutOfStockMatches(false);
       setError("");
       setIsLoading(false);
       return undefined;
@@ -129,20 +131,23 @@ export function PublicSearchPage() {
       setError("");
       if (resultsKeywordRef.current !== searchKeyword) {
         setResults([]);
+        setHasHiddenOutOfStockMatches(false);
       }
       try {
-        const data = await searchPublicProducts(searchKeyword, {
+        const searchResult = await searchPublicProducts(searchKeyword, {
           signal: abortController.signal,
           timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
         });
         if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           resultsKeywordRef.current = searchKeyword;
-          setResults(data);
+          setResults(searchResult.products);
+          setHasHiddenOutOfStockMatches(searchResult.hasHiddenOutOfStockMatches);
         }
       } catch (err) {
         if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           if (resultsKeywordRef.current !== searchKeyword) {
             setResults([]);
+            setHasHiddenOutOfStockMatches(false);
           }
           setError(PUBLIC_SEARCH_ERROR_MESSAGE);
         }
@@ -479,8 +484,21 @@ export function PublicSearchPage() {
 
             {!isLoading && !error && results.length === 0 && (
               <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white px-4 py-12 text-center shadow-sm">
-                <p className="text-base font-bold text-slate-800">Không tìm thấy sản phẩm phù hợp.</p>
-                <p className="mt-2 text-sm text-slate-500">Thử tìm bằng SKU, tên model ngắn hơn hoặc ghi chú bảo hành.</p>
+                {hasHiddenOutOfStockMatches ? (
+                  <>
+                    <p className="text-base font-bold text-slate-800">Sản phẩm hiện hết hàng</p>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Shop hiện chưa còn tồn cho từ khóa này. Vui lòng liên hệ để kiểm tra thêm.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-base font-bold text-slate-800">Không tìm thấy sản phẩm</p>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Bạn thử kiểm tra lại từ khóa, mã SKU hoặc tên sản phẩm.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 

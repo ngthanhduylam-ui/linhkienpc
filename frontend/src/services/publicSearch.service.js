@@ -7,23 +7,28 @@ export async function listPublicProductImages(sku, options = {}) {
 
 export async function searchPublicProducts(keyword, options = {}) {
   const trimmedKeyword = keyword?.trim();
-  if (!trimmedKeyword) return [];
+  if (!trimmedKeyword) {
+    return { products: [], hasHiddenOutOfStockMatches: false };
+  }
 
   const response = await apiGet("/public/products", { q: trimmedKeyword, page: 1, limit: 20 }, options);
   const products = response?.data || [];
 
-  return products.map((product, index) => ({
-    id: `${product.sku}-${index}`,
-    name: product.name,
-    sku: product.sku,
-    categoryName: product.category?.name || product.category_name || "",
-    imageCount: Number(product.image_count || 0),
-    primaryImage: product.primary_image || null,
-    totalQuantity: Number(product.total_quantity || 0),
-    noteGroups: (product.note_groups || []).map((item) => ({
-      note: item.note,
-      label: item.label || item.note || "Không ghi chú",
-      quantity: Number(item.quantity || 0)
-    }))
-  }));
+  return {
+    products: products.map((product, index) => ({
+      id: `${product.sku}-${index}`,
+      name: product.name,
+      sku: product.sku,
+      categoryName: product.category?.name || product.category_name || "",
+      imageCount: Number(product.image_count || 0),
+      primaryImage: product.primary_image || null,
+      totalQuantity: Number(product.total_quantity || 0),
+      noteGroups: (product.note_groups || []).map((item) => ({
+        note: item.note,
+        label: item.label || item.note || "Không ghi chú",
+        quantity: Number(item.quantity || 0)
+      }))
+    })),
+    hasHiddenOutOfStockMatches: response?.meta?.has_hidden_out_of_stock_matches === true
+  };
 }
