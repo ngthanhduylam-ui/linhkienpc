@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { SearchResultCard } from "../components/SearchResultCard";
-import { searchPublicProducts } from "../services/publicSearch.service";
+import { PublicAvailableProductsSection } from "../components/public/PublicAvailableProductsSection";
+import { PublicCatalogueHeader } from "../components/public/PublicCatalogueHeader";
+import { PublicCatalogueHero } from "../components/public/PublicCatalogueHero";
+import { PublicCategoryNav } from "../components/public/PublicCategoryNav";
+import {
+  listAvailableCatalogueProducts,
+  listPublicCategories,
+  searchPublicProducts
+} from "../services/publicSearch.service";
 
 const SEARCH_HISTORY_KEY = "public_search_history";
 const IOS_INSTALL_DISMISSED_KEY = "public_ios_install_dismissed_at";
@@ -11,27 +18,45 @@ const PUBLIC_SEARCH_RESUME_AFTER_MS = 25000;
 const IOS_INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
 const PUBLIC_SEARCH_ERROR_MESSAGE = "Mạng đang chậm, vui lòng thử lại.";
 
+function isTechnicalCatalogueSearch(value) {
+  return /^__catalogue_/i.test(String(value || "").trim());
+}
+
+function sanitizeSearchHistory(items) {
+  return items
+    .filter((item) => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item && !isTechnicalCatalogueSearch(item))
+    .slice(0, MAX_HISTORY_ITEMS);
+}
+
 function loadSearchHistory() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
+    const sanitized = Array.isArray(parsed) ? sanitizeSearchHistory(parsed) : [];
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(sanitized));
+    return sanitized;
   } catch {
     return [];
   }
 }
 
 function saveSearchHistory(items) {
-  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
+  try {
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(sanitizeSearchHistory(items)));
+  } catch {
+    // Search remains usable when storage is unavailable.
+  }
 }
 
 function addKeywordToHistory(searchInput, currentHistory) {
   const trimmed = searchInput.trim();
-  if (!trimmed) return currentHistory;
+  if (!trimmed || isTechnicalCatalogueSearch(trimmed)) return sanitizeSearchHistory(currentHistory);
 
-  const nextHistory = [trimmed, ...currentHistory.filter((item) => item.toLowerCase() !== trimmed.toLowerCase())].slice(
-    0,
-    MAX_HISTORY_ITEMS
-  );
+  const nextHistory = sanitizeSearchHistory([
+    trimmed,
+    ...currentHistory.filter((item) => item.toLowerCase() !== trimmed.toLowerCase())
+  ]);
   saveSearchHistory(nextHistory);
   return nextHistory;
 }
@@ -68,6 +93,9 @@ export function PublicSearchPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [results, setResults] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [catalogueProducts, setCatalogueProducts] = useState([]);
+  const [isCatalogueLoading, setIsCatalogueLoading] = useState(true);
   const [hasHiddenOutOfStockMatches, setHasHiddenOutOfStockMatches] = useState(false);
   const [history, setHistory] = useState(() => loadSearchHistory());
   const [isLoading, setIsLoading] = useState(false);
@@ -96,6 +124,37 @@ export function PublicSearchPage() {
   useEffect(() => {
     isLoadingRef.current = isLoading;
   }, [isLoading]);
+
+  useEffect(() => {
+    let active = true;
+    listPublicCategories()
+      .then((items) => {
+        if (active) setCategories(items);
+      })
+      .catch(() => {
+        if (active) setCategories([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    listAvailableCatalogueProducts()
+      .then((items) => {
+        if (active) setCatalogueProducts(items);
+      })
+      .catch(() => {
+        if (active) setCatalogueProducts([]);
+      })
+      .finally(() => {
+        if (active) setIsCatalogueLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -270,6 +329,7 @@ export function PublicSearchPage() {
     setDebouncedKeyword("");
     resultsKeywordRef.current = "";
     setResults([]);
+    setHasHiddenOutOfStockMatches(false);
     setError("");
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
@@ -295,6 +355,12 @@ export function PublicSearchPage() {
     setHistory([]);
   }
 
+  function handleCatalogueProductDetails(product) {
+    setSearchInput(product.sku);
+    submitSearch(product.sku);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function handleDismissIOSInstallGuide() {
     try {
       localStorage.setItem(IOS_INSTALL_DISMISSED_KEY, String(Date.now()));
@@ -306,145 +372,78 @@ export function PublicSearchPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div>
-            <p className="text-base font-extrabold tracking-wide text-sky-800 sm:text-lg">VI TÍNH PHƯỚC TÀI</p>
-            <p className="text-xs font-medium text-slate-500 sm:text-sm">Tra cứu tồn kho linh kiện PC</p>
-          </div>
-          <Link
-            to="/admin/login"
-            className="shrink-0 rounded-full border border-sky-200 bg-white px-4 py-2 text-sm font-bold text-sky-700 shadow-sm hover:bg-sky-50"
-          >
-            Đăng nhập quản trị
-          </Link>
-        </div>
-      </header>
+      <PublicCatalogueHeader
+        inputRef={inputRef}
+        isLoading={isLoading}
+        onClear={handleClearSearch}
+        onInputBlur={rememberKeyword}
+        onInputChange={setSearchInput}
+        onSubmit={submitSearch}
+        searchInput={searchInput}
+      />
+      <PublicCategoryNav categories={categories} />
 
-      <main className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 sm:pb-14 sm:pt-10">
-        <section className="mx-auto max-w-3xl text-center">
-          <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sky-700">
-            Kiểm tra nhanh
-          </span>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">
-            Tra cứu tồn kho linh kiện PC
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-            Nhập tên sản phẩm, SKU hoặc ghi chú bảo hành để kiểm tra số lượng còn trong kho.
-          </p>
+      <main className="mx-auto max-w-7xl px-4 pb-10 pt-4 sm:px-6 sm:pb-14 sm:pt-6">
+        {!trimmedKeyword && <PublicCatalogueHero />}
 
-          <form
-            className="mt-6 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitSearch(searchInput);
-            }}
-          >
-            <label className="sr-only" htmlFor="public-product-search">
-              Tìm sản phẩm
-            </label>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <input
-                  id="public-product-search"
-                  ref={inputRef}
-                  className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-4 pr-12 text-base font-semibold text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 sm:h-16 sm:text-lg"
-                  placeholder="Tìm theo tên sản phẩm, SKU hoặc ghi chú bảo hành"
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  onBlur={() => rememberKeyword(searchInput)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      submitSearch(searchInput);
-                    }
-                  }}
-                />
-
-                {searchInput.trim() && (
-                  <button
-                    type="button"
-                    aria-label="Xóa tìm kiếm"
-                    onClick={handleClearSearch}
-                    className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    ×
-                  </button>
-                )}
+        {showIOSInstallGuide && (
+          <section className="mx-auto mt-4 max-w-3xl rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-extrabold text-sky-800">Cài ứng dụng trên iPhone</p>
+                <p className="mt-1 text-sm leading-5 text-sky-700">
+                  Nhấn Chia sẻ, sau đó chọn “Thêm vào Màn hình chính”.
+                </p>
               </div>
               <button
-                type="submit"
-                className="h-12 rounded-2xl bg-sky-600 px-6 text-sm font-extrabold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:h-16 sm:min-w-32 sm:text-base"
-                disabled={!trimmedKeyword || isLoading}
+                type="button"
+                onClick={handleDismissIOSInstallGuide}
+                className="shrink-0 rounded-full px-2 py-1 text-sm font-bold text-sky-700 hover:bg-sky-100"
+                aria-label="Ẩn hướng dẫn cài ứng dụng trên iPhone"
               >
-                {isLoading ? "Đang tìm..." : "Tìm kiếm"}
+                ×
               </button>
-            </div>
-            <p className="mt-3 text-left text-xs leading-5 text-slate-500 sm:text-sm">
-              Tìm theo tên sản phẩm, SKU hoặc ghi chú bảo hành. Ví dụ: 12400f, ddr4, b365...
-            </p>
-          </form>
-
-          {showIOSInstallGuide && (
-            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-left shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-extrabold text-sky-800">Cài ứng dụng trên iPhone</p>
-                  <p className="mt-1 text-sm leading-5 text-sky-700">
-                    Nhấn Chia sẻ, sau đó chọn “Thêm vào Màn hình chính”.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDismissIOSInstallGuide}
-                  className="shrink-0 rounded-full px-2 py-1 text-sm font-bold text-sky-700 hover:bg-sky-100"
-                  aria-label="Ẩn hướng dẫn cài ứng dụng trên iPhone"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {!trimmedKeyword && (
-          <section className="mx-auto mt-5 max-w-3xl rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 sm:px-6">
-            <h2 className="text-sm font-bold text-slate-800">Cách tra cứu</h2>
-            <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
-              <p className="rounded-xl bg-slate-50 px-4 py-3">Gõ tên sản phẩm hoặc model cần kiểm tra.</p>
-              <p className="rounded-xl bg-slate-50 px-4 py-3">Dùng SKU nếu cần tìm chính xác hơn.</p>
-              <p className="rounded-xl bg-slate-50 px-4 py-3">Xem tồn theo từng nhóm bảo hành / ghi chú.</p>
             </div>
           </section>
         )}
 
+        {!trimmedKeyword && (
+          <PublicAvailableProductsSection
+            isLoading={isCatalogueLoading}
+            onViewDetails={handleCatalogueProductDetails}
+            products={catalogueProducts}
+          />
+        )}
+
         {!trimmedKeyword && history.length > 0 && (
-          <section className="mx-auto mt-5 max-w-3xl rounded-2xl border border-slate-200 bg-white px-4 py-5 shadow-sm sm:px-6">
+          <section className="mt-5 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-bold text-slate-800">Lịch sử tìm kiếm</h2>
+              <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Lịch sử tìm kiếm</h2>
               <button type="button" onClick={handleClearHistory} className="text-xs font-medium text-slate-500 hover:text-slate-800">
                 Xóa lịch sử
               </button>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {history.map((item) => (
-                <span
-                  key={item}
-                  className="inline-flex min-h-10 items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700"
-                >
-                  <button type="button" onClick={() => handleHistoryClick(item)} className="py-2 hover:text-sky-700">
-                    {item}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveHistoryItem(item)}
-                    className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-                    aria-label={`Xóa ${item} khỏi lịch sử`}
+            <div className="mt-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex w-max gap-2 pb-0.5">
+                {history.map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex min-h-8 items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-600"
                   >
-                    ×
-                  </button>
-                </span>
-              ))}
+                    <button type="button" onClick={() => handleHistoryClick(item)} className="py-1.5 hover:text-[#0b63f6]">
+                      {item}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveHistoryItem(item)}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                      aria-label={`Xóa ${item} khỏi lịch sử`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
           </section>
         )}
