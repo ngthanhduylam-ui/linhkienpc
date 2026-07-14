@@ -25,7 +25,7 @@ export async function listPublicProductImages(sku, options = {}) {
 export async function searchPublicProducts(keyword, options = {}) {
   const trimmedKeyword = keyword?.trim();
   if (!trimmedKeyword) {
-    return { products: [], hasHiddenOutOfStockMatches: false };
+    return { products: [], hasHiddenOutOfStockMatches: false, totalMatches: 0 };
   }
 
   const { limit = 20, ...requestOptions } = options;
@@ -42,6 +42,10 @@ export async function searchPublicProducts(keyword, options = {}) {
         productId,
         name: product.name,
         sku: product.sku,
+        salePrice:
+          product.sale_price === null || product.sale_price === undefined
+            ? null
+            : Number(product.sale_price),
         categoryName: product.category?.name || product.category_name || "",
         imageCount: Number(product.image_count || 0),
         primaryImage: product.primary_image || images[0] || null,
@@ -54,7 +58,8 @@ export async function searchPublicProducts(keyword, options = {}) {
         }))
       };
     }),
-    hasHiddenOutOfStockMatches: response?.meta?.has_hidden_out_of_stock_matches === true
+    hasHiddenOutOfStockMatches: response?.meta?.has_hidden_out_of_stock_matches === true,
+    totalMatches: Number(response?.meta?.total || products.length)
   };
 }
 

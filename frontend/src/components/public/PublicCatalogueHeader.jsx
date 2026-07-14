@@ -1,13 +1,28 @@
 import { Link } from "react-router-dom";
 import ptcLogoUrl from "../../assets/ptc-logo.png";
+import { PUBLIC_SEARCH_LISTBOX_ID, PublicSearchDropdown } from "./PublicSearchDropdown";
 
 export function PublicCatalogueHeader({
+  activeSearchIndex,
   inputRef,
+  isDropdownOpen,
   isLoading,
+  liveSearchError,
+  liveSearchHiddenOutOfStock,
+  liveSearchLoading,
+  liveSearchProducts,
+  liveSearchTotal,
   onClear,
+  onDismissDropdown,
+  onDropdownActiveIndexChange,
+  onDropdownSelect,
+  onDropdownViewAll,
   onInputBlur,
   onInputChange,
+  onInputFocus,
+  onInputKeyDown,
   onSubmit,
+  searchFormRef,
   searchInput
 }) {
   const hasKeyword = Boolean(searchInput.trim());
@@ -33,10 +48,17 @@ export function PublicCatalogueHeader({
         </div>
 
         <form
-          className="order-3 flex w-full min-w-0 lg:order-none"
+          ref={searchFormRef}
+          className="relative order-3 flex w-full min-w-0 lg:order-none lg:max-w-[57.5rem] lg:justify-self-center"
           onSubmit={(event) => {
             event.preventDefault();
+            onDismissDropdown();
             onSubmit(searchInput);
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              onDismissDropdown(event.relatedTarget);
+            }
           }}
         >
           <label className="sr-only" htmlFor="public-product-search">
@@ -51,6 +73,17 @@ export function PublicCatalogueHeader({
               value={searchInput}
               onChange={(event) => onInputChange(event.target.value)}
               onBlur={() => onInputBlur(searchInput)}
+              onFocus={onInputFocus}
+              onKeyDown={onInputKeyDown}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-controls={isDropdownOpen ? PUBLIC_SEARCH_LISTBOX_ID : undefined}
+              aria-expanded={isDropdownOpen}
+              aria-activedescendant={
+                isDropdownOpen && activeSearchIndex >= 0
+                  ? `${PUBLIC_SEARCH_LISTBOX_ID}-option-${activeSearchIndex}`
+                  : undefined
+              }
             />
             {!searchInput && (
               <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 sm:hidden">
@@ -75,6 +108,21 @@ export function PublicCatalogueHeader({
           >
             {isLoading ? "Đang tìm..." : "Tìm kiếm"}
           </button>
+
+          {isDropdownOpen && (
+            <PublicSearchDropdown
+              activeIndex={activeSearchIndex}
+              errorMessage={liveSearchError}
+              hasHiddenOutOfStockMatches={liveSearchHiddenOutOfStock}
+              isLoading={liveSearchLoading}
+              onActiveIndexChange={onDropdownActiveIndexChange}
+              onSelectProduct={onDropdownSelect}
+              onViewAll={onDropdownViewAll}
+              products={liveSearchProducts}
+              query={searchInput.trim()}
+              totalMatches={liveSearchTotal}
+            />
+          )}
         </form>
 
         <Link

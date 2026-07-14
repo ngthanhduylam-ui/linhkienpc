@@ -18,6 +18,39 @@ const PUBLIC_SEARCH_RESUME_AFTER_MS = 25000;
 const IOS_INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
 const PUBLIC_SEARCH_ERROR_MESSAGE = "Mạng đang chậm, vui lòng thử lại.";
 const EMPTY_CATALOGUE_SECTIONS = Object.freeze({ newest: [], secondhand: [], new: [] });
+const LIVE_SEARCH_DEBOUNCE_MS = 250;
+const LIVE_SEARCH_LIMIT = 7;
+const LIVE_SEARCH_ERROR_MESSAGE = "Không thể tải gợi ý lúc này. Vui lòng thử tìm kiếm đầy đủ.";
+const PUBLIC_VIEW_STATE_KEY = "public_catalogue_view";
+const PUBLIC_VIEW_MODES = new Set(["home", "search", "detail"]);
+
+function isMeaningfulLiveQuery(value) {
+  return String(value || "").trim().replace(/\s+/g, "").length >= 2;
+}
+
+function readPublicViewState(state = window.history.state) {
+  const value = state?.[PUBLIC_VIEW_STATE_KEY];
+  if (!value || !PUBLIC_VIEW_MODES.has(value.view) || typeof value.query !== "string") return null;
+  return { view: value.view, query: value.query.trim() };
+}
+
+function writePublicViewState(method, view, query) {
+  const state = {
+    ...(window.history.state || {}),
+    [PUBLIC_VIEW_STATE_KEY]: { view, query: String(query || "").trim() }
+  };
+  window.history[method](state, "");
+}
+
+function dedupePublicProducts(products) {
+  const usedSkus = new Set();
+  return (Array.isArray(products) ? products : []).filter((product) => {
+    const key = String(product?.sku || "").trim().toLowerCase();
+    if (!key || usedSkus.has(key) || Number(product?.totalQuantity || 0) <= 0) return false;
+    usedSkus.add(key);
+    return true;
+  });
+}
 
 function isTechnicalCatalogueSearch(value) {
   return /^__catalogue_/i.test(String(value || "").trim());
@@ -91,8 +124,13 @@ function shouldShowIOSInstallGuide() {
 }
 
 export function PublicSearchPage() {
-  const [searchInput, setSearchInput] = useState("");
-  const [debouncedKeyword, setDebouncedKeyword] = useState("");
+  const initialViewStateRef = useRef(readPublicViewState() || { view: "home", query: "" });
+  const initialViewState = initialViewStateRef.current;
+  const [searchInput, setSearchInput] = useState(initialViewState.query);
+  const [submittedKeyword, setSubmittedKeyword] = useState(
+    initialViewState.view === "home" ? "" : initialViewState.query
+  );
+  const [viewMode, setViewMode] = useState(initialViewState.view);
   const [results, setResults] = useState([]);
   const [categories, setCategories] = useState([]);
   const [catalogueSections, setCatalogueSections] = useState(EMPTY_CATALOGUE_SECTIONS);
@@ -103,10 +141,25 @@ export function PublicSearchPage() {
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [showIOSInstallGuide, setShowIOSInstallGuide] = useState(() => shouldShowIOSInstallGuide());
+  const [liveSearchKeyword, setLiveSearchKeyword] = useState("");
+  const [liveSearchProducts, setLiveSearchProducts] = useState([]);
+  const [liveSearchTotal, setLiveSearchTotal] = useState(0);
+  const [liveSearchHiddenOutOfStock, setLiveSearchHiddenOutOfStock] = useState(false);
+  const [liveSearchLoading, setLiveSearchLoading] = useState(false);
+  const [liveSearchError, setLiveSearchError] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const inputRef = useRef(null);
+  const searchFormRef = useRef(null);
+  const searchInputRef = useRef(searchInput);
+  const isSearchFocusedRef = useRef(false);
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef(null);
-  const debouncedKeywordRef = useRef("");
+  const submittedKeywordRef = useRef(submittedKeyword);
+  const liveRequestIdRef = useRef(0);
+  const liveAbortControllerRef = useRef(null);
+  const liveResolvedKeywordRef = useRef("");
   const isLoadingRef = useRef(false);
   const hiddenAtRef = useRef(0);
   const wasPendingWhenHiddenRef = useRef(false);
@@ -115,16 +168,57 @@ export function PublicSearchPage() {
   const resumeRevalidationPendingRef = useRef(false);
   const resultsKeywordRef = useRef("");
 
-  const trimmedKeyword = searchInput.trim();
-  const hasSearched = debouncedKeyword.trim().length > 0;
+  const hasSearched = viewMode !== "home" && submittedKeyword.trim().length > 0;
 
   useEffect(() => {
-    debouncedKeywordRef.current = debouncedKeyword;
-  }, [debouncedKeyword]);
+    submittedKeywordRef.current = submittedKeyword;
+  }, [submittedKeyword]);
+
+  useEffect(() => {
+    searchInputRef.current = searchInput;
+  }, [searchInput]);
+
+  useEffect(() => {
+    isSearchFocusedRef.current = isSearchFocused;
+  }, [isSearchFocused]);
 
   useEffect(() => {
     isLoadingRef.current = isLoading;
   }, [isLoading]);
+
+  useEffect(() => {
+    if (!readPublicViewState()) {
+      writePublicViewState("replaceState", initialViewState.view, initialViewState.query);
+    }
+
+    function handlePopState(event) {
+      const nextView = readPublicViewState(event.state);
+      if (!nextView) return;
+
+      liveRequestIdRef.current += 1;
+      liveAbortControllerRef.current?.abort();
+      liveAbortControllerRef.current = null;
+      setIsDropdownOpen(false);
+      setActiveSearchIndex(-1);
+      setLiveSearchKeyword("");
+      setSearchInput(nextView.query);
+      setViewMode(nextView.view);
+      setSubmittedKeyword(nextView.view === "home" ? "" : nextView.query);
+    }
+
+    function handleOutsidePointerDown(event) {
+      if (!searchFormRef.current?.contains(event.target)) {
+        closeLiveDropdown({ abort: true });
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -158,14 +252,86 @@ export function PublicSearchPage() {
   }, []);
 
   useEffect(() => {
+    const nextKeyword = searchInput.trim();
+    if (!isSearchFocused || !isMeaningfulLiveQuery(nextKeyword)) {
+      setLiveSearchKeyword("");
+      setIsDropdownOpen(false);
+      setActiveSearchIndex(-1);
+      return undefined;
+    }
+
     const timer = setTimeout(() => {
-      setDebouncedKeyword(searchInput.trim());
-    }, 300);
+      setLiveSearchKeyword(nextKeyword);
+    }, LIVE_SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [isSearchFocused, searchInput]);
 
   useEffect(() => {
-    const searchKeyword = debouncedKeyword.trim();
+    const searchKeyword = liveSearchKeyword.trim();
+    if (!isMeaningfulLiveQuery(searchKeyword)) return undefined;
+
+    const currentRequestId = liveRequestIdRef.current + 1;
+    liveRequestIdRef.current = currentRequestId;
+    const abortController = new AbortController();
+    liveAbortControllerRef.current?.abort();
+    liveAbortControllerRef.current = abortController;
+    setLiveSearchLoading(true);
+    setLiveSearchError("");
+    setActiveSearchIndex(-1);
+    if (isSearchFocusedRef.current && searchInputRef.current.trim() === searchKeyword) {
+      setIsDropdownOpen(true);
+    }
+
+    async function runLiveSearch() {
+      try {
+        const searchResult = await searchPublicProducts(searchKeyword, {
+          limit: LIVE_SEARCH_LIMIT,
+          signal: abortController.signal,
+          timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
+        });
+        if (
+          abortController.signal.aborted ||
+          liveRequestIdRef.current !== currentRequestId ||
+          searchInputRef.current.trim() !== searchKeyword
+        ) {
+          return;
+        }
+
+        const uniqueProducts = dedupePublicProducts(searchResult.products).slice(0, LIVE_SEARCH_LIMIT);
+        liveResolvedKeywordRef.current = searchKeyword;
+        setLiveSearchProducts(uniqueProducts);
+        setLiveSearchTotal(Math.max(searchResult.totalMatches, uniqueProducts.length));
+        setLiveSearchHiddenOutOfStock(searchResult.hasHiddenOutOfStockMatches);
+        if (isSearchFocusedRef.current) setIsDropdownOpen(true);
+      } catch {
+        if (!abortController.signal.aborted && liveRequestIdRef.current === currentRequestId) {
+          setLiveSearchProducts([]);
+          setLiveSearchTotal(0);
+          setLiveSearchHiddenOutOfStock(false);
+          setLiveSearchError(LIVE_SEARCH_ERROR_MESSAGE);
+          if (isSearchFocusedRef.current) setIsDropdownOpen(true);
+        }
+      } finally {
+        if (liveAbortControllerRef.current === abortController) {
+          liveAbortControllerRef.current = null;
+        }
+        if (!abortController.signal.aborted && liveRequestIdRef.current === currentRequestId) {
+          setLiveSearchLoading(false);
+        }
+      }
+    }
+
+    runLiveSearch();
+    return () => {
+      abortController.abort();
+      if (liveAbortControllerRef.current === abortController) {
+        liveAbortControllerRef.current = null;
+      }
+    };
+  }, [liveSearchKeyword]);
+
+  useEffect(() => {
+    const searchKeyword = submittedKeyword.trim();
 
     if (!searchKeyword) {
       requestIdRef.current += 1;
@@ -231,11 +397,11 @@ export function PublicSearchPage() {
         abortControllerRef.current = null;
       }
     };
-  }, [debouncedKeyword, retryCount]);
+  }, [submittedKeyword, retryCount]);
 
   useEffect(() => {
     function recoverCurrentSearch() {
-      const searchKeyword = debouncedKeywordRef.current.trim();
+      const searchKeyword = submittedKeywordRef.current.trim();
       if (!searchKeyword) return;
       if (resumeRevalidationPendingRef.current) return;
 
@@ -254,6 +420,10 @@ export function PublicSearchPage() {
         resumeRevalidationPendingRef.current = false;
         abortControllerRef.current?.abort();
         abortControllerRef.current = null;
+        liveRequestIdRef.current += 1;
+        liveAbortControllerRef.current?.abort();
+        liveAbortControllerRef.current = null;
+        setIsDropdownOpen(false);
         requestIdRef.current += 1;
         return;
       }
@@ -280,6 +450,10 @@ export function PublicSearchPage() {
       if (document.visibilityState === "hidden") {
         abortControllerRef.current?.abort();
         abortControllerRef.current = null;
+        liveRequestIdRef.current += 1;
+        liveAbortControllerRef.current?.abort();
+        liveAbortControllerRef.current = null;
+        setIsDropdownOpen(false);
         requestIdRef.current += 1;
       }
     }
@@ -314,10 +488,60 @@ export function PublicSearchPage() {
     setHistory((currentHistory) => addKeywordToHistory(value, currentHistory));
   }
 
+  function closeLiveDropdown({ abort = false } = {}) {
+    setIsDropdownOpen(false);
+    setActiveSearchIndex(-1);
+    if (!abort) return;
+
+    liveRequestIdRef.current += 1;
+    liveAbortControllerRef.current?.abort();
+    liveAbortControllerRef.current = null;
+    liveResolvedKeywordRef.current = "";
+    setLiveSearchKeyword("");
+    setLiveSearchProducts([]);
+    setLiveSearchTotal(0);
+    setLiveSearchHiddenOutOfStock(false);
+    setLiveSearchLoading(false);
+    setLiveSearchError("");
+  }
+
+  function applyPublicView(nextView, value, { retryIfCurrent = false } = {}) {
+    const nextQuery = String(value || "").trim();
+    const currentQuery = viewMode === "home" ? "" : submittedKeyword.trim();
+    const isCurrentTarget = viewMode === nextView && currentQuery === nextQuery;
+
+    if (nextView === "home") {
+      writePublicViewState("replaceState", "home", "");
+    } else {
+      writePublicViewState("replaceState", viewMode, currentQuery);
+      if (viewMode !== nextView || !isCurrentTarget) {
+        writePublicViewState("pushState", nextView, nextQuery);
+      }
+    }
+
+    closeLiveDropdown({ abort: true });
+    isSearchFocusedRef.current = false;
+    setIsSearchFocused(false);
+    inputRef.current?.blur();
+    searchInputRef.current = nextQuery;
+    setSearchInput(nextQuery);
+    setViewMode(nextView);
+    setSubmittedKeyword(nextView === "home" ? "" : nextQuery);
+
+    if (isCurrentTarget && retryIfCurrent && nextView !== "home") {
+      setRetryCount((current) => current + 1);
+    }
+  }
+
   function submitSearch(value = searchInput) {
     const nextKeyword = value.trim();
-    setDebouncedKeyword(nextKeyword);
+    if (!nextKeyword) {
+      handleClearSearch();
+      return;
+    }
+
     rememberKeyword(nextKeyword);
+    applyPublicView("search", nextKeyword, { retryIfCurrent: true });
   }
 
   function handleRetrySearch() {
@@ -326,8 +550,7 @@ export function PublicSearchPage() {
 
   function handleClearSearch() {
     rememberKeyword(searchInput);
-    setSearchInput("");
-    setDebouncedKeyword("");
+    applyPublicView("home", "");
     resultsKeywordRef.current = "";
     setResults([]);
     setHasHiddenOutOfStockMatches(false);
@@ -337,10 +560,8 @@ export function PublicSearchPage() {
 
   function handleHistoryClick(value) {
     const nextKeyword = value.trim();
-    setHistory((currentHistory) => addKeywordToHistory(nextKeyword, currentHistory));
-    setSearchInput(nextKeyword);
-    setDebouncedKeyword(nextKeyword);
-    inputRef.current?.focus();
+    rememberKeyword(nextKeyword);
+    applyPublicView("search", nextKeyword, { retryIfCurrent: true });
   }
 
   function handleRemoveHistoryItem(value) {
@@ -357,9 +578,62 @@ export function PublicSearchPage() {
   }
 
   function handleCatalogueProductDetails(product) {
-    setSearchInput(product.sku);
-    submitSearch(product.sku);
+    const exactSku = String(product?.sku || "").trim();
+    if (!exactSku) return;
+    rememberKeyword(exactSku);
+    applyPublicView("detail", exactSku, { retryIfCurrent: true });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleSearchInputChange(value) {
+    searchInputRef.current = value;
+    setSearchInput(value);
+    closeLiveDropdown({ abort: true });
+  }
+
+  function handleSearchInputFocus() {
+    isSearchFocusedRef.current = true;
+    setIsSearchFocused(true);
+    const currentKeyword = searchInputRef.current.trim();
+    if (isMeaningfulLiveQuery(currentKeyword) && liveResolvedKeywordRef.current === currentKeyword) {
+      setIsDropdownOpen(true);
+    }
+  }
+
+  function handleDismissDropdown(nextFocusedElement) {
+    isSearchFocusedRef.current = nextFocusedElement === inputRef.current;
+    setIsSearchFocused(isSearchFocusedRef.current);
+    closeLiveDropdown({ abort: true });
+  }
+
+  function handleSearchInputKeyDown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeLiveDropdown({ abort: true });
+      return;
+    }
+
+    if (event.key === "ArrowDown" && isDropdownOpen && liveSearchProducts.length > 0) {
+      event.preventDefault();
+      setActiveSearchIndex((current) => (current + 1) % liveSearchProducts.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp" && isDropdownOpen && liveSearchProducts.length > 0) {
+      event.preventDefault();
+      setActiveSearchIndex((current) => (current <= 0 ? liveSearchProducts.length - 1 : current - 1));
+      return;
+    }
+
+    if (event.key !== "Enter") return;
+
+    event.preventDefault();
+    if (isDropdownOpen && activeSearchIndex >= 0 && liveSearchProducts[activeSearchIndex]) {
+      handleCatalogueProductDetails(liveSearchProducts[activeSearchIndex]);
+      return;
+    }
+
+    submitSearch(event.currentTarget.value);
   }
 
   function handleDismissIOSInstallGuide() {
@@ -374,18 +648,32 @@ export function PublicSearchPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <PublicCatalogueHeader
+        activeSearchIndex={activeSearchIndex}
         inputRef={inputRef}
+        isDropdownOpen={isDropdownOpen}
         isLoading={isLoading}
+        liveSearchError={liveSearchError}
+        liveSearchHiddenOutOfStock={liveSearchHiddenOutOfStock}
+        liveSearchLoading={liveSearchLoading}
+        liveSearchProducts={liveSearchProducts}
+        liveSearchTotal={liveSearchTotal}
         onClear={handleClearSearch}
+        onDismissDropdown={handleDismissDropdown}
+        onDropdownActiveIndexChange={setActiveSearchIndex}
+        onDropdownSelect={handleCatalogueProductDetails}
+        onDropdownViewAll={() => submitSearch(searchInput)}
         onInputBlur={rememberKeyword}
-        onInputChange={setSearchInput}
+        onInputChange={handleSearchInputChange}
+        onInputFocus={handleSearchInputFocus}
+        onInputKeyDown={handleSearchInputKeyDown}
         onSubmit={submitSearch}
+        searchFormRef={searchFormRef}
         searchInput={searchInput}
       />
       <PublicCategoryNav categories={categories} />
 
       <main className="mx-auto w-[min(calc(100%_-_clamp(2rem,3vw,6rem)),clamp(80rem,86vw,131.25rem))] pb-10 pt-[clamp(1rem,1.3vw,1.75rem)] sm:pb-14">
-        {!trimmedKeyword && <PublicCatalogueHero />}
+        {viewMode === "home" && <PublicCatalogueHero />}
 
         {showIOSInstallGuide && (
           <section className="mx-auto mt-4 max-w-3xl rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-sm">
@@ -408,7 +696,7 @@ export function PublicSearchPage() {
           </section>
         )}
 
-        {!trimmedKeyword && (
+        {viewMode === "home" && (
           <PublicAvailableProductsSection
             isLoading={isCatalogueLoading}
             onViewDetails={handleCatalogueProductDetails}
@@ -416,7 +704,7 @@ export function PublicSearchPage() {
           />
         )}
 
-        {!trimmedKeyword && history.length > 0 && (
+        {viewMode === "home" && history.length > 0 && (
           <section className="mt-5 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-600">Lịch sử tìm kiếm</h2>
@@ -449,7 +737,7 @@ export function PublicSearchPage() {
           </section>
         )}
 
-        {!trimmedKeyword && (
+        {viewMode === "home" && (
           <footer className="mt-5 rounded-xl border border-blue-100 bg-[#f3f8ff] px-4 py-3 text-[#0f2f5f]">
             <div className="grid gap-2 text-xs font-semibold sm:grid-cols-3 sm:gap-4">
               {[

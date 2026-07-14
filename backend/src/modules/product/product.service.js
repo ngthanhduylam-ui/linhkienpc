@@ -375,6 +375,7 @@ async function searchPublicProducts(query) {
         p.id,
         p.sku,
         p.name,
+        p.sale_price,
         COALESCE(pib.quantity, 0) AS total_quantity,
         COALESCE(pim.image_count, 0) AS image_count,
         pim.primary_image_id
@@ -401,6 +402,7 @@ async function searchPublicProducts(query) {
     items: products.map((product) => ({
       sku: product.sku,
       name: product.name,
+      sale_price: mapSalePrice(product.sale_price),
       total_quantity: Number(product.total_quantity || 0),
       note_groups: noteGroupMap.get(product.id) || [],
       ...mapImageSummary(product)
