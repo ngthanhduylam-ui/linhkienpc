@@ -42,6 +42,12 @@ function getResponseThumbnailUrl(product) {
   return getThumbnailUrl(product?.primaryImage) || getThumbnailUrl(product?.images?.[0]);
 }
 
+function formatPublicPrice(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return "Liên hệ giá";
+  return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
+}
+
 function getPlaceholderCategory(product) {
   const categoryName = String(product?.categoryName || "").trim();
   if (categoryName) return categoryName;
@@ -79,7 +85,7 @@ function CategoryPlaceholder({ categoryName, status }) {
   );
 }
 
-export function PublicCatalogueProductCard({ product, onViewDetails }) {
+export function PublicCatalogueProductCard({ product, onViewDetails, showPrice = false }) {
   const [isSharing, setIsSharing] = useState(false);
   const [shareFeedback, setShareFeedback] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState(() => getResponseThumbnailUrl(product));
@@ -202,6 +208,11 @@ export function PublicCatalogueProductCard({ product, onViewDetails }) {
         <p className="mt-1 truncate text-[11px] font-medium text-slate-500 sm:text-[clamp(0.6875rem,0.6vw,0.75rem)]" title={product.sku}>
           SKU: {product.sku}
         </p>
+        {showPrice && (
+          <p className="mt-1 text-[12px] font-extrabold text-[#0b4fb3] sm:text-[clamp(0.75rem,0.67vw,0.875rem)]">
+            {formatPublicPrice(product.salePrice)}
+          </p>
+        )}
 
         <div className="mt-[clamp(0.625rem,0.7vw,0.75rem)] flex items-center justify-between gap-2 text-[clamp(0.6875rem,0.6vw,0.75rem)]">
           <span className="rounded-md bg-emerald-50 px-2 py-1 font-bold text-emerald-700">Còn hàng</span>

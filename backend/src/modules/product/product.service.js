@@ -314,8 +314,9 @@ async function setProductActive(id, isActive) {
 async function searchPublicProducts(query) {
   const { page, limit, offset } = parsePagination(query);
   const searchTokens = getSearchTokens(query.q);
+  const categoryId = parseNullableInt(query.category_id, 'category_id');
 
-  if (!searchTokens.length) {
+  if (!searchTokens.length && categoryId === null) {
     return {
       items: [],
       page,
@@ -329,10 +330,17 @@ async function searchPublicProducts(query) {
   const search = buildProductTokenSearch(searchTokens, { includeWarrantyNote: true });
   const whereParts = [
     'p.is_active = 1',
-    'COALESCE(pib.quantity, 0) > 0',
-    ...search.clauses
+    'COALESCE(pib.quantity, 0) > 0'
   ];
-  const params = search.params;
+  const params = [];
+
+  if (categoryId !== null) {
+    whereParts.push('p.category_id = ?');
+    params.push(categoryId);
+  }
+
+  whereParts.push(...search.clauses);
+  params.push(...search.params);
 
   const whereSql = `WHERE ${whereParts.join(' AND ')}`;
 
@@ -348,12 +356,22 @@ async function searchPublicProducts(query) {
   const total = Number(countRows[0].total || 0);
   let hasHiddenOutOfStockMatches = false;
 
-  if (total === 0) {
-    const hiddenWhereSql = `WHERE ${[
+  if (total === 0 && searchTokens.length > 0) {
+    const hiddenWhereParts = [
       'p.is_active = 1',
-      'COALESCE(pib.quantity, 0) = 0',
-      ...search.clauses
-    ].join(' AND ')}`;
+      'COALESCE(pib.quantity, 0) = 0'
+    ];
+    const hiddenParams = [];
+
+    if (categoryId !== null) {
+      hiddenWhereParts.push('p.category_id = ?');
+      hiddenParams.push(categoryId);
+    }
+
+    hiddenWhereParts.push(...search.clauses);
+    hiddenParams.push(...search.params);
+
+    const hiddenWhereSql = `WHERE ${hiddenWhereParts.join(' AND ')}`;
     const [hiddenMatchRows] = await pool.query(
       `
         SELECT EXISTS(
@@ -364,7 +382,7 @@ async function searchPublicProducts(query) {
           LIMIT 1
         ) AS has_hidden_match
       `,
-      params
+      hiddenParams
     );
     hasHiddenOutOfStockMatches = Boolean(hiddenMatchRows[0]?.has_hidden_match);
   }

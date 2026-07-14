@@ -22,6 +22,34 @@ export async function listPublicProductImages(sku, options = {}) {
   return response?.data?.images || [];
 }
 
+function mapPublicProducts(products) {
+  return products.map((product, index) => {
+    const productId = Number(product.id || product.note_groups?.find((item) => item?.product_id)?.product_id) || null;
+    const images = Array.isArray(product.images) ? product.images : [];
+
+    return {
+      id: productId || product.sku || `public-product-${index}`,
+      productId,
+      name: product.name,
+      sku: product.sku,
+      salePrice:
+        product.sale_price === null || product.sale_price === undefined
+          ? null
+          : Number(product.sale_price),
+      categoryName: product.category?.name || product.category_name || "",
+      imageCount: Number(product.image_count || 0),
+      primaryImage: product.primary_image || images[0] || null,
+      images,
+      totalQuantity: Number(product.total_quantity || 0),
+      noteGroups: (product.note_groups || []).map((item) => ({
+        note: item.note,
+        label: item.label || item.note || "Không ghi chú",
+        quantity: Number(item.quantity || 0)
+      }))
+    };
+  });
+}
+
 export async function searchPublicProducts(keyword, options = {}) {
   const trimmedKeyword = keyword?.trim();
   if (!trimmedKeyword) {
@@ -33,32 +61,21 @@ export async function searchPublicProducts(keyword, options = {}) {
   const products = Array.isArray(response?.data) ? response.data : [];
 
   return {
-    products: products.map((product, index) => {
-      const productId = Number(product.id || product.note_groups?.find((item) => item?.product_id)?.product_id) || null;
-      const images = Array.isArray(product.images) ? product.images : [];
-
-      return {
-        id: productId || product.sku || `public-product-${index}`,
-        productId,
-        name: product.name,
-        sku: product.sku,
-        salePrice:
-          product.sale_price === null || product.sale_price === undefined
-            ? null
-            : Number(product.sale_price),
-        categoryName: product.category?.name || product.category_name || "",
-        imageCount: Number(product.image_count || 0),
-        primaryImage: product.primary_image || images[0] || null,
-        images,
-        totalQuantity: Number(product.total_quantity || 0),
-        noteGroups: (product.note_groups || []).map((item) => ({
-          note: item.note,
-          label: item.label || item.note || "Không ghi chú",
-          quantity: Number(item.quantity || 0)
-        }))
-      };
-    }),
+    products: mapPublicProducts(products),
     hasHiddenOutOfStockMatches: response?.meta?.has_hidden_out_of_stock_matches === true,
+    totalMatches: Number(response?.meta?.total || products.length)
+  };
+}
+
+export async function listPublicCategoryProducts(categoryId, options = {}) {
+  const { page = 1, limit = 24, ...requestOptions } = options;
+  const response = await apiGet("/public/products", { category_id: categoryId, page, limit }, requestOptions);
+  const products = Array.isArray(response?.data) ? response.data : [];
+
+  return {
+    products: mapPublicProducts(products),
+    page: Number(response?.meta?.page || page),
+    limit: Number(response?.meta?.limit || limit),
     totalMatches: Number(response?.meta?.total || products.length)
   };
 }

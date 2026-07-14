@@ -31,7 +31,7 @@ function CatalogueSection({ definition, onViewDetails, products }) {
 
   return (
     <section className="mt-[clamp(1.25rem,1.5vw,1.75rem)]" aria-labelledby={`catalogue-${definition.key}-heading`}>
-      <div className="mb-2.5 flex items-center justify-between gap-3">
+      <div className="mb-2.5 flex items-center gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg px-1.5 text-white ${definition.accent}`}>
             <SectionIcon type={definition.icon} />
@@ -40,9 +40,6 @@ function CatalogueSection({ definition, onViewDetails, products }) {
             {definition.title}
           </h2>
         </div>
-        <span className="shrink-0 rounded-lg border border-blue-100 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-500">
-          Xem tất cả
-        </span>
       </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-[clamp(0.75rem,1vw,1.25rem)] sm:grid-cols-[repeat(auto-fit,minmax(clamp(15.5rem,19vw,18.75rem),1fr))]">

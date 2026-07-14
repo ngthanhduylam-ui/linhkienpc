@@ -4,8 +4,10 @@ import { PublicAvailableProductsSection } from "../components/public/PublicAvail
 import { PublicCatalogueHeader } from "../components/public/PublicCatalogueHeader";
 import { PublicCatalogueHero } from "../components/public/PublicCatalogueHero";
 import { PublicCategoryNav } from "../components/public/PublicCategoryNav";
+import { PublicCategoryResultsSection } from "../components/public/PublicCategoryResultsSection";
 import {
   listAvailableCatalogueProducts,
+  listPublicCategoryProducts,
   listPublicCategories,
   searchPublicProducts
 } from "../services/publicSearch.service";
@@ -22,7 +24,8 @@ const LIVE_SEARCH_DEBOUNCE_MS = 250;
 const LIVE_SEARCH_LIMIT = 7;
 const LIVE_SEARCH_ERROR_MESSAGE = "Không thể tải gợi ý lúc này. Vui lòng thử tìm kiếm đầy đủ.";
 const PUBLIC_VIEW_STATE_KEY = "public_catalogue_view";
-const PUBLIC_VIEW_MODES = new Set(["home", "search", "detail"]);
+const PUBLIC_VIEW_MODES = new Set(["home", "category", "search", "detail"]);
+const CATEGORY_PAGE_SIZE = 24;
 
 function isMeaningfulLiveQuery(value) {
   return String(value || "").trim().replace(/\s+/g, "").length >= 2;
@@ -30,24 +33,42 @@ function isMeaningfulLiveQuery(value) {
 
 function readPublicViewState(state = window.history.state) {
   const value = state?.[PUBLIC_VIEW_STATE_KEY];
-  if (!value || !PUBLIC_VIEW_MODES.has(value.view) || typeof value.query !== "string") return null;
-  return { view: value.view, query: value.query.trim() };
+  if (!value || !PUBLIC_VIEW_MODES.has(value.view)) return null;
+
+  if (value.view === "category") {
+    const categoryId = Number(value.category_id);
+    const categoryName = typeof value.category_name === "string" ? value.category_name.trim() : "";
+    if (!Number.isInteger(categoryId) || categoryId < 1 || !categoryName) return null;
+    return { view: "category", query: "", category: { id: categoryId, name: categoryName } };
+  }
+
+  const query = typeof value.query === "string" ? value.query.trim() : "";
+  if (value.view !== "home" && !query) return null;
+  return { view: value.view, query, category: null };
 }
 
-function writePublicViewState(method, view, query) {
+function writePublicViewState(method, viewState) {
+  const category = viewState?.category;
   const state = {
     ...(window.history.state || {}),
-    [PUBLIC_VIEW_STATE_KEY]: { view, query: String(query || "").trim() }
+    [PUBLIC_VIEW_STATE_KEY]: {
+      view: viewState.view,
+      query: String(viewState.query || "").trim(),
+      category_id: category ? Number(category.id) : null,
+      category_name: category?.name || ""
+    }
   };
   window.history[method](state, "");
 }
 
 function dedupePublicProducts(products) {
-  const usedSkus = new Set();
+  const usedKeys = new Set();
   return (Array.isArray(products) ? products : []).filter((product) => {
-    const key = String(product?.sku || "").trim().toLowerCase();
-    if (!key || usedSkus.has(key) || Number(product?.totalQuantity || 0) <= 0) return false;
-    usedSkus.add(key);
+    const productId = Number(product?.productId);
+    const normalizedSku = String(product?.sku || "").trim().toLowerCase();
+    const key = Number.isInteger(productId) && productId > 0 ? `id:${productId}` : normalizedSku ? `sku:${normalizedSku}` : "";
+    if (!key || usedKeys.has(key) || Number(product?.totalQuantity || 0) <= 0) return false;
+    usedKeys.add(key);
     return true;
   });
 }
@@ -124,13 +145,21 @@ function shouldShowIOSInstallGuide() {
 }
 
 export function PublicSearchPage() {
-  const initialViewStateRef = useRef(readPublicViewState() || { view: "home", query: "" });
+  const initialViewStateRef = useRef(readPublicViewState() || { view: "home", query: "", category: null });
   const initialViewState = initialViewStateRef.current;
   const [searchInput, setSearchInput] = useState(initialViewState.query);
   const [submittedKeyword, setSubmittedKeyword] = useState(
     initialViewState.view === "home" ? "" : initialViewState.query
   );
   const [viewMode, setViewMode] = useState(initialViewState.view);
+  const [selectedCategory, setSelectedCategory] = useState(initialViewState.category);
+  const [categoryProducts, setCategoryProducts] = useState([]);
+  const [categoryTotal, setCategoryTotal] = useState(0);
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [categoryError, setCategoryError] = useState("");
+  const [isCategoryLoading, setIsCategoryLoading] = useState(false);
+  const [isCategoryLoadingMore, setIsCategoryLoadingMore] = useState(false);
+  const [categoryRetryCount, setCategoryRetryCount] = useState(0);
   const [results, setResults] = useState([]);
   const [categories, setCategories] = useState([]);
   const [catalogueSections, setCatalogueSections] = useState(EMPTY_CATALOGUE_SECTIONS);
@@ -154,13 +183,19 @@ export function PublicSearchPage() {
   const searchFormRef = useRef(null);
   const searchInputRef = useRef(searchInput);
   const isSearchFocusedRef = useRef(false);
+  const viewModeRef = useRef(initialViewState.view);
+  const selectedCategoryRef = useRef(initialViewState.category);
+  const previousCategoryRef = useRef(initialViewState.category);
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef(null);
+  const categoryRequestIdRef = useRef(0);
+  const categoryAbortControllerRef = useRef(null);
   const submittedKeywordRef = useRef(submittedKeyword);
   const liveRequestIdRef = useRef(0);
   const liveAbortControllerRef = useRef(null);
   const liveResolvedKeywordRef = useRef("");
   const isLoadingRef = useRef(false);
+  const isCategoryLoadingRef = useRef(false);
   const hiddenAtRef = useRef(0);
   const wasPendingWhenHiddenRef = useRef(false);
   const shouldRecoverAfterOnlineRef = useRef(false);
@@ -168,7 +203,8 @@ export function PublicSearchPage() {
   const resumeRevalidationPendingRef = useRef(false);
   const resultsKeywordRef = useRef("");
 
-  const hasSearched = viewMode !== "home" && submittedKeyword.trim().length > 0;
+  const hasSearched = (viewMode === "search" || viewMode === "detail") && submittedKeyword.trim().length > 0;
+  const hasSelectedCategory = viewMode === "category" && Boolean(selectedCategory?.id);
 
   useEffect(() => {
     submittedKeywordRef.current = submittedKeyword;
@@ -183,27 +219,30 @@ export function PublicSearchPage() {
   }, [isSearchFocused]);
 
   useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
+
+  useEffect(() => {
+    selectedCategoryRef.current = selectedCategory;
+  }, [selectedCategory]);
+
+  useEffect(() => {
     isLoadingRef.current = isLoading;
   }, [isLoading]);
 
   useEffect(() => {
+    isCategoryLoadingRef.current = isCategoryLoading || isCategoryLoadingMore;
+  }, [isCategoryLoading, isCategoryLoadingMore]);
+
+  useEffect(() => {
     if (!readPublicViewState()) {
-      writePublicViewState("replaceState", initialViewState.view, initialViewState.query);
+      writePublicViewState("replaceState", initialViewState);
     }
 
     function handlePopState(event) {
       const nextView = readPublicViewState(event.state);
       if (!nextView) return;
-
-      liveRequestIdRef.current += 1;
-      liveAbortControllerRef.current?.abort();
-      liveAbortControllerRef.current = null;
-      setIsDropdownOpen(false);
-      setActiveSearchIndex(-1);
-      setLiveSearchKeyword("");
-      setSearchInput(nextView.query);
-      setViewMode(nextView.view);
-      setSubmittedKeyword(nextView.view === "home" ? "" : nextView.query);
+      restorePublicView(nextView);
     }
 
     function handleOutsidePointerDown(event) {
@@ -250,6 +289,63 @@ export function PublicSearchPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (viewMode !== "category" || !selectedCategory?.id) return undefined;
+
+    const currentRequestId = categoryRequestIdRef.current + 1;
+    categoryRequestIdRef.current = currentRequestId;
+    const abortController = new AbortController();
+    categoryAbortControllerRef.current?.abort();
+    categoryAbortControllerRef.current = abortController;
+    const isFirstPage = categoryPage === 1;
+
+    if (isFirstPage) {
+      setIsCategoryLoading(true);
+    } else {
+      setIsCategoryLoadingMore(true);
+    }
+    setCategoryError("");
+
+    async function loadCategoryProducts() {
+      try {
+        const result = await listPublicCategoryProducts(selectedCategory.id, {
+          page: categoryPage,
+          limit: CATEGORY_PAGE_SIZE,
+          signal: abortController.signal,
+          timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
+        });
+        if (abortController.signal.aborted || categoryRequestIdRef.current !== currentRequestId) return;
+
+        setCategoryProducts((currentProducts) => {
+          const candidates = isFirstPage ? result.products : [...currentProducts, ...result.products];
+          return dedupePublicProducts(candidates);
+        });
+        setCategoryTotal(result.totalMatches);
+      } catch {
+        if (!abortController.signal.aborted && categoryRequestIdRef.current === currentRequestId) {
+          setCategoryError("Không thể tải danh mục lúc này.");
+        }
+      } finally {
+        if (categoryAbortControllerRef.current === abortController) {
+          categoryAbortControllerRef.current = null;
+        }
+        if (!abortController.signal.aborted && categoryRequestIdRef.current === currentRequestId) {
+          setIsCategoryLoading(false);
+          setIsCategoryLoadingMore(false);
+          resumeRevalidationPendingRef.current = false;
+        }
+      }
+    }
+
+    loadCategoryProducts();
+    return () => {
+      abortController.abort();
+      if (categoryAbortControllerRef.current === abortController) {
+        categoryAbortControllerRef.current = null;
+      }
+    };
+  }, [categoryPage, categoryRetryCount, selectedCategory?.id, viewMode]);
 
   useEffect(() => {
     const nextKeyword = searchInput.trim();
@@ -400,7 +496,18 @@ export function PublicSearchPage() {
   }, [submittedKeyword, retryCount]);
 
   useEffect(() => {
-    function recoverCurrentSearch() {
+    function recoverCurrentView() {
+      if (viewModeRef.current === "category" && selectedCategoryRef.current?.id) {
+        if (resumeRevalidationPendingRef.current) return;
+        resumeRevalidationPendingRef.current = true;
+        categoryRequestIdRef.current += 1;
+        categoryAbortControllerRef.current?.abort();
+        categoryAbortControllerRef.current = null;
+        setCategoryPage(1);
+        setCategoryRetryCount((current) => current + 1);
+        return;
+      }
+
       const searchKeyword = submittedKeywordRef.current.trim();
       if (!searchKeyword) return;
       if (resumeRevalidationPendingRef.current) return;
@@ -415,11 +522,18 @@ export function PublicSearchPage() {
     function handleVisibilityChange() {
       if (document.visibilityState === "hidden") {
         hiddenAtRef.current = Date.now();
-        wasPendingWhenHiddenRef.current = Boolean(abortControllerRef.current) || isLoadingRef.current;
+        wasPendingWhenHiddenRef.current =
+          Boolean(abortControllerRef.current) ||
+          Boolean(categoryAbortControllerRef.current) ||
+          isLoadingRef.current ||
+          isCategoryLoadingRef.current;
         resumeSearchKeyRef.current = "";
         resumeRevalidationPendingRef.current = false;
         abortControllerRef.current?.abort();
         abortControllerRef.current = null;
+        categoryRequestIdRef.current += 1;
+        categoryAbortControllerRef.current?.abort();
+        categoryAbortControllerRef.current = null;
         liveRequestIdRef.current += 1;
         liveAbortControllerRef.current?.abort();
         liveAbortControllerRef.current = null;
@@ -441,7 +555,7 @@ export function PublicSearchPage() {
       shouldRecoverAfterOnlineRef.current = false;
 
       if (shouldRecover) {
-        recoverCurrentSearch();
+        recoverCurrentView();
       }
     }
 
@@ -450,6 +564,9 @@ export function PublicSearchPage() {
       if (document.visibilityState === "hidden") {
         abortControllerRef.current?.abort();
         abortControllerRef.current = null;
+        categoryRequestIdRef.current += 1;
+        categoryAbortControllerRef.current?.abort();
+        categoryAbortControllerRef.current = null;
         liveRequestIdRef.current += 1;
         liveAbortControllerRef.current?.abort();
         liveAbortControllerRef.current = null;
@@ -461,13 +578,13 @@ export function PublicSearchPage() {
     function handleOnline() {
       shouldRecoverAfterOnlineRef.current = true;
       if (document.visibilityState === "visible") {
-        recoverCurrentSearch();
+        recoverCurrentView();
       }
     }
 
     function handlePageShow(event) {
       if (event.persisted) {
-        recoverCurrentSearch();
+        recoverCurrentView();
       }
     }
 
@@ -505,30 +622,87 @@ export function PublicSearchPage() {
     setLiveSearchError("");
   }
 
-  function applyPublicView(nextView, value, { retryIfCurrent = false } = {}) {
-    const nextQuery = String(value || "").trim();
-    const currentQuery = viewMode === "home" ? "" : submittedKeyword.trim();
-    const isCurrentTarget = viewMode === nextView && currentQuery === nextQuery;
+  function getCurrentViewState() {
+    if (viewMode === "category" && selectedCategory?.id) {
+      return { view: "category", query: "", category: selectedCategory };
+    }
+    return {
+      view: viewMode,
+      query: viewMode === "home" ? "" : submittedKeyword.trim(),
+      category: null
+    };
+  }
 
-    if (nextView === "home") {
-      writePublicViewState("replaceState", "home", "");
-    } else {
-      writePublicViewState("replaceState", viewMode, currentQuery);
-      if (viewMode !== nextView || !isCurrentTarget) {
-        writePublicViewState("pushState", nextView, nextQuery);
-      }
+  function isSameViewState(left, right) {
+    return (
+      left.view === right.view &&
+      left.query === right.query &&
+      Number(left.category?.id || 0) === Number(right.category?.id || 0)
+    );
+  }
+
+  function restorePublicView(nextView) {
+    closeLiveDropdown({ abort: true });
+    categoryRequestIdRef.current += 1;
+    categoryAbortControllerRef.current?.abort();
+    categoryAbortControllerRef.current = null;
+    isSearchFocusedRef.current = false;
+    setIsSearchFocused(false);
+    setViewMode(nextView.view);
+    setSearchInput(nextView.view === "search" || nextView.view === "detail" ? nextView.query : "");
+    searchInputRef.current = nextView.view === "search" || nextView.view === "detail" ? nextView.query : "";
+    setSubmittedKeyword(nextView.view === "search" || nextView.view === "detail" ? nextView.query : "");
+    setSelectedCategory(nextView.category || null);
+
+    if (nextView.category) {
+      previousCategoryRef.current = nextView.category;
+      setCategoryProducts([]);
+      setCategoryTotal(0);
+      setCategoryError("");
+      setCategoryPage(1);
+    } else if (nextView.view === "home") {
+      previousCategoryRef.current = null;
+    }
+  }
+
+  function applyPublicView(nextView, { retryIfCurrent = false } = {}) {
+    const currentView = getCurrentViewState();
+    const isCurrentTarget = isSameViewState(currentView, nextView);
+
+    if (!isCurrentTarget) {
+      writePublicViewState("replaceState", currentView);
+      writePublicViewState("pushState", nextView);
     }
 
     closeLiveDropdown({ abort: true });
+    categoryRequestIdRef.current += 1;
+    categoryAbortControllerRef.current?.abort();
+    categoryAbortControllerRef.current = null;
     isSearchFocusedRef.current = false;
     setIsSearchFocused(false);
     inputRef.current?.blur();
+
+    const nextQuery = nextView.view === "search" || nextView.view === "detail" ? nextView.query : "";
     searchInputRef.current = nextQuery;
     setSearchInput(nextQuery);
-    setViewMode(nextView);
-    setSubmittedKeyword(nextView === "home" ? "" : nextQuery);
+    setViewMode(nextView.view);
+    setSubmittedKeyword(nextQuery);
+    setSelectedCategory(nextView.category || null);
 
-    if (isCurrentTarget && retryIfCurrent && nextView !== "home") {
+    if (nextView.category) {
+      previousCategoryRef.current = nextView.category;
+      setCategoryProducts([]);
+      setCategoryTotal(0);
+      setCategoryError("");
+      setCategoryPage(1);
+    } else if (nextView.view === "home") {
+      previousCategoryRef.current = null;
+    }
+
+    if (isCurrentTarget && retryIfCurrent && nextView.view === "category") {
+      setCategoryRetryCount((current) => current + 1);
+    }
+    if (isCurrentTarget && retryIfCurrent && (nextView.view === "search" || nextView.view === "detail")) {
       setRetryCount((current) => current + 1);
     }
   }
@@ -541,7 +715,7 @@ export function PublicSearchPage() {
     }
 
     rememberKeyword(nextKeyword);
-    applyPublicView("search", nextKeyword, { retryIfCurrent: true });
+    applyPublicView({ view: "search", query: nextKeyword, category: null }, { retryIfCurrent: true });
   }
 
   function handleRetrySearch() {
@@ -550,7 +724,12 @@ export function PublicSearchPage() {
 
   function handleClearSearch() {
     rememberKeyword(searchInput);
-    applyPublicView("home", "");
+    const previousCategory = previousCategoryRef.current;
+    applyPublicView(
+      previousCategory
+        ? { view: "category", query: "", category: previousCategory }
+        : { view: "home", query: "", category: null }
+    );
     resultsKeywordRef.current = "";
     setResults([]);
     setHasHiddenOutOfStockMatches(false);
@@ -561,7 +740,7 @@ export function PublicSearchPage() {
   function handleHistoryClick(value) {
     const nextKeyword = value.trim();
     rememberKeyword(nextKeyword);
-    applyPublicView("search", nextKeyword, { retryIfCurrent: true });
+    applyPublicView({ view: "search", query: nextKeyword, category: null }, { retryIfCurrent: true });
   }
 
   function handleRemoveHistoryItem(value) {
@@ -581,8 +760,29 @@ export function PublicSearchPage() {
     const exactSku = String(product?.sku || "").trim();
     if (!exactSku) return;
     rememberKeyword(exactSku);
-    applyPublicView("detail", exactSku, { retryIfCurrent: true });
+    applyPublicView({ view: "detail", query: exactSku, category: null }, { retryIfCurrent: true });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleSelectCategory(category) {
+    if (!category) {
+      previousCategoryRef.current = null;
+      applyPublicView({ view: "home", query: "", category: null });
+      return;
+    }
+
+    const nextCategory = { id: Number(category.id), name: String(category.name || "").trim() };
+    if (!Number.isInteger(nextCategory.id) || nextCategory.id < 1 || !nextCategory.name) return;
+    applyPublicView({ view: "category", query: "", category: nextCategory }, { retryIfCurrent: true });
+  }
+
+  function handleLoadMoreCategoryProducts() {
+    if (isCategoryLoading || isCategoryLoadingMore || categoryProducts.length >= categoryTotal) return;
+    setCategoryPage((current) => current + 1);
+  }
+
+  function handleRetryCategoryProducts() {
+    setCategoryRetryCount((current) => current + 1);
   }
 
   function handleSearchInputChange(value) {
@@ -670,7 +870,11 @@ export function PublicSearchPage() {
         searchFormRef={searchFormRef}
         searchInput={searchInput}
       />
-      <PublicCategoryNav categories={categories} />
+      <PublicCategoryNav
+        categories={categories}
+        onSelectCategory={handleSelectCategory}
+        selectedCategoryId={viewMode === "search" ? null : selectedCategory?.id ?? null}
+      />
 
       <main className="mx-auto w-[min(calc(100%_-_clamp(2rem,3vw,6rem)),clamp(80rem,86vw,131.25rem))] pb-10 pt-[clamp(1rem,1.3vw,1.75rem)] sm:pb-14">
         {viewMode === "home" && <PublicCatalogueHero />}
@@ -701,6 +905,21 @@ export function PublicSearchPage() {
             isLoading={isCatalogueLoading}
             onViewDetails={handleCatalogueProductDetails}
             sections={catalogueSections}
+          />
+        )}
+
+        {hasSelectedCategory && (
+          <PublicCategoryResultsSection
+            category={selectedCategory}
+            error={categoryError}
+            hasMore={categoryProducts.length < categoryTotal}
+            isLoading={isCategoryLoading}
+            isLoadingMore={isCategoryLoadingMore}
+            onLoadMore={handleLoadMoreCategoryProducts}
+            onRetry={handleRetryCategoryProducts}
+            onViewDetails={handleCatalogueProductDetails}
+            products={categoryProducts}
+            total={categoryTotal}
           />
         )}
 
