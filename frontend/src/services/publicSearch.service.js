@@ -2,6 +2,8 @@ import { apiGet } from "../api/apiClient";
 
 let publicCategoriesPromise = null;
 let availableCatalogueProductsPromise = null;
+const CATALOGUE_SECTION_LIMIT = 6;
+const CATALOGUE_FETCH_LIMIT = 20;
 
 export function listPublicCategories() {
   if (!publicCategoriesPromise) {
@@ -84,34 +86,50 @@ function takeUniqueAvailableProducts(candidates, limit, usedKeys) {
   return selected;
 }
 
-function interleaveCatalogueProducts(secondhandProducts, newProducts) {
-  const products = [];
-  const maxLength = Math.max(secondhandProducts.length, newProducts.length);
+function interleaveNewestCatalogueProducts(newProducts, secondhandProducts) {
+  const interleaved = [];
+  const maxLength = Math.max(newProducts.length, secondhandProducts.length);
 
   for (let index = 0; index < maxLength; index += 1) {
-    if (secondhandProducts[index]) products.push(secondhandProducts[index]);
-    if (newProducts[index]) products.push(newProducts[index]);
+    if (newProducts[index]) interleaved.push(newProducts[index]);
+    if (secondhandProducts[index]) interleaved.push(secondhandProducts[index]);
   }
 
-  return products.slice(0, 6);
+  return interleaved;
+}
+
+export function composeCatalogueSections(secondhandProducts, newProducts) {
+  const secondhandCandidates = secondhandProducts.filter((product) => getCatalogueCondition(product) === "2nd");
+  const newCandidates = newProducts.filter((product) => getCatalogueCondition(product) === "new");
+  const newestUsedKeys = new Set();
+  const newest = takeUniqueAvailableProducts(
+    interleaveNewestCatalogueProducts(newCandidates, secondhandCandidates),
+    CATALOGUE_SECTION_LIMIT,
+    newestUsedKeys
+  );
+  const sectionUsedKeys = new Set(newestUsedKeys);
+  const secondhand = takeUniqueAvailableProducts(
+    secondhandCandidates,
+    CATALOGUE_SECTION_LIMIT,
+    sectionUsedKeys
+  );
+  const newItems = takeUniqueAvailableProducts(
+    newCandidates,
+    CATALOGUE_SECTION_LIMIT,
+    sectionUsedKeys
+  );
+
+  return { newest, secondhand, new: newItems };
 }
 
 export function listAvailableCatalogueProducts() {
   if (!availableCatalogueProductsPromise) {
     availableCatalogueProductsPromise = Promise.all([
-      searchPublicProducts("2nd", { limit: 6 }),
-      searchPublicProducts("new", { limit: 6 })
+      searchPublicProducts("2nd", { limit: CATALOGUE_FETCH_LIMIT }),
+      searchPublicProducts("new", { limit: CATALOGUE_FETCH_LIMIT })
     ])
       .then(([secondhandResult, newResult]) => {
-        const usedKeys = new Set();
-        const newCandidates = newResult.products.filter((product) => getCatalogueCondition(product) === "new");
-        const secondhandCandidates = secondhandResult.products.filter(
-          (product) => getCatalogueCondition(product) === "2nd"
-        );
-        const selectedNew = takeUniqueAvailableProducts(newCandidates, 2, usedKeys);
-        const selectedSecondhand = takeUniqueAvailableProducts(secondhandCandidates, 6 - selectedNew.length, usedKeys);
-
-        return interleaveCatalogueProducts(selectedSecondhand, selectedNew);
+        return composeCatalogueSections(secondhandResult.products, newResult.products);
       })
       .catch((error) => {
         availableCatalogueProductsPromise = null;

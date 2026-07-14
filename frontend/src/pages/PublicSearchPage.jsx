@@ -17,6 +17,7 @@ const PUBLIC_SEARCH_TIMEOUT_MS = 20000;
 const PUBLIC_SEARCH_RESUME_AFTER_MS = 25000;
 const IOS_INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
 const PUBLIC_SEARCH_ERROR_MESSAGE = "Mạng đang chậm, vui lòng thử lại.";
+const EMPTY_CATALOGUE_SECTIONS = Object.freeze({ newest: [], secondhand: [], new: [] });
 
 function isTechnicalCatalogueSearch(value) {
   return /^__catalogue_/i.test(String(value || "").trim());
@@ -94,7 +95,7 @@ export function PublicSearchPage() {
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [results, setResults] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [catalogueProducts, setCatalogueProducts] = useState([]);
+  const [catalogueSections, setCatalogueSections] = useState(EMPTY_CATALOGUE_SECTIONS);
   const [isCatalogueLoading, setIsCatalogueLoading] = useState(true);
   const [hasHiddenOutOfStockMatches, setHasHiddenOutOfStockMatches] = useState(false);
   const [history, setHistory] = useState(() => loadSearchHistory());
@@ -143,10 +144,10 @@ export function PublicSearchPage() {
     let active = true;
     listAvailableCatalogueProducts()
       .then((items) => {
-        if (active) setCatalogueProducts(items);
+        if (active) setCatalogueSections(items);
       })
       .catch(() => {
-        if (active) setCatalogueProducts([]);
+        if (active) setCatalogueSections(EMPTY_CATALOGUE_SECTIONS);
       })
       .finally(() => {
         if (active) setIsCatalogueLoading(false);
@@ -383,7 +384,7 @@ export function PublicSearchPage() {
       />
       <PublicCategoryNav categories={categories} />
 
-      <main className="mx-auto max-w-7xl px-4 pb-10 pt-4 sm:px-6 sm:pb-14 sm:pt-6">
+      <main className="mx-auto w-[min(calc(100%_-_clamp(2rem,3vw,6rem)),clamp(80rem,86vw,131.25rem))] pb-10 pt-[clamp(1rem,1.3vw,1.75rem)] sm:pb-14">
         {!trimmedKeyword && <PublicCatalogueHero />}
 
         {showIOSInstallGuide && (
@@ -411,7 +412,7 @@ export function PublicSearchPage() {
           <PublicAvailableProductsSection
             isLoading={isCatalogueLoading}
             onViewDetails={handleCatalogueProductDetails}
-            products={catalogueProducts}
+            sections={catalogueSections}
           />
         )}
 
@@ -446,6 +447,23 @@ export function PublicSearchPage() {
               </div>
             </div>
           </section>
+        )}
+
+        {!trimmedKeyword && (
+          <footer className="mt-5 rounded-xl border border-blue-100 bg-[#f3f8ff] px-4 py-3 text-[#0f2f5f]">
+            <div className="grid gap-2 text-xs font-semibold sm:grid-cols-3 sm:gap-4">
+              {[
+                "Kiểm tra kỹ trước khi bán",
+                "Bảo hành được ghi rõ theo từng sản phẩm",
+                "Hỗ trợ tra cứu nhanh"
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[#0b63f6]" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </footer>
         )}
 
         {hasSearched && (

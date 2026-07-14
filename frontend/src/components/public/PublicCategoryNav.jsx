@@ -43,13 +43,13 @@ export function PublicCategoryNav({ categories }) {
 
   return (
     <nav aria-label="Danh mục sản phẩm" className="border-b border-[#d9e6f5] bg-[#f3f8ff]">
-      <div className="mx-auto flex max-w-7xl min-w-0 items-center gap-3 overflow-hidden px-4 py-2.5 sm:px-6">
+      <div className="mx-auto flex w-[min(calc(100%_-_clamp(2rem,3vw,6rem)),clamp(80rem,86vw,131.25rem))] min-w-0 items-center gap-[clamp(0.75rem,1vw,1rem)] overflow-hidden py-[clamp(0.625rem,0.7vw,0.75rem)]">
         <p className="shrink-0 text-xs font-extrabold uppercase tracking-[0.08em] text-[#0f2f5f]">Danh mục</p>
         <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <ul className="flex w-max max-w-none items-center gap-1.5 pr-2 sm:gap-2">
             {quickCategories.map((category) => (
               <li key={category.id}>
-                <span className="inline-flex h-8 items-center rounded-full border border-[#d9e6f5] bg-white px-3.5 text-sm font-semibold text-[#0b4fb3]">
+                <span className="inline-flex h-[clamp(2rem,1.9vw,2.25rem)] items-center rounded-full border border-[#d9e6f5] bg-white px-[clamp(0.875rem,0.9vw,1rem)] text-[clamp(0.875rem,0.75vw,0.9375rem)] font-semibold text-[#0b4fb3]">
                   {category.name}
                 </span>
               </li>

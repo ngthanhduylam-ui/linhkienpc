@@ -15,20 +15,20 @@ export function PublicCatalogueHeader({
   return (
     <header className="border-b border-[#d9e6f5] bg-white shadow-[0_2px_10px_rgba(15,47,95,0.06)]">
       <div
-        className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 pb-2.5 sm:gap-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,auto)_minmax(0,1fr)_auto] lg:gap-3 xl:gap-5"
+        className="mx-auto flex w-[min(calc(100%_-_clamp(2rem,3vw,6rem)),clamp(80rem,86vw,131.25rem))] flex-wrap items-center gap-2 pb-2.5 sm:gap-4 lg:grid lg:grid-cols-[minmax(0,auto)_minmax(0,1fr)_auto] lg:gap-[clamp(0.75rem,1.1vw,1.5rem)] lg:pb-[clamp(0.625rem,0.7vw,0.875rem)]"
         style={{ paddingTop: "max(0.625rem, env(safe-area-inset-top))" }}
       >
-        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3 lg:max-w-60">
+        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3 lg:max-w-[clamp(16.5rem,16vw,20rem)] lg:gap-[clamp(0.75rem,0.8vw,1rem)]">
           <img
             src={ptcLogoUrl}
             alt="Logo Vi Tính Phước Tài"
-            className="h-11 w-11 shrink-0 rounded-lg border border-[#d9e6f5] bg-white object-contain p-0.5 sm:h-12 sm:w-12"
+            className="h-11 w-11 shrink-0 rounded-lg border border-[#d9e6f5] bg-white object-contain p-0.5 sm:h-[clamp(3rem,3vw,3.5rem)] sm:w-[clamp(3rem,3vw,3.5rem)]"
           />
           <div className="min-w-0">
-            <p className="truncate text-sm font-extrabold tracking-wide text-[#0f2f5f] sm:text-lg">
+            <p className="truncate text-sm font-extrabold tracking-wide text-[#0f2f5f] sm:text-[clamp(1.125rem,1.05vw,1.25rem)]">
               VI TÍNH PHƯỚC TÀI
             </p>
-            <p className="truncate text-[10px] font-medium text-slate-500 sm:text-xs">Uy tín tạo nên thương hiệu</p>
+            <p className="truncate text-[10px] font-medium text-slate-500 sm:text-[clamp(0.75rem,0.7vw,0.875rem)]">Uy tín tạo nên thương hiệu</p>
           </div>
         </div>
 
@@ -46,7 +46,7 @@ export function PublicCatalogueHeader({
             <input
               id="public-product-search"
               ref={inputRef}
-              className="h-11 w-full rounded-l-xl border border-r-0 border-[#8ab8fb] bg-white px-3 pr-10 text-sm font-semibold text-slate-900 outline-none placeholder:font-normal placeholder:text-transparent focus:border-[#0b63f6] focus:ring-2 focus:ring-inset focus:ring-blue-100 sm:px-4 sm:text-base sm:placeholder:text-slate-400"
+              className="h-11 w-full rounded-l-xl border border-r-0 border-[#8ab8fb] bg-white px-3 pr-10 text-sm font-semibold text-slate-900 outline-none placeholder:font-normal placeholder:text-transparent focus:border-[#0b63f6] focus:ring-2 focus:ring-inset focus:ring-blue-100 sm:px-[clamp(1rem,1vw,1.25rem)] sm:text-base sm:placeholder:text-slate-400 lg:h-[clamp(2.75rem,2.5vw,3rem)]"
               placeholder="Nhập tên sản phẩm, SKU hoặc ghi chú bảo hành..."
               value={searchInput}
               onChange={(event) => onInputChange(event.target.value)}
@@ -70,7 +70,7 @@ export function PublicCatalogueHeader({
           </div>
           <button
             type="submit"
-            className="h-11 shrink-0 rounded-r-xl bg-[#0b63f6] px-3 text-sm font-extrabold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#0b63f6] disabled:opacity-60 sm:min-w-28 sm:px-5"
+            className="h-11 shrink-0 rounded-r-xl bg-[#0b63f6] px-3 text-sm font-extrabold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#0b63f6] disabled:opacity-60 sm:min-w-[clamp(7rem,7vw,9rem)] sm:px-[clamp(1.25rem,1.4vw,1.75rem)] lg:h-[clamp(2.75rem,2.5vw,3rem)] lg:text-[clamp(0.875rem,0.8vw,1rem)]"
             disabled={!hasKeyword || isLoading}
           >
             {isLoading ? "Đang tìm..." : "Tìm kiếm"}
@@ -79,7 +79,7 @@ export function PublicCatalogueHeader({
 
         <Link
           to="/admin/login"
-          className="ml-auto inline-flex h-11 shrink-0 items-center whitespace-nowrap rounded-xl border border-[#8ab8fb] bg-white px-2.5 text-[11px] font-bold text-[#0b63f6] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] focus-visible:ring-offset-2 sm:px-4 sm:text-sm lg:ml-0"
+          className="ml-auto inline-flex h-11 shrink-0 items-center whitespace-nowrap rounded-xl border border-[#8ab8fb] bg-white px-2.5 text-[11px] font-bold text-[#0b63f6] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] focus-visible:ring-offset-2 sm:px-[clamp(1rem,1.2vw,1.5rem)] sm:text-[clamp(0.875rem,0.8vw,1rem)] lg:ml-0 lg:h-[clamp(2.75rem,2.5vw,3rem)]"
         >
           Đăng nhập quản trị
         </Link>
