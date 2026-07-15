@@ -1,8 +1,11 @@
 import { PublicCatalogueProductCard } from "./PublicCatalogueProductCard";
 
+const CATALOGUE_GRID_CLASS_NAME =
+  "grid min-w-0 grid-cols-1 gap-[clamp(0.75rem,1vw,1.25rem)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1680px]:grid-cols-5 min-[2200px]:grid-cols-6";
+
 function CategoryGrid({ onViewDetails, products }) {
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-[clamp(0.75rem,1vw,1.25rem)] sm:grid-cols-[repeat(auto-fit,minmax(clamp(15.5rem,19vw,18.75rem),1fr))]">
+    <div className={CATALOGUE_GRID_CLASS_NAME}>
       {products.map((product) => (
         <div key={product.id || product.sku} className="h-full min-w-0">
           <PublicCatalogueProductCard product={product} onViewDetails={onViewDetails} showPrice />
@@ -14,7 +17,7 @@ function CategoryGrid({ onViewDetails, products }) {
 
 function CategoryGridSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-[clamp(0.75rem,1vw,1.25rem)] sm:grid-cols-[repeat(auto-fit,minmax(clamp(15.5rem,19vw,18.75rem),1fr))]">
+    <div className={CATALOGUE_GRID_CLASS_NAME}>
       {Array.from({ length: 6 }, (_, index) => (
         <div key={index} className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="h-36 bg-slate-100 sm:h-[clamp(9rem,8vw,11rem)]" />

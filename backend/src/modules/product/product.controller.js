@@ -97,6 +97,20 @@ exports.searchPublicProducts = asyncHandler(async (req, res) => {
   });
 });
 
+exports.listPublicCatalogueSuggestions = asyncHandler(async (req, res) => {
+  const result = await productService.listPublicCatalogueSuggestions(req.query);
+  res.json({
+    success: true,
+    data: result.items.map(withPublicImageSummary),
+    meta: {
+      limit: result.limit,
+      count: result.items.length,
+      excluded_count: result.excludedCount,
+      server_time: new Date().toISOString()
+    }
+  });
+});
+
 exports.getPublicInventoryBySku = asyncHandler(async (req, res) => {
   const data = await productService.getPublicInventoryBySku(req.params.sku);
   res.json({

@@ -1,7 +1,8 @@
 import { apiGet } from "../api/apiClient";
 
 let publicCategoriesPromise = null;
-let availableCatalogueProductsPromise = null;
+let publicCatalogueSuggestionsPromise = null;
+let availableCatalogueConditionProductsPromise = null;
 const CATALOGUE_SECTION_LIMIT = 6;
 const CATALOGUE_FETCH_LIMIT = 20;
 
@@ -80,6 +81,44 @@ export async function listPublicCategoryProducts(categoryId, options = {}) {
   };
 }
 
+function requestPublicCatalogueSuggestions(excludedIds, options) {
+  const { limit, ...requestOptions } = options;
+  const safeExcludedIds = Array.from(
+    new Set(
+      (Array.isArray(excludedIds) ? excludedIds : [])
+        .map(Number)
+        .filter((id) => Number.isSafeInteger(id) && id > 0)
+        .slice(0, 24)
+    )
+  );
+  const query = { limit };
+  if (safeExcludedIds.length) query.exclude_ids = safeExcludedIds.join(",");
+
+  return apiGet("/public/catalogue/suggestions", query, requestOptions).then((response) => {
+    const products = Array.isArray(response?.data) ? response.data : [];
+    return mapPublicProducts(products);
+  });
+}
+
+export function listPublicCatalogueSuggestions(excludedIds = [], options = {}) {
+  const { limit = 6, forceRefresh = false, ...requestOptions } = options;
+  const load = () => requestPublicCatalogueSuggestions(excludedIds, { limit, ...requestOptions });
+
+  if (forceRefresh) {
+    return load();
+  }
+
+  if (!publicCatalogueSuggestionsPromise) {
+    const currentPromise = load().finally(() => {
+      if (publicCatalogueSuggestionsPromise === currentPromise) {
+        publicCatalogueSuggestionsPromise = null;
+      }
+    });
+    publicCatalogueSuggestionsPromise = currentPromise;
+  }
+  return publicCatalogueSuggestionsPromise;
+}
+
 function getCatalogueCondition(product) {
   const firstSkuToken = String(product?.sku || "").trim().toLowerCase().split(/[.\s_-]+/)[0];
   return firstSkuToken === "2nd" || firstSkuToken === "new" ? firstSkuToken : "";
@@ -108,45 +147,26 @@ function takeUniqueAvailableProducts(candidates, limit, usedKeys) {
   return selected;
 }
 
-function interleaveNewestCatalogueProducts(newProducts, secondhandProducts) {
-  const interleaved = [];
-  const maxLength = Math.max(newProducts.length, secondhandProducts.length);
-
-  for (let index = 0; index < maxLength; index += 1) {
-    if (newProducts[index]) interleaved.push(newProducts[index]);
-    if (secondhandProducts[index]) interleaved.push(secondhandProducts[index]);
-  }
-
-  return interleaved;
-}
-
 export function composeCatalogueSections(secondhandProducts, newProducts) {
   const secondhandCandidates = secondhandProducts.filter((product) => getCatalogueCondition(product) === "2nd");
   const newCandidates = newProducts.filter((product) => getCatalogueCondition(product) === "new");
-  const newestUsedKeys = new Set();
-  const newest = takeUniqueAvailableProducts(
-    interleaveNewestCatalogueProducts(newCandidates, secondhandCandidates),
-    CATALOGUE_SECTION_LIMIT,
-    newestUsedKeys
-  );
-  const sectionUsedKeys = new Set(newestUsedKeys);
   const secondhand = takeUniqueAvailableProducts(
     secondhandCandidates,
     CATALOGUE_SECTION_LIMIT,
-    sectionUsedKeys
+    new Set()
   );
   const newItems = takeUniqueAvailableProducts(
     newCandidates,
     CATALOGUE_SECTION_LIMIT,
-    sectionUsedKeys
+    new Set()
   );
 
-  return { newest, secondhand, new: newItems };
+  return { secondhand, new: newItems };
 }
 
-export function listAvailableCatalogueProducts() {
-  if (!availableCatalogueProductsPromise) {
-    availableCatalogueProductsPromise = Promise.all([
+export function listAvailableCatalogueConditionProducts() {
+  if (!availableCatalogueConditionProductsPromise) {
+    availableCatalogueConditionProductsPromise = Promise.all([
       searchPublicProducts("2nd", { limit: CATALOGUE_FETCH_LIMIT }),
       searchPublicProducts("new", { limit: CATALOGUE_FETCH_LIMIT })
     ])
@@ -154,10 +174,10 @@ export function listAvailableCatalogueProducts() {
         return composeCatalogueSections(secondhandResult.products, newResult.products);
       })
       .catch((error) => {
-        availableCatalogueProductsPromise = null;
+        availableCatalogueConditionProductsPromise = null;
         throw error;
       });
   }
 
-  return availableCatalogueProductsPromise;
+  return availableCatalogueConditionProductsPromise;
 }

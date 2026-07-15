@@ -4,6 +4,9 @@ const { parsePagination, parseNullableInt, parseBooleanQuery, escapeLike } = req
 const { buildAdjustedNoteGroupMap } = require('../../utils/inventoryNoteGroups');
 
 const MAX_SEARCH_TOKENS = 8;
+const DEFAULT_PUBLIC_SUGGESTION_LIMIT = 6;
+const MAX_PUBLIC_SUGGESTION_LIMIT = 12;
+const MAX_PUBLIC_SUGGESTION_EXCLUSIONS = 24;
 const COMPACT_SKU_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.sku), '.', ''), '-', ''), ' ', '')";
 const COMPACT_NAME_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.name), '.', ''), '-', ''), ' ', '')";
 
@@ -76,6 +79,55 @@ function mapImageSummary(row) {
     image_count: imageCount,
     primary_image_id: row.primary_image_id ? Number(row.primary_image_id) : null
   };
+}
+
+function parsePublicSuggestionLimit(value) {
+  if (value === undefined || value === null || value === '') {
+    return DEFAULT_PUBLIC_SUGGESTION_LIMIT;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_PUBLIC_SUGGESTION_LIMIT) {
+    throw new AppError(
+      `limit must be an integer between 1 and ${MAX_PUBLIC_SUGGESTION_LIMIT}.`,
+      400,
+      'VALIDATION_ERROR'
+    );
+  }
+  return parsed;
+}
+
+function parsePublicSuggestionExclusions(value) {
+  if (value === undefined || value === null || value === '') return [];
+  if (Array.isArray(value) || typeof value !== 'string') {
+    throw new AppError('exclude_ids must be a comma-separated list of positive integers.', 400, 'VALIDATION_ERROR');
+  }
+
+  const parts = value.split(',').map((item) => item.trim());
+  if (parts.length > MAX_PUBLIC_SUGGESTION_EXCLUSIONS) {
+    throw new AppError(
+      `exclude_ids cannot contain more than ${MAX_PUBLIC_SUGGESTION_EXCLUSIONS} values.`,
+      400,
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const ids = [];
+  const usedIds = new Set();
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) {
+      throw new AppError('exclude_ids must be a comma-separated list of positive integers.', 400, 'VALIDATION_ERROR');
+    }
+    const id = Number(part);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      throw new AppError('exclude_ids must be a comma-separated list of positive integers.', 400, 'VALIDATION_ERROR');
+    }
+    if (!usedIds.has(id)) {
+      usedIds.add(id);
+      ids.push(id);
+    }
+  }
+  return ids;
 }
 
 async function getProductById(id) {
@@ -433,6 +485,69 @@ async function searchPublicProducts(query) {
   };
 }
 
+async function queryRandomAvailableProducts(limit, excludedIds) {
+  if (limit < 1) return [];
+
+  const exclusionSql = excludedIds.length
+    ? `AND p.id NOT IN (${excludedIds.map(() => '?').join(', ')})`
+    : '';
+  const [rows] = await pool.query(
+    `
+      SELECT
+        p.id,
+        p.sku,
+        p.name,
+        p.sale_price,
+        COALESCE(pib.quantity, 0) AS total_quantity,
+        COALESCE(pim.image_count, 0) AS image_count,
+        pim.primary_image_id
+      FROM products p
+      LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+      LEFT JOIN (
+        SELECT
+          product_id,
+          COUNT(*) AS image_count,
+          MAX(CASE WHEN sort_order = 1 THEN id END) AS primary_image_id
+        FROM product_images
+        GROUP BY product_id
+      ) pim ON pim.product_id = p.id
+      WHERE p.is_active = 1
+        AND COALESCE(pib.quantity, 0) > 0
+        ${exclusionSql}
+      ORDER BY RAND()
+      LIMIT ?
+    `,
+    [...excludedIds, limit]
+  );
+  return rows;
+}
+
+async function listPublicCatalogueSuggestions(query) {
+  const limit = parsePublicSuggestionLimit(query.limit);
+  const excludedIds = parsePublicSuggestionExclusions(query.exclude_ids);
+  const preferredRows = await queryRandomAvailableProducts(limit, excludedIds);
+  let rows = preferredRows;
+
+  if (rows.length < limit) {
+    const selectedIds = rows.map((row) => Number(row.id));
+    const fallbackRows = await queryRandomAvailableProducts(limit - rows.length, selectedIds);
+    rows = [...rows, ...fallbackRows];
+  }
+
+  return {
+    items: rows.map((product) => ({
+      id: Number(product.id),
+      sku: product.sku,
+      name: product.name,
+      sale_price: mapSalePrice(product.sale_price),
+      total_quantity: Number(product.total_quantity || 0),
+      ...mapImageSummary(product)
+    })),
+    limit,
+    excludedCount: excludedIds.length
+  };
+}
+
 async function getPublicInventoryBySku(sku) {
   const [products] = await pool.query(
     `
@@ -484,5 +599,6 @@ module.exports = {
   updateProduct,
   setProductActive,
   searchPublicProducts,
+  listPublicCatalogueSuggestions,
   getPublicInventoryBySku
 };

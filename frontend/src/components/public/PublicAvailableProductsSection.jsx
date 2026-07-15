@@ -1,7 +1,16 @@
 import { PublicCatalogueProductCard } from "./PublicCatalogueProductCard";
 
-const SECTION_DEFINITIONS = [
-  { key: "newest", title: "Sản phẩm mới nhập", accent: "bg-[#0b63f6]", icon: "spark" },
+const CATALOGUE_GRID_CLASS_NAME =
+  "grid min-w-0 grid-cols-1 gap-[clamp(0.75rem,1vw,1.25rem)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1680px]:grid-cols-5 min-[2200px]:grid-cols-6";
+
+const SUGGESTION_DEFINITION = {
+  key: "suggestions",
+  title: "Có thể bạn đang cần",
+  accent: "bg-[#0b63f6]",
+  icon: "spark"
+};
+
+const CONDITION_SECTION_DEFINITIONS = [
   { key: "secondhand", title: "Hàng 2nd", accent: "bg-orange-500", icon: "secondhand" },
   { key: "new", title: "Hàng new", accent: "bg-blue-600", icon: "new" }
 ];
@@ -26,7 +35,7 @@ function SectionIcon({ type }) {
   );
 }
 
-function CatalogueSection({ definition, onViewDetails, products }) {
+function CatalogueSection({ definition, onViewDetails, products, showPrice = false }) {
   if (!products.length) return null;
 
   return (
@@ -42,10 +51,10 @@ function CatalogueSection({ definition, onViewDetails, products }) {
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-[clamp(0.75rem,1vw,1.25rem)] sm:grid-cols-[repeat(auto-fit,minmax(clamp(15.5rem,19vw,18.75rem),1fr))]">
+      <div className={CATALOGUE_GRID_CLASS_NAME}>
         {products.map((product) => (
           <div key={product.id || product.sku} className="h-full min-w-0">
-            <PublicCatalogueProductCard product={product} onViewDetails={onViewDetails} />
+            <PublicCatalogueProductCard product={product} onViewDetails={onViewDetails} showPrice={showPrice} />
           </div>
         ))}
       </div>
@@ -53,11 +62,11 @@ function CatalogueSection({ definition, onViewDetails, products }) {
   );
 }
 
-function CatalogueSkeleton() {
+function CatalogueSkeleton({ label }) {
   return (
-    <section className="mt-[clamp(1.25rem,1.5vw,1.75rem)]" aria-label="Đang tải sản phẩm mới nhập">
+    <section className="mt-[clamp(1.25rem,1.5vw,1.75rem)]" aria-label={label}>
       <div className="mb-2.5 h-7 w-52 animate-pulse rounded bg-slate-200" />
-      <div className="grid grid-cols-1 gap-[clamp(0.75rem,1vw,1.25rem)] sm:grid-cols-[repeat(auto-fit,minmax(clamp(15.5rem,19vw,18.75rem),1fr))]">
+      <div className={CATALOGUE_GRID_CLASS_NAME}>
         {Array.from({ length: 6 }, (_, index) => (
           <div key={index} className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="h-36 bg-slate-100 sm:h-[clamp(9rem,8vw,11rem)]" />
@@ -73,22 +82,74 @@ function CatalogueSkeleton() {
   );
 }
 
-export function PublicAvailableProductsSection({ isLoading, onViewDetails, sections }) {
+function SuggestionError({ onRetry }) {
+  return (
+    <section className="mt-[clamp(1.25rem,1.5vw,1.75rem)]" aria-labelledby="catalogue-suggestions-heading">
+      <div className="mb-2.5 flex min-w-0 items-center gap-2">
+        <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg bg-[#0b63f6] px-1.5 text-white">
+          <SectionIcon type="spark" />
+        </span>
+        <h2 id="catalogue-suggestions-heading" className="text-[clamp(1.125rem,1.1vw,1.5rem)] font-extrabold text-[#0f2f5f]">
+          Có thể bạn đang cần
+        </h2>
+      </div>
+      <div className="rounded-xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-600">
+        <span>Chưa thể tải gợi ý lúc này.</span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="ml-2 font-bold text-[#0b63f6] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]"
+        >
+          Thử lại
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export function PublicAvailableProductsSection({
+  isLoading,
+  isSuggestionsLoading,
+  onRetrySuggestions,
+  onViewDetails,
+  sections,
+  suggestionError,
+  suggestions
+}) {
   const safeSections = sections || {};
-  const hasProducts = SECTION_DEFINITIONS.some((definition) => (safeSections[definition.key] || []).length > 0);
-  if (isLoading) return <CatalogueSkeleton />;
-  if (!hasProducts) return null;
+  const safeSuggestions = Array.isArray(suggestions) ? suggestions : [];
+  const hasConditionProducts = CONDITION_SECTION_DEFINITIONS.some(
+    (definition) => (safeSections[definition.key] || []).length > 0
+  );
+  if (!isLoading && !isSuggestionsLoading && !suggestionError && !safeSuggestions.length && !hasConditionProducts) {
+    return null;
+  }
 
   return (
     <div aria-label="Danh sách sản phẩm catalogue">
-      {SECTION_DEFINITIONS.map((definition) => (
+      {isSuggestionsLoading && <CatalogueSkeleton label="Đang tải sản phẩm có thể bạn đang cần" />}
+      {!isSuggestionsLoading && safeSuggestions.length > 0 && (
         <CatalogueSection
-          key={definition.key}
-          definition={definition}
+          definition={SUGGESTION_DEFINITION}
           onViewDetails={onViewDetails}
-          products={safeSections[definition.key] || []}
+          products={safeSuggestions}
+          showPrice
         />
-      ))}
+      )}
+      {!isSuggestionsLoading && suggestionError && <SuggestionError onRetry={onRetrySuggestions} />}
+
+      {isLoading ? (
+        <CatalogueSkeleton label="Đang tải sản phẩm theo tình trạng" />
+      ) : (
+        CONDITION_SECTION_DEFINITIONS.map((definition) => (
+          <CatalogueSection
+            key={definition.key}
+            definition={definition}
+            onViewDetails={onViewDetails}
+            products={safeSections[definition.key] || []}
+          />
+        ))
+      )}
     </div>
   );
 }

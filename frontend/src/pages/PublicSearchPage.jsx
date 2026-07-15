@@ -6,7 +6,8 @@ import { PublicCatalogueHero } from "../components/public/PublicCatalogueHero";
 import { PublicCategoryNav } from "../components/public/PublicCategoryNav";
 import { PublicCategoryResultsSection } from "../components/public/PublicCategoryResultsSection";
 import {
-  listAvailableCatalogueProducts,
+  listAvailableCatalogueConditionProducts,
+  listPublicCatalogueSuggestions,
   listPublicCategoryProducts,
   listPublicCategories,
   searchPublicProducts
@@ -19,13 +20,16 @@ const PUBLIC_SEARCH_TIMEOUT_MS = 20000;
 const PUBLIC_SEARCH_RESUME_AFTER_MS = 25000;
 const IOS_INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
 const PUBLIC_SEARCH_ERROR_MESSAGE = "Mạng đang chậm, vui lòng thử lại.";
-const EMPTY_CATALOGUE_SECTIONS = Object.freeze({ newest: [], secondhand: [], new: [] });
+const EMPTY_CATALOGUE_SECTIONS = Object.freeze({ secondhand: [], new: [] });
 const LIVE_SEARCH_DEBOUNCE_MS = 250;
 const LIVE_SEARCH_LIMIT = 7;
 const LIVE_SEARCH_ERROR_MESSAGE = "Không thể tải gợi ý lúc này. Vui lòng thử tìm kiếm đầy đủ.";
 const PUBLIC_VIEW_STATE_KEY = "public_catalogue_view";
 const PUBLIC_VIEW_MODES = new Set(["home", "category", "search", "detail"]);
 const CATEGORY_PAGE_SIZE = 24;
+const PUBLIC_SUGGESTION_LIMIT = 6;
+const MAX_STORED_SUGGESTION_IDS = 24;
+const PREVIOUS_SUGGESTION_IDS_KEY = "publicCataloguePreviousSuggestionIds";
 
 function isMeaningfulLiveQuery(value) {
   return String(value || "").trim().replace(/\s+/g, "").length >= 2;
@@ -71,6 +75,33 @@ function dedupePublicProducts(products) {
     usedKeys.add(key);
     return true;
   });
+}
+
+function sanitizeSuggestionIds(values) {
+  const usedIds = new Set();
+  return (Array.isArray(values) ? values : []).flatMap((value) => {
+    const id = Number(value);
+    if (!Number.isSafeInteger(id) || id < 1 || usedIds.has(id)) return [];
+    usedIds.add(id);
+    return [id];
+  }).slice(0, MAX_STORED_SUGGESTION_IDS);
+}
+
+function readPreviousSuggestionIds() {
+  try {
+    return sanitizeSuggestionIds(JSON.parse(sessionStorage.getItem(PREVIOUS_SUGGESTION_IDS_KEY) || "[]"));
+  } catch {
+    return [];
+  }
+}
+
+function savePreviousSuggestionIds(products) {
+  try {
+    const ids = sanitizeSuggestionIds((Array.isArray(products) ? products : []).map((product) => product?.productId));
+    sessionStorage.setItem(PREVIOUS_SUGGESTION_IDS_KEY, JSON.stringify(ids));
+  } catch {
+    // Suggestions remain usable when storage is unavailable.
+  }
 }
 
 function isTechnicalCatalogueSearch(value) {
@@ -164,6 +195,10 @@ export function PublicSearchPage() {
   const [categories, setCategories] = useState([]);
   const [catalogueSections, setCatalogueSections] = useState(EMPTY_CATALOGUE_SECTIONS);
   const [isCatalogueLoading, setIsCatalogueLoading] = useState(true);
+  const [suggestedProducts, setSuggestedProducts] = useState([]);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(true);
+  const [suggestionError, setSuggestionError] = useState("");
+  const [suggestionRetryCount, setSuggestionRetryCount] = useState(0);
   const [hasHiddenOutOfStockMatches, setHasHiddenOutOfStockMatches] = useState(false);
   const [history, setHistory] = useState(() => loadSearchHistory());
   const [isLoading, setIsLoading] = useState(false);
@@ -275,7 +310,7 @@ export function PublicSearchPage() {
 
   useEffect(() => {
     let active = true;
-    listAvailableCatalogueProducts()
+    listAvailableCatalogueConditionProducts()
       .then((items) => {
         if (active) setCatalogueSections(items);
       })
@@ -289,6 +324,34 @@ export function PublicSearchPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const excludedIds = readPreviousSuggestionIds();
+    setIsSuggestionsLoading(true);
+    setSuggestionError("");
+
+    listPublicCatalogueSuggestions(excludedIds, {
+      limit: PUBLIC_SUGGESTION_LIMIT,
+      forceRefresh: suggestionRetryCount > 0
+    })
+      .then((products) => {
+        if (!active) return;
+        const nextProducts = dedupePublicProducts(products).slice(0, PUBLIC_SUGGESTION_LIMIT);
+        setSuggestedProducts(nextProducts);
+        savePreviousSuggestionIds(nextProducts);
+      })
+      .catch(() => {
+        if (active) setSuggestionError("Không thể tải gợi ý lúc này.");
+      })
+      .finally(() => {
+        if (active) setIsSuggestionsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [suggestionRetryCount]);
 
   useEffect(() => {
     if (viewMode !== "category" || !selectedCategory?.id) return undefined;
@@ -785,6 +848,10 @@ export function PublicSearchPage() {
     setCategoryRetryCount((current) => current + 1);
   }
 
+  function handleRetrySuggestions() {
+    setSuggestionRetryCount((current) => current + 1);
+  }
+
   function handleSearchInputChange(value) {
     searchInputRef.current = value;
     setSearchInput(value);
@@ -903,8 +970,12 @@ export function PublicSearchPage() {
         {viewMode === "home" && (
           <PublicAvailableProductsSection
             isLoading={isCatalogueLoading}
+            isSuggestionsLoading={isSuggestionsLoading}
+            onRetrySuggestions={handleRetrySuggestions}
             onViewDetails={handleCatalogueProductDetails}
             sections={catalogueSections}
+            suggestionError={suggestionError}
+            suggestions={suggestedProducts}
           />
         )}
 

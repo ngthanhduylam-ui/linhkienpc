@@ -21,6 +21,7 @@ const router = express.Router();
 
 router.use('/health', healthRoute);
 
+router.get('/public/catalogue/suggestions', productController.listPublicCatalogueSuggestions);
 router.get('/public/products', productController.searchPublicProducts);
 router.get('/public/products/:sku/images', productValidators.skuParamValidator, productImageController.listPublicImages);
 router.get('/public/products/:sku/images/:imageId/thumbnail', productImageController.getPublicThumbnail);
