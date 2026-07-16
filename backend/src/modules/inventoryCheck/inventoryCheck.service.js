@@ -75,13 +75,17 @@ async function searchProducts(query) {
     ...query,
     limit: query.limit || 20
   });
-  const keyword = (query.keyword || query.q || '').trim();
+  const searchTokens = String(query.keyword || query.q || '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
   const whereParts = ['p.is_active = 1'];
   const params = [];
 
-  if (keyword) {
-    const pattern = `%${escapeLike(keyword)}%`;
-    whereParts.push('(p.sku LIKE ? OR p.name LIKE ?)');
+  for (const token of searchTokens) {
+    const pattern = `%${escapeLike(token)}%`;
+    whereParts.push('(LOWER(p.sku) LIKE ? OR LOWER(p.name) LIKE ?)');
     params.push(pattern, pattern);
   }
 
