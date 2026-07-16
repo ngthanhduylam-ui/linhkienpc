@@ -13,6 +13,11 @@ const BANNER_SLIDES = [
     id: "used-components",
     image: "/catalogue-banners/used-components.webp",
     alt: "Linh kiện máy tính cũ tại Phước Tài Computer"
+  },
+  {
+  id: "trade-in-upgrade",
+  image: "/catalogue-banners/trade-in-upgrade.webp",
+  alt: "Thu cũ đổi mới bù chênh lệch tại Phước Tài Computer"
   }
   ];
 
