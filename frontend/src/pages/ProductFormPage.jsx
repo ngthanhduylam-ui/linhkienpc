@@ -42,6 +42,7 @@ const SKU_CATEGORY_ALIASES = {
   ram: ["ram"],
   mainboard: ["main", "mainboard"],
   cpu: ["cpu"],
+  tanNhietCpu: ["fcpu"],
   laptop: ["lap", "laptop"]
 };
 const SKU_CATEGORY_LABELS = {
@@ -55,7 +56,11 @@ const SKU_CATEGORY_LABELS = {
   ram: ["ram"],
   mainboard: ["mainboard"],
   cpu: ["cpu"],
+  tanNhietCpu: ["tan nhiet cpu"],
   laptop: ["laptop"]
+};
+const SKU_CATEGORY_PREFIX_BY_NAME = {
+  "tan nhiet cpu": "fcpu"
 };
 const SKU_CATEGORY_PREFIX_TOKENS = new Set(["2nd", "new", "used"]);
 const MAX_PRODUCT_IMAGES = 5;
@@ -200,7 +205,9 @@ function toDotToken(value) {
 }
 
 function buildSuggestedSku(productName, category, condition) {
-  const categoryPrefix = toDotToken(category?.code || category?.name || "");
+  const categoryPrefix =
+    SKU_CATEGORY_PREFIX_BY_NAME[normalizeText(category?.name)] ||
+    toDotToken(category?.code || category?.name || "");
   const normalizedName = normalizeSkuChunk(productName);
   if (!categoryPrefix || !normalizedName) return "";
   return `${condition}.${categoryPrefix}.${toDotToken(normalizedName)}`;
