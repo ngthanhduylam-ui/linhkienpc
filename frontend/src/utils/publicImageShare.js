@@ -6,15 +6,15 @@ export const IMAGE_SHARE_ERROR_MESSAGE =
   "Không thể chuẩn bị ảnh để chia sẻ. Bạn có thể tải ảnh xuống để gửi.";
 
 function getImageShareFileName(product, image, index) {
-  const sourceName = String(image?.original_name || "").trim();
-  if (sourceName) return sourceName;
-
-  const safeSku = String(product?.sku || "san-pham")
+  const safeName = String(product?.name || "san-pham")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `${safeSku || "san-pham"}-${index + 1}.jpg`;
+  const extension = image?.mime_type === "image/png" ? "png" : image?.mime_type === "image/webp" ? "webp" : "jpg";
+  return `${safeName || "san-pham"}-${index + 1}.${extension}`;
 }
 
 async function imageToShareFile(product, image, index) {

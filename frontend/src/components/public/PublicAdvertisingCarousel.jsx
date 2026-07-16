@@ -1,0 +1,149 @@
+import { useEffect, useRef, useState } from "react";
+
+const AUTO_ROTATE_MS = 4500;
+const SWIPE_DISTANCE_PX = 44;
+
+const BANNER_SLIDES = [];
+
+function ArrowIcon({ direction }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path d={direction === "next" ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7"} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function PublicAdvertisingCarousel() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isHovering, setIsHovering] = useState(false);
+  const [isFocusWithin, setIsFocusWithin] = useState(false);
+  const [isPointerActive, setIsPointerActive] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const pointerStartXRef = useRef(null);
+  const isPaused = isHovering || isFocusWithin || isPointerActive;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mediaQuery) return undefined;
+
+    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+    updatePreference();
+    mediaQuery.addEventListener?.("change", updatePreference);
+    return () => mediaQuery.removeEventListener?.("change", updatePreference);
+  }, []);
+
+  useEffect(() => {
+    if (BANNER_SLIDES.length < 2 || isPaused || prefersReducedMotion) return undefined;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % BANNER_SLIDES.length);
+    }, AUTO_ROTATE_MS);
+    return () => window.clearInterval(timer);
+  }, [isPaused, prefersReducedMotion]);
+
+  function showPreviousSlide() {
+    setActiveIndex((current) => (current - 1 + BANNER_SLIDES.length) % BANNER_SLIDES.length);
+  }
+
+  function showNextSlide() {
+    setActiveIndex((current) => (current + 1) % BANNER_SLIDES.length);
+  }
+
+  function handlePointerDown(event) {
+    if (BANNER_SLIDES.length < 2) return;
+    pointerStartXRef.current = event.clientX;
+    setIsPointerActive(true);
+  }
+
+  function handlePointerUp(event) {
+    if (pointerStartXRef.current === null) return;
+    const distance = event.clientX - pointerStartXRef.current;
+    pointerStartXRef.current = null;
+    setIsPointerActive(false);
+    if (Math.abs(distance) < SWIPE_DISTANCE_PX) return;
+    if (distance < 0) showNextSlide();
+    else showPreviousSlide();
+  }
+
+  function handlePointerCancel() {
+    pointerStartXRef.current = null;
+    setIsPointerActive(false);
+  }
+
+  return (
+    <section aria-label="Quảng cáo PHƯỚC TÀI COMPUTER" className="w-full overflow-hidden border-b border-blue-200/20 bg-[#071a44]">
+      <div
+        className="group relative h-[clamp(6.5rem,10.25vw,14rem)] w-full touch-pan-y overflow-hidden bg-[linear-gradient(110deg,#071a44_0%,#0b2f6a_55%,#0b4fb3_100%)]"
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => setIsHovering(false)}
+        onFocus={() => setIsFocusWithin(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setIsFocusWithin(false);
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+      >
+        {BANNER_SLIDES.length === 0 && (
+          <div className="flex h-full items-center justify-center px-4 text-center">
+            <p className="text-[clamp(0.6875rem,0.7vw,0.875rem)] font-semibold uppercase tracking-[0.16em] text-blue-100/70">
+              Khu vực banner quảng cáo
+            </p>
+          </div>
+        )}
+
+        {BANNER_SLIDES.map((slide, index) => (
+          <img
+            key={slide.src}
+            src={slide.src}
+            alt={slide.alt}
+            loading={index === 0 ? "eager" : "lazy"}
+            fetchPriority={index === 0 ? "high" : "auto"}
+            draggable="false"
+            className={`absolute inset-0 h-full w-full select-none object-cover object-[43%_center] transition-opacity duration-700 motion-reduce:transition-none sm:object-[50%_25%] ${
+              index === activeIndex ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+          />
+        ))}
+
+        {BANNER_SLIDES.length > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="Banner trước"
+              onClick={showPreviousSlide}
+              className="absolute left-3 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#0b4fb3] shadow-lg hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:flex"
+            >
+              <ArrowIcon direction="previous" />
+            </button>
+            <button
+              type="button"
+              aria-label="Banner tiếp theo"
+              onClick={showNextSlide}
+              className="absolute right-3 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#0b4fb3] shadow-lg hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:flex"
+            >
+              <ArrowIcon direction="next" />
+            </button>
+          </>
+        )}
+
+        {BANNER_SLIDES.length > 1 && (
+          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 sm:bottom-4" aria-label="Chọn banner">
+            {BANNER_SLIDES.map((slide, index) => (
+              <button
+                key={slide.src}
+                type="button"
+                aria-label={`Hiển thị banner ${index + 1}`}
+                aria-current={index === activeIndex ? "true" : undefined}
+                onClick={() => setActiveIndex(index)}
+                className={`h-2.5 rounded-full border border-white/80 shadow transition-[width,background-color] motion-reduce:transition-none ${
+                  index === activeIndex ? "w-6 bg-white" : "w-2.5 bg-white/40 hover:bg-white/70"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

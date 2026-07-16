@@ -9,28 +9,9 @@ import {
 } from "../../utils/publicImageShare";
 
 const PUBLIC_IMAGE_LIST_TIMEOUT_MS = 20000;
-const PLACEHOLDER_CATEGORY_ALIASES = Object.freeze({
-  bb: "Barebone",
-  barebone: "Barebone",
-  case: "Case",
-  cpu: "CPU",
-  hdd: "HDD",
-  lap: "Laptop",
-  laptop: "Laptop",
-  lcd: "Màn hình",
-  main: "Mainboard",
-  mainboard: "Mainboard",
-  nguon: "Nguồn",
-  psu: "Nguồn",
-  ram: "RAM",
-  ssd: "SSD",
-  vga: "VGA"
-});
-
-function getProductCondition(sku) {
-  const firstToken = String(sku || "").trim().toLowerCase().split(/[.\s_-]+/)[0];
-  if (firstToken === "2nd") return { label: "2nd", className: "bg-orange-500 text-white" };
-  if (firstToken === "new") return { label: "new", className: "bg-[#0b63f6] text-white" };
+function getProductCondition(condition) {
+  if (condition === "2nd") return { label: "2nd", className: "bg-orange-500 text-white" };
+  if (condition === "new") return { label: "new", className: "bg-[#0b63f6] text-white" };
   return null;
 }
 
@@ -44,22 +25,13 @@ function getResponseThumbnailUrl(product) {
 
 function formatPublicPrice(value) {
   const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0) return "Liên hệ giá";
+  if (!Number.isFinite(amount) || amount <= 0) return "Liên hệ giá";
   return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
 }
 
 function getPlaceholderCategory(product) {
   const categoryName = String(product?.categoryName || "").trim();
-  if (categoryName) return categoryName;
-
-  const tokens = String(product?.sku || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .split(/[.\s_-]+/)
-    .filter(Boolean);
-  const matchingToken = tokens.find((token) => PLACEHOLDER_CATEGORY_ALIASES[token]);
-  return matchingToken ? PLACEHOLDER_CATEGORY_ALIASES[matchingToken] : "Linh kiện PC";
+  return categoryName || "Linh kiện PC";
 }
 
 function CategoryPlaceholder({ categoryName, status }) {
@@ -85,7 +57,7 @@ function CategoryPlaceholder({ categoryName, status }) {
   );
 }
 
-export function PublicCatalogueProductCard({ product, onViewDetails, showPrice = false }) {
+export function PublicCatalogueProductCard({ product, onViewDetails }) {
   const [isSharing, setIsSharing] = useState(false);
   const [shareFeedback, setShareFeedback] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState(() => getResponseThumbnailUrl(product));
@@ -94,7 +66,7 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
   );
   const attemptedThumbnailUrlsRef = useRef(new Set());
   const thumbnailRequestIdRef = useRef(0);
-  const condition = getProductCondition(product.sku);
+  const condition = getProductCondition(product.condition);
 
   async function loadFallbackThumbnail() {
     const requestId = thumbnailRequestIdRef.current + 1;
@@ -102,7 +74,7 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
     setImageStatus("loading");
 
     try {
-      const images = await listPublicProductImages(product.sku, { timeoutMs: PUBLIC_IMAGE_LIST_TIMEOUT_MS });
+      const images = await listPublicProductImages(product.productId, { timeoutMs: PUBLIC_IMAGE_LIST_TIMEOUT_MS });
       if (thumbnailRequestIdRef.current !== requestId) return;
 
       const fallbackUrl = images
@@ -143,7 +115,7 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
     return () => {
       thumbnailRequestIdRef.current += 1;
     };
-  }, [product.sku, product.imageCount, product.primaryImage]);
+  }, [product.productId, product.imageCount, product.primaryImage]);
 
   function handleThumbnailError() {
     if (thumbnailUrl) attemptedThumbnailUrlsRef.current.add(thumbnailUrl);
@@ -161,7 +133,7 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
     setIsSharing(true);
     setShareFeedback("Đang chuẩn bị...");
     try {
-      const images = await listPublicProductImages(product.sku, { timeoutMs: PUBLIC_IMAGE_LIST_TIMEOUT_MS });
+      const images = await listPublicProductImages(product.productId, { timeoutMs: PUBLIC_IMAGE_LIST_TIMEOUT_MS });
       if (!images.length) {
         setShareFeedback("Sản phẩm chưa có ảnh để chia sẻ.");
         return;
@@ -177,8 +149,12 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
   }
 
   return (
-    <article className="grid h-full min-w-0 grid-cols-[104px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[#d9e6f5] bg-white shadow-[0_3px_10px_rgba(15,47,95,0.055)] sm:flex sm:flex-col">
-      <div className="relative min-h-[152px] overflow-hidden border-r border-[#e8f0fa] bg-slate-50 sm:h-[clamp(9rem,8vw,11rem)] sm:min-h-0 sm:border-b sm:border-r-0">
+    <article
+      className="grid h-full min-w-0 grid-cols-[96px_minmax(0,1fr)] overflow-hidden rounded-xl border border-[#d6e4f5] bg-white shadow-[0_4px_14px_rgba(15,47,95,0.07)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_10px_24px_rgba(15,47,95,0.11)] sm:flex sm:flex-col"
+    >
+      <div
+        className="relative min-h-[132px] overflow-hidden border-r border-[#e8f0fa] bg-slate-50 sm:h-28 sm:min-h-0 sm:border-b sm:border-r-0"
+      >
         {thumbnailUrl && imageStatus === "ready" ? (
           <img
             src={resolveApiAssetUrl(thumbnailUrl)}
@@ -189,7 +165,7 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
             width="320"
             height="240"
             onError={handleThumbnailError}
-            className="h-full w-full object-contain p-2.5"
+            className="h-full w-full object-contain p-1.5 sm:p-2"
           />
         ) : (
           <CategoryPlaceholder categoryName={getPlaceholderCategory(product)} status={imageStatus} />
@@ -201,29 +177,27 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col p-2.5 sm:p-[clamp(0.75rem,0.8vw,1rem)]">
-        <h3 className="line-clamp-2 text-sm font-bold leading-[18px] text-[#0f2f5f] sm:min-h-[clamp(2.25rem,2.1vw,2.5rem)] sm:text-[clamp(0.875rem,0.75vw,1rem)] sm:leading-[1.3]" title={product.name}>
+      <div className="flex min-w-0 flex-1 flex-col p-2">
+        <h3
+          className="line-clamp-2 min-h-8 text-[13px] font-extrabold leading-4 text-[#0f2f5f]"
+          title={product.name}
+        >
           {product.name}
         </h3>
-        <p className="mt-1 truncate text-[11px] font-medium text-slate-500 sm:text-[clamp(0.6875rem,0.6vw,0.75rem)]" title={product.sku}>
-          SKU: {product.sku}
+        <p className="mt-0.5 text-xs font-black leading-4 text-[#0755c7] sm:text-[13px]">
+          {formatPublicPrice(product.salePrice)}
         </p>
-        {showPrice && (
-          <p className="mt-1 text-[12px] font-extrabold text-[#0b4fb3] sm:text-[clamp(0.75rem,0.67vw,0.875rem)]">
-            {formatPublicPrice(product.salePrice)}
-          </p>
-        )}
 
-        <div className="mt-[clamp(0.625rem,0.7vw,0.75rem)] flex items-center justify-between gap-2 text-[clamp(0.6875rem,0.6vw,0.75rem)]">
-          <span className="rounded-md bg-emerald-50 px-2 py-1 font-bold text-emerald-700">Còn hàng</span>
+        <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] sm:text-xs">
+          <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-bold leading-[18px] text-emerald-700">Còn hàng</span>
           <span className="font-semibold text-slate-600">Tồn: {product.totalQuantity}</span>
         </div>
 
-        <div className="mt-auto grid grid-cols-2 gap-1.5 pt-2.5">
+        <div className="mt-auto grid grid-cols-2 gap-1.5 pt-1.5">
           <button
             type="button"
             onClick={() => onViewDetails(product)}
-            className="min-h-9 whitespace-nowrap rounded-lg border border-blue-200 bg-white px-1.5 text-[11px] font-bold text-[#0b63f6] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] sm:min-h-[clamp(2.25rem,2vw,2.5rem)] sm:px-[clamp(0.375rem,0.5vw,0.625rem)] sm:text-[clamp(0.75rem,0.65vw,0.8125rem)]"
+            className="min-h-[30px] whitespace-nowrap rounded-lg border border-blue-200 bg-white px-1 text-[10px] font-bold text-[#0b63f6] shadow-[0_2px_5px_rgba(11,99,246,0.05)] hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] sm:text-[11px]"
           >
             Xem chi tiết
           </button>
@@ -231,7 +205,7 @@ export function PublicCatalogueProductCard({ product, onViewDetails, showPrice =
             type="button"
             onClick={handleShareImages}
             disabled={isSharing}
-            className="min-h-9 whitespace-nowrap rounded-lg border border-blue-200 bg-white px-1.5 text-[11px] font-bold text-[#0b63f6] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[clamp(2.25rem,2vw,2.5rem)] sm:px-[clamp(0.375rem,0.5vw,0.625rem)] sm:text-[clamp(0.75rem,0.65vw,0.8125rem)]"
+            className="min-h-[30px] whitespace-nowrap rounded-lg border border-blue-200 bg-white px-1 text-[10px] font-bold text-[#0b63f6] shadow-[0_2px_5px_rgba(11,99,246,0.05)] hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] disabled:cursor-not-allowed disabled:opacity-60 sm:text-[11px]"
           >
             {isSharing ? "Đang chuẩn bị" : "Chia sẻ ảnh"}
           </button>

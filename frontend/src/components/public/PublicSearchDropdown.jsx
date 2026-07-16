@@ -28,6 +28,15 @@ function ProductThumbnailPlaceholder() {
   );
 }
 
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function ProductThumbnail({ product }) {
   const initialThumbnailUrl = getThumbnailUrl(product?.primaryImage);
   const [thumbnailUrl, setThumbnailUrl] = useState(initialThumbnailUrl);
@@ -41,7 +50,7 @@ function ProductThumbnail({ product }) {
     setThumbnailUrl(initialThumbnailUrl);
 
     if (!initialThumbnailUrl && Number(product?.imageCount || 0) > 0) {
-      listPublicProductImages(product.sku, { signal: controller.signal, timeoutMs: 12000 })
+      listPublicProductImages(product.productId, { signal: controller.signal, timeoutMs: 12000 })
         .then((images) => {
           if (!isCurrent) return;
           const fallbackUrl = images.map(getThumbnailUrl).find(Boolean) || "";
@@ -56,7 +65,7 @@ function ProductThumbnail({ product }) {
       isCurrent = false;
       controller.abort();
     };
-  }, [initialThumbnailUrl, product?.imageCount, product?.sku]);
+  }, [initialThumbnailUrl, product?.imageCount, product?.productId]);
 
   if (!thumbnailUrl || hasImageError) return <ProductThumbnailPlaceholder />;
 
@@ -83,43 +92,106 @@ export function PublicSearchDropdown({
   errorMessage,
   hasHiddenOutOfStockMatches,
   isLoading,
+  mode = "products",
   onActiveIndexChange,
+  onClearRecentSearches,
+  onRemoveRecentSearch,
+  onSelectRecentSearch,
   onSelectProduct,
   onViewAll,
   products,
   query,
+  recentSearches,
   totalMatches
 }) {
   const safeProducts = Array.isArray(products) ? products : [];
-  const showViewAll = totalMatches > safeProducts.length;
+  const safeRecentSearches = (Array.isArray(recentSearches) ? recentSearches : []).slice(0, 7);
+  const isRecentMode = mode === "recent";
+  const showViewAll = !isRecentMode && totalMatches > safeProducts.length;
 
   return (
     <div
       className="absolute left-0 top-[calc(100%+0.5rem)] z-50 w-full overflow-hidden rounded-2xl border border-[#bfd4ee] bg-white shadow-[0_16px_36px_rgba(15,47,95,0.16)]"
-      aria-label={`Gợi ý tìm kiếm cho ${query}`}
+      aria-label={isRecentMode ? "Tìm kiếm gần đây" : `Gợi ý tìm kiếm cho ${query}`}
     >
-      {isLoading && safeProducts.length === 0 && (
+      {isRecentMode && safeRecentSearches.length > 0 && (
+        <>
+          <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-100 bg-[#f8fbff] px-3.5 sm:px-4">
+            <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-[#0f2f5f]">Tìm kiếm gần đây</p>
+            <button
+              type="button"
+              onClick={onClearRecentSearches}
+              className="rounded-md px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-blue-50 hover:text-[#0b63f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]"
+            >
+              Xóa tất cả
+            </button>
+          </div>
+          <div id={PUBLIC_SEARCH_LISTBOX_ID} role="listbox" aria-label="Tìm kiếm gần đây">
+            {safeRecentSearches.map((item, index) => {
+              const isActive = index === activeIndex;
+              return (
+                <div
+                  key={item}
+                  role="group"
+                  onMouseEnter={() => onActiveIndexChange(index)}
+                  className={`flex min-h-11 items-center border-b border-slate-100 last:border-b-0 ${
+                    isActive ? "bg-blue-50" : "bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    id={`${PUBLIC_SEARCH_LISTBOX_ID}-option-${index}`}
+                    role="option"
+                    aria-selected={isActive}
+                    onFocus={() => onActiveIndexChange(index)}
+                    onClick={() => onSelectRecentSearch(item)}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-semibold text-[#0f2f5f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0b63f6] sm:px-4"
+                  >
+                    <span className="shrink-0 text-[#7890b2]">
+                      <HistoryIcon />
+                    </span>
+                    <span className="truncate">{item}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Xóa ${item} khỏi tìm kiếm gần đây`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRemoveRecentSearch(item);
+                    }}
+                    className="mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] sm:mr-3"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {!isRecentMode && isLoading && safeProducts.length === 0 && (
         <p className="px-4 py-5 text-center text-sm font-medium text-slate-500">Đang tìm sản phẩm...</p>
       )}
 
-      {!isLoading && errorMessage && (
+      {!isRecentMode && !isLoading && errorMessage && (
         <p className="px-4 py-5 text-center text-sm font-medium text-slate-600">{errorMessage}</p>
       )}
 
-      {!isLoading && !errorMessage && safeProducts.length === 0 && (
+      {!isRecentMode && !isLoading && !errorMessage && safeProducts.length === 0 && (
         <p className="px-4 py-5 text-center text-sm font-bold text-slate-700">
           {hasHiddenOutOfStockMatches ? "Sản phẩm hiện hết hàng" : "Không tìm thấy sản phẩm"}
         </p>
       )}
 
-      {safeProducts.length > 0 && (
+      {!isRecentMode && safeProducts.length > 0 && (
         <div id={PUBLIC_SEARCH_LISTBOX_ID} role="listbox" aria-label="Sản phẩm phù hợp">
           {safeProducts.map((product, index) => {
             const isActive = index === activeIndex;
             return (
               <button
                 id={`${PUBLIC_SEARCH_LISTBOX_ID}-option-${index}`}
-                key={product.sku}
+                key={product.productId}
                 type="button"
                 role="option"
                 aria-selected={isActive}

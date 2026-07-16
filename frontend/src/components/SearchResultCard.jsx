@@ -11,6 +11,12 @@ import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const PUBLIC_IMAGE_LIST_TIMEOUT_MS = 20000;
 
+function formatPublicPrice(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return "Liên hệ giá";
+  return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
+}
+
 export function SearchResultCard({ product, autoExpand = false, eagerImage = false }) {
   const [expanded, setExpanded] = useState(autoExpand);
   const [copyFeedback, setCopyFeedback] = useState("");
@@ -28,6 +34,7 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
   const hasNotes = sortedNoteGroups.length > 0;
   const totalQuantity = Number(product.totalQuantity || 0);
   const isInStock = totalQuantity > 0;
+  const condition = product.condition === "2nd" || product.condition === "new" ? product.condition : null;
 
   useEffect(() => {
     setExpanded(autoExpand);
@@ -36,7 +43,7 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
     setSelectedImageIndex(null);
     setShareFeedback("");
     setIsSharingImages(false);
-  }, [autoExpand, product.sku]);
+  }, [autoExpand, product.productId]);
 
   useEffect(() => {
     if (selectedImageIndex === null) return undefined;
@@ -89,7 +96,7 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
     setIsLoadingImages(true);
     setImageError("");
     try {
-      setImages(await listPublicProductImages(product.sku, { timeoutMs: PUBLIC_IMAGE_LIST_TIMEOUT_MS }));
+      setImages(await listPublicProductImages(product.productId, { timeoutMs: PUBLIC_IMAGE_LIST_TIMEOUT_MS }));
     } catch (error) {
       setImageError(error?.message || "Không thể tải ảnh sản phẩm.");
     } finally {
@@ -128,7 +135,7 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
     <>
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-sky-200 hover:shadow-md">
       <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap sm:justify-between sm:gap-4">
           {product.primaryImage && (
             <img
               src={resolveApiAssetUrl(product.primaryImage.thumbnail_url)}
@@ -155,16 +162,21 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
               >
                 {isInStock ? "Còn hàng" : "Hết hàng"}
               </span>
+              {condition && (
+                <span className={`rounded-full px-2.5 py-1 text-xs font-bold text-white ${condition === "2nd" ? "bg-orange-500" : "bg-blue-600"}`}>
+                  {condition}
+                </span>
+              )}
             </div>
-            <p className="mt-2 break-all text-sm font-medium text-slate-500">{product.sku}</p>
             {product.categoryName && (
               <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{product.categoryName}</p>
             )}
+            <p className="mt-2 text-base font-extrabold text-blue-700">{formatPublicPrice(product.salePrice)}</p>
           </button>
 
-          <div className="shrink-0 rounded-2xl bg-sky-50 px-4 py-3 text-center">
-            <p className="text-3xl font-extrabold leading-none text-sky-700">{totalQuantity}</p>
-            <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Tổng tồn</p>
+          <div className="flex w-full shrink-0 items-center justify-between rounded-xl bg-sky-50 px-3 py-2 text-left sm:block sm:w-auto sm:rounded-2xl sm:px-4 sm:py-3 sm:text-center">
+            <p className="text-xl font-extrabold leading-none text-sky-700 sm:text-3xl">{totalQuantity}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:mt-1">Tổng tồn</p>
           </div>
         </div>
 
@@ -259,7 +271,7 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
             <ul className="space-y-2">
               {sortedNoteGroups.map((group) => (
                 <li
-                  key={`${product.sku}-${group.note ?? "empty"}`}
+                  key={`${product.productId}-${group.note ?? "empty"}`}
                   className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm"
                 >
                   <span className="break-words font-semibold text-slate-800">

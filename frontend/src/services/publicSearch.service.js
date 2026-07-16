@@ -2,9 +2,6 @@ import { apiGet } from "../api/apiClient";
 
 let publicCategoriesPromise = null;
 let publicCatalogueSuggestionsPromise = null;
-let availableCatalogueConditionProductsPromise = null;
-const CATALOGUE_SECTION_LIMIT = 6;
-const CATALOGUE_FETCH_LIMIT = 20;
 
 export function listPublicCategories() {
   if (!publicCategoriesPromise) {
@@ -18,21 +15,23 @@ export function listPublicCategories() {
   return publicCategoriesPromise;
 }
 
-export async function listPublicProductImages(sku, options = {}) {
-  const response = await apiGet(`/public/products/${encodeURIComponent(sku)}/images`, {}, options);
+export async function listPublicProductImages(productId, options = {}) {
+  const safeProductId = Number(productId);
+  if (!Number.isSafeInteger(safeProductId) || safeProductId < 1) return [];
+  const response = await apiGet(`/public/catalogue/products/${safeProductId}/images`, {}, options);
   return response?.data?.images || [];
 }
 
 function mapPublicProducts(products) {
   return products.map((product, index) => {
-    const productId = Number(product.id || product.note_groups?.find((item) => item?.product_id)?.product_id) || null;
+    const productId = Number(product.id) || null;
     const images = Array.isArray(product.images) ? product.images : [];
 
     return {
-      id: productId || product.sku || `public-product-${index}`,
+      id: productId || `public-product-${index}`,
       productId,
       name: product.name,
-      sku: product.sku,
+      condition: product.condition || null,
       salePrice:
         product.sale_price === null || product.sale_price === undefined
           ? null
@@ -49,6 +48,21 @@ function mapPublicProducts(products) {
       }))
     };
   });
+}
+
+export async function getPublicProductById(productId, options = {}) {
+  const safeProductId = Number(productId);
+  if (!Number.isSafeInteger(safeProductId) || safeProductId < 1) {
+    return { products: [], hasHiddenOutOfStockMatches: false, totalMatches: 0 };
+  }
+
+  const response = await apiGet("/public/products", { product_id: safeProductId, page: 1, limit: 1 }, options);
+  const products = Array.isArray(response?.data) ? response.data : [];
+  return {
+    products: mapPublicProducts(products),
+    hasHiddenOutOfStockMatches: response?.meta?.has_hidden_out_of_stock_matches === true,
+    totalMatches: Number(response?.meta?.total || products.length)
+  };
 }
 
 export async function searchPublicProducts(keyword, options = {}) {
@@ -117,67 +131,4 @@ export function listPublicCatalogueSuggestions(excludedIds = [], options = {}) {
     publicCatalogueSuggestionsPromise = currentPromise;
   }
   return publicCatalogueSuggestionsPromise;
-}
-
-function getCatalogueCondition(product) {
-  const firstSkuToken = String(product?.sku || "").trim().toLowerCase().split(/[.\s_-]+/)[0];
-  return firstSkuToken === "2nd" || firstSkuToken === "new" ? firstSkuToken : "";
-}
-
-function getCatalogueProductKey(product) {
-  if (product?.productId) return `id:${product.productId}`;
-  const normalizedSku = String(product?.sku || "").trim().toLowerCase();
-  return normalizedSku ? `sku:${normalizedSku}` : "";
-}
-
-function takeUniqueAvailableProducts(candidates, limit, usedKeys) {
-  const selected = [];
-
-  for (const product of candidates) {
-    if (selected.length >= limit) break;
-    if (Number(product?.totalQuantity || 0) <= 0) continue;
-
-    const key = getCatalogueProductKey(product);
-    if (!key || usedKeys.has(key)) continue;
-
-    usedKeys.add(key);
-    selected.push(product);
-  }
-
-  return selected;
-}
-
-export function composeCatalogueSections(secondhandProducts, newProducts) {
-  const secondhandCandidates = secondhandProducts.filter((product) => getCatalogueCondition(product) === "2nd");
-  const newCandidates = newProducts.filter((product) => getCatalogueCondition(product) === "new");
-  const secondhand = takeUniqueAvailableProducts(
-    secondhandCandidates,
-    CATALOGUE_SECTION_LIMIT,
-    new Set()
-  );
-  const newItems = takeUniqueAvailableProducts(
-    newCandidates,
-    CATALOGUE_SECTION_LIMIT,
-    new Set()
-  );
-
-  return { secondhand, new: newItems };
-}
-
-export function listAvailableCatalogueConditionProducts() {
-  if (!availableCatalogueConditionProductsPromise) {
-    availableCatalogueConditionProductsPromise = Promise.all([
-      searchPublicProducts("2nd", { limit: CATALOGUE_FETCH_LIMIT }),
-      searchPublicProducts("new", { limit: CATALOGUE_FETCH_LIMIT })
-    ])
-      .then(([secondhandResult, newResult]) => {
-        return composeCatalogueSections(secondhandResult.products, newResult.products);
-      })
-      .catch((error) => {
-        availableCatalogueConditionProductsPromise = null;
-        throw error;
-      });
-  }
-
-  return availableCatalogueConditionProductsPromise;
 }
