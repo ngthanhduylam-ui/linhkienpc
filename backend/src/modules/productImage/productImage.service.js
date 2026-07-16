@@ -32,11 +32,21 @@ function mapImage(row) {
   };
 }
 
-async function ensureProduct(productId, { activeOnly = false, connection = pool, lock = false } = {}) {
-  const whereActive = activeOnly ? ' AND is_active = 1' : '';
+async function ensureProduct(
+  productId,
+  { activeOnly = false, publiclyAvailableOnly = false, connection = pool, lock = false } = {}
+) {
+  const inventoryJoin = publiclyAvailableOnly
+    ? ' LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id'
+    : '';
+  const whereActive = activeOnly || publiclyAvailableOnly ? ' AND p.is_active = 1' : '';
+  const whereAvailable = publiclyAvailableOnly ? ' AND COALESCE(pib.quantity, 0) > 0' : '';
   const lockSql = lock ? ' FOR UPDATE' : '';
   const [rows] = await connection.query(
-    `SELECT id, sku, name, is_active FROM products WHERE id = ?${whereActive} LIMIT 1${lockSql}`,
+    `SELECT p.id, p.sku, p.name, p.is_active
+     FROM products p${inventoryJoin}
+     WHERE p.id = ?${whereActive}${whereAvailable}
+     LIMIT 1${lockSql}`,
     [productId]
   );
   if (!rows.length) {
@@ -45,13 +55,19 @@ async function ensureProduct(productId, { activeOnly = false, connection = pool,
   return rows[0];
 }
 
-async function getActiveProductBySku(sku) {
+async function getPubliclyAvailableProductBySku(sku) {
   const [rows] = await pool.query(
-    'SELECT id, sku, name FROM products WHERE sku = ? AND is_active = 1 LIMIT 1',
+    `SELECT p.id, p.sku, p.name
+     FROM products p
+     LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+     WHERE p.sku = ?
+       AND p.is_active = 1
+       AND COALESCE(pib.quantity, 0) > 0
+     LIMIT 1`,
     [sku]
   );
   if (!rows.length) {
-    throw new AppError('SKU not found.', 404, 'SKU_NOT_FOUND');
+    throw new AppError('Product not found.', 404, 'RESOURCE_NOT_FOUND');
   }
   return rows[0];
 }
@@ -69,7 +85,7 @@ async function listByProductId(productId) {
 }
 
 async function listPublicBySku(sku) {
-  const product = await getActiveProductBySku(sku);
+  const product = await getPubliclyAvailableProductBySku(sku);
   const [rows] = await pool.query(
     `SELECT id, product_id, original_name, mime_type, file_size, sort_order, created_at, updated_at
      FROM product_images
@@ -78,7 +94,22 @@ async function listPublicBySku(sku) {
     [product.id]
   );
   return {
-    product: { sku: product.sku, name: product.name },
+    product: { id: Number(product.id), name: product.name },
+    images: rows.map(mapImage)
+  };
+}
+
+async function listPublicByProductId(productId) {
+  const product = await ensureProduct(productId, { publiclyAvailableOnly: true });
+  const [rows] = await pool.query(
+    `SELECT id, product_id, original_name, mime_type, file_size, sort_order, created_at, updated_at
+     FROM product_images
+     WHERE product_id = ?
+     ORDER BY sort_order ASC, id ASC`,
+    [product.id]
+  );
+  return {
+    product: { id: Number(product.id), name: product.name },
     images: rows.map(mapImage)
   };
 }
@@ -325,13 +356,17 @@ async function reorderImages(productId, imageIds) {
   }
 }
 
-async function getStoredImage(productId, imageId, { activeOnly = false, sku = null } = {}) {
+async function getStoredImage(
+  productId,
+  imageId,
+  { activeOnly = false, publiclyAvailableOnly = false, sku = null } = {}
+) {
   let resolvedProductId = productId;
   if (sku !== null) {
-    const product = await getActiveProductBySku(sku);
+    const product = await getPubliclyAvailableProductBySku(sku);
     resolvedProductId = product.id;
   } else {
-    await ensureProduct(productId, { activeOnly });
+    await ensureProduct(productId, { activeOnly, publiclyAvailableOnly });
   }
 
   const [rows] = await pool.query(
@@ -404,6 +439,7 @@ async function deleteImage(productId, imageId) {
 module.exports = {
   listByProductId,
   listPublicBySku,
+  listPublicByProductId,
   uploadImages,
   replaceImage,
   reorderImages,

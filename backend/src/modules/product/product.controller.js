@@ -25,13 +25,12 @@ function withAdminImageSummary(product) {
 function withPublicImageSummary(product) {
   const primaryImageId = product.primary_image_id;
   const { primary_image_id, ...data } = product;
-  const encodedSku = encodeURIComponent(product.sku);
   return {
     ...data,
     primary_image: primaryImageId
       ? {
           id: primaryImageId,
-          thumbnail_url: `/api/v1/public/products/${encodedSku}/images/${primaryImageId}/thumbnail`
+          thumbnail_url: `/api/v1/public/catalogue/products/${product.id}/images/${primaryImageId}/thumbnail`
         }
       : null
   };

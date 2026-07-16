@@ -15,17 +15,20 @@ function adminImageResponse(productId, image) {
   };
 }
 
-function publicImageResponse(sku, image) {
-  const encodedSku = encodeURIComponent(sku);
+function publicImageResponse(productId, image) {
   return {
     id: image.id,
-    original_name: image.original_name,
     mime_type: image.mime_type,
     file_size: image.file_size,
     sort_order: image.sort_order,
-    thumbnail_url: `/api/v1/public/products/${encodedSku}/images/${image.id}/thumbnail`,
-    download_url: `/api/v1/public/products/${encodedSku}/images/${image.id}/download`
+    thumbnail_url: `/api/v1/public/catalogue/products/${productId}/images/${image.id}/thumbnail`,
+    download_url: `/api/v1/public/catalogue/products/${productId}/images/${image.id}/download`
   };
+}
+
+function getPublicDownloadName(image) {
+  const extension = image.mime_type === 'image/png' ? 'png' : image.mime_type === 'image/webp' ? 'webp' : 'jpg';
+  return `product-image-${image.id}.${extension}`;
 }
 
 exports.listAdminImages = asyncHandler(async (req, res) => {
@@ -73,7 +76,18 @@ exports.listPublicImages = asyncHandler(async (req, res) => {
     success: true,
     data: {
       product: result.product,
-      images: result.images.map((image) => publicImageResponse(result.product.sku, image))
+      images: result.images.map((image) => publicImageResponse(result.product.id, image))
+    }
+  });
+});
+
+exports.listPublicImagesByProductId = asyncHandler(async (req, res) => {
+  const result = await productImageService.listPublicByProductId(toId(req.params.id));
+  res.json({
+    success: true,
+    data: {
+      product: result.product,
+      images: result.images.map((image) => publicImageResponse(result.product.id, image))
     }
   });
 });
@@ -85,5 +99,19 @@ exports.getPublicThumbnail = asyncHandler(async (req, res) => {
 
 exports.downloadPublicImage = asyncHandler(async (req, res) => {
   const image = await productImageService.getStoredImage(null, toId(req.params.imageId), { sku: req.params.sku });
-  res.download(storage.resolveStoredPath(image.original_path), path.basename(image.original_name));
+  res.download(storage.resolveStoredPath(image.original_path), getPublicDownloadName(image));
+});
+
+exports.getPublicThumbnailByProductId = asyncHandler(async (req, res) => {
+  const image = await productImageService.getStoredImage(toId(req.params.id), toId(req.params.imageId), {
+    publiclyAvailableOnly: true
+  });
+  res.type('image/webp').sendFile(storage.resolveStoredPath(image.thumbnail_path));
+});
+
+exports.downloadPublicImageByProductId = asyncHandler(async (req, res) => {
+  const image = await productImageService.getStoredImage(toId(req.params.id), toId(req.params.imageId), {
+    publiclyAvailableOnly: true
+  });
+  res.download(storage.resolveStoredPath(image.original_path), getPublicDownloadName(image));
 });

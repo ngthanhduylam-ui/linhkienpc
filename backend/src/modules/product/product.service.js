@@ -81,6 +81,13 @@ function mapImageSummary(row) {
   };
 }
 
+function mapPublicCondition(sku) {
+  const firstToken = String(sku || '').trim().toLowerCase().split(/[.\s_-]+/)[0];
+  if (firstToken === '2nd') return '2nd';
+  if (firstToken === 'new') return 'new';
+  return null;
+}
+
 function parsePublicSuggestionLimit(value) {
   if (value === undefined || value === null || value === '') {
     return DEFAULT_PUBLIC_SUGGESTION_LIMIT;
@@ -367,8 +374,9 @@ async function searchPublicProducts(query) {
   const { page, limit, offset } = parsePagination(query);
   const searchTokens = getSearchTokens(query.q);
   const categoryId = parseNullableInt(query.category_id, 'category_id');
+  const productId = parseNullableInt(query.product_id, 'product_id');
 
-  if (!searchTokens.length && categoryId === null) {
+  if (!searchTokens.length && categoryId === null && productId === null) {
     return {
       items: [],
       page,
@@ -389,6 +397,11 @@ async function searchPublicProducts(query) {
   if (categoryId !== null) {
     whereParts.push('p.category_id = ?');
     params.push(categoryId);
+  }
+
+  if (productId !== null) {
+    whereParts.push('p.id = ?');
+    params.push(productId);
   }
 
   whereParts.push(...search.clauses);
@@ -420,6 +433,11 @@ async function searchPublicProducts(query) {
       hiddenParams.push(categoryId);
     }
 
+    if (productId !== null) {
+      hiddenWhereParts.push('p.id = ?');
+      hiddenParams.push(productId);
+    }
+
     hiddenWhereParts.push(...search.clauses);
     hiddenParams.push(...search.params);
 
@@ -445,11 +463,13 @@ async function searchPublicProducts(query) {
         p.id,
         p.sku,
         p.name,
+        c.name AS category_name,
         p.sale_price,
         COALESCE(pib.quantity, 0) AS total_quantity,
         COALESCE(pim.image_count, 0) AS image_count,
         pim.primary_image_id
       FROM products p
+      JOIN categories c ON c.id = p.category_id
       LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
       LEFT JOIN (
         SELECT
@@ -470,8 +490,10 @@ async function searchPublicProducts(query) {
 
   return {
     items: products.map((product) => ({
-      sku: product.sku,
+      id: Number(product.id),
       name: product.name,
+      condition: mapPublicCondition(product.sku),
+      category_name: product.category_name,
       sale_price: mapSalePrice(product.sale_price),
       total_quantity: Number(product.total_quantity || 0),
       note_groups: noteGroupMap.get(product.id) || [],
@@ -497,11 +519,13 @@ async function queryRandomAvailableProducts(limit, excludedIds) {
         p.id,
         p.sku,
         p.name,
+        c.name AS category_name,
         p.sale_price,
         COALESCE(pib.quantity, 0) AS total_quantity,
         COALESCE(pim.image_count, 0) AS image_count,
         pim.primary_image_id
       FROM products p
+      JOIN categories c ON c.id = p.category_id
       LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
       LEFT JOIN (
         SELECT
@@ -537,8 +561,9 @@ async function listPublicCatalogueSuggestions(query) {
   return {
     items: rows.map((product) => ({
       id: Number(product.id),
-      sku: product.sku,
       name: product.name,
+      condition: mapPublicCondition(product.sku),
+      category_name: product.category_name,
       sale_price: mapSalePrice(product.sale_price),
       total_quantity: Number(product.total_quantity || 0),
       ...mapImageSummary(product)
@@ -582,8 +607,8 @@ async function getPublicInventoryBySku(sku) {
   return {
     product: {
       id: product.id,
-      sku: product.sku,
       name: product.name,
+      condition: mapPublicCondition(product.sku),
       total_quantity: Number(product.total_quantity || 0),
       is_active: product.is_active === 1,
       ...mapImageSummary(product)
