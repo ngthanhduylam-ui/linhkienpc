@@ -8,8 +8,13 @@ const BANNER_SLIDES = [
     id: "build-pc",
     image: "/catalogue-banners/build-pc.webp",
     alt: "Build PC tối ưu ngân sách tại Phước Tài Computer"
+  },
+  { 
+    id: "used-components",
+    image: "/catalogue-banners/used-components.webp",
+    alt: "Linh kiện máy tính cũ tại Phước Tài Computer"
   }
-];
+  ];
 
 function ArrowIcon({ direction }) {
   return (
