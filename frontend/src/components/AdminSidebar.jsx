@@ -1,4 +1,5 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
+import { saveAdminReturnLocation } from "../utils/adminPublicNavigation";
 
 const inventoryItems = [
   { label: "Nhập hàng", to: "/admin/stock-in" },
@@ -38,14 +39,16 @@ export function AdminSidebar({ isOpen, onClose }) {
         </div>
 
         <nav className="space-y-4">
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to="/"
+            onClick={() => {
+              saveAdminReturnLocation();
+              onClose();
+            }}
             className="block rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
           >
-            Tra cứu ↗
-          </a>
+            Tra cứu
+          </Link>
 
           <div>
             <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Quản lý kho</p>

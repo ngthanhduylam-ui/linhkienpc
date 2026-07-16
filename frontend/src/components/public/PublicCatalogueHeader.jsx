@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import ptcLogoUrl from "../../assets/ptc-logo.png";
+import { consumeAdminReturnLocation, readAdminReturnLocation } from "../../utils/adminPublicNavigation";
 import { PUBLIC_SEARCH_LISTBOX_ID, PublicSearchDropdown } from "./PublicSearchDropdown";
 
 function SearchIcon({ className = "h-5 w-5" }) {
@@ -39,6 +41,13 @@ export function PublicCatalogueHeader({
   searchInput
 }) {
   const hasKeyword = Boolean(searchInput.trim());
+  const [adminReturnLocation, setAdminReturnLocation] = useState(() => readAdminReturnLocation());
+
+  function handleReturnToAdmin() {
+    const destination = consumeAdminReturnLocation();
+    setAdminReturnLocation(null);
+    window.location.assign(destination);
+  }
 
   return (
     <header className="border-b border-[#dbe8f7] bg-white">
@@ -163,18 +172,29 @@ export function PublicCatalogueHeader({
           )}
         </form>
 
-        <Link
-          to="/admin/login"
-          aria-label="Đăng nhập quản trị"
-          title="Đăng nhập quản trị"
-          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-blue-100 bg-[#f7faff] px-2.5 text-[11px] font-bold text-[#0b4fb3] hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] sm:h-11 sm:px-3 sm:text-xs"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-            <path d="m10 17 5-5-5-5M15 12H3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span className="hidden sm:inline">Quản trị</span>
-        </Link>
+        {adminReturnLocation ? (
+          <button
+            type="button"
+            onClick={handleReturnToAdmin}
+            className="inline-flex min-h-10 max-w-[5.5rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-blue-100 bg-[#f7faff] px-2.5 py-1.5 text-center text-[10px] font-bold leading-tight text-[#0b4fb3] hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] sm:min-h-11 sm:max-w-none sm:whitespace-nowrap sm:px-3 sm:text-xs"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Quay lại quản trị</span>
+          </button>
+        ) : (
+          <Link
+            to="/admin/login"
+            aria-label="Đăng nhập quản trị"
+            title="Đăng nhập quản trị"
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-blue-100 bg-[#f7faff] px-2.5 text-[11px] font-bold text-[#0b4fb3] hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] sm:h-11 sm:px-3 sm:text-xs"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+              <path d="m10 17 5-5-5-5M15 12H3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="hidden sm:inline">Quản trị</span>
+          </Link>
+        )}
       </div>
     </header>
   );
