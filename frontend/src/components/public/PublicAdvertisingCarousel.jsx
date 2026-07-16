@@ -3,7 +3,13 @@ import { useEffect, useRef, useState } from "react";
 const AUTO_ROTATE_MS = 4500;
 const SWIPE_DISTANCE_PX = 44;
 
-const BANNER_SLIDES = [];
+const BANNER_SLIDES = [
+  {
+    id: "build-pc",
+    image: "/catalogue-banners/build-pc.webp",
+    alt: "Build PC tối ưu ngân sách tại Phước Tài Computer"
+  }
+];
 
 function ArrowIcon({ direction }) {
   return (
@@ -94,13 +100,13 @@ export function PublicAdvertisingCarousel() {
 
         {BANNER_SLIDES.map((slide, index) => (
           <img
-            key={slide.src}
-            src={slide.src}
+            key={slide.id}
+            src={slide.image}
             alt={slide.alt}
             loading={index === 0 ? "eager" : "lazy"}
             fetchPriority={index === 0 ? "high" : "auto"}
             draggable="false"
-            className={`absolute inset-0 h-full w-full select-none object-cover object-[43%_center] transition-opacity duration-700 motion-reduce:transition-none sm:object-[50%_25%] ${
+            className={`absolute inset-0 h-full w-full select-none object-contain transition-opacity duration-700 motion-reduce:transition-none ${
               index === activeIndex ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           />
@@ -131,7 +137,7 @@ export function PublicAdvertisingCarousel() {
           <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 sm:bottom-4" aria-label="Chọn banner">
             {BANNER_SLIDES.map((slide, index) => (
               <button
-                key={slide.src}
+                key={slide.id}
                 type="button"
                 aria-label={`Hiển thị banner ${index + 1}`}
                 aria-current={index === activeIndex ? "true" : undefined}
