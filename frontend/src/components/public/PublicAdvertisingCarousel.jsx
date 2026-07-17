@@ -143,22 +143,6 @@ export function PublicAdvertisingCarousel() {
           </>
         )}
 
-        {BANNER_SLIDES.length > 1 && (
-          <div className="absolute bottom-1 left-1/2 flex -translate-x-1/2 gap-1 lg:bottom-4 lg:gap-1.5" aria-label="Chọn banner">
-            {BANNER_SLIDES.map((slide, index) => (
-              <button
-                key={slide.id}
-                type="button"
-                aria-label={`Hiển thị banner ${index + 1}`}
-                aria-current={index === activeIndex ? "true" : undefined}
-                onClick={() => setActiveIndex(index)}
-                className={`h-1.5 rounded-full border border-white/80 shadow transition-[width,background-color] motion-reduce:transition-none lg:h-2.5 ${
-                  index === activeIndex ? "w-4 bg-white lg:w-6" : "w-1.5 bg-white/40 hover:bg-white/70 lg:w-2.5"
-                }`}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </section>
   );
