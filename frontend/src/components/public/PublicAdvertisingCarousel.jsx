@@ -89,7 +89,7 @@ export function PublicAdvertisingCarousel() {
   return (
     <section aria-label="Quảng cáo PHƯỚC TÀI COMPUTER" className="w-full overflow-hidden border-b border-blue-200/20 bg-[#071a44]">
       <div
-        className="group relative h-[clamp(6.5rem,10.25vw,14rem)] w-full touch-pan-y overflow-hidden bg-[linear-gradient(110deg,#071a44_0%,#0b2f6a_55%,#0b4fb3_100%)]"
+        className="group relative aspect-[2169/191] w-full touch-pan-y overflow-hidden bg-[linear-gradient(110deg,#071a44_0%,#0b2f6a_55%,#0b4fb3_100%)]"
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onFocus={() => setIsFocusWithin(true)}
@@ -116,7 +116,7 @@ export function PublicAdvertisingCarousel() {
             loading={index === 0 ? "eager" : "lazy"}
             fetchPriority={index === 0 ? "high" : "auto"}
             draggable="false"
-            className={`absolute inset-0 h-full w-full select-none object-contain transition-opacity duration-700 motion-reduce:transition-none ${
+            className={`absolute inset-0 h-full w-full select-none object-cover transition-opacity duration-700 motion-reduce:transition-none ${
               index === activeIndex ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           />
