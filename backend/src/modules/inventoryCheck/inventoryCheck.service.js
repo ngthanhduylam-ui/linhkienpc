@@ -3,6 +3,14 @@ const AppError = require('../../utils/AppError');
 const { escapeLike, parsePagination } = require('../../utils/parsers');
 const { cleanNote, getAdjustedNoteGroups, normalizeNoteKey } = require('../../utils/inventoryNoteGroups');
 
+const MAX_SEARCH_TOKENS = 8;
+const COMPACT_SKU_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.sku), '.', ''), '-', ''), ' ', '')";
+const COMPACT_NAME_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.name), '.', ''), '-', ''), ' ', '')";
+
+function compactSearchToken(value) {
+  return value.replace(/[.\-\s]/g, '');
+}
+
 function mapProduct(row, noteGroups = [], adjustments = []) {
   return {
     product: {
@@ -79,14 +87,28 @@ async function searchProducts(query) {
     .trim()
     .toLowerCase()
     .split(/\s+/)
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, MAX_SEARCH_TOKENS);
   const whereParts = ['p.is_active = 1'];
   const params = [];
 
   for (const token of searchTokens) {
-    const pattern = `%${escapeLike(token)}%`;
-    whereParts.push('(LOWER(p.sku) LIKE ? OR LOWER(p.name) LIKE ?)');
-    params.push(pattern, pattern);
+    const rawPattern = `%${escapeLike(token)}%`;
+    const compactToken = compactSearchToken(token);
+    const tokenClauses = [
+      'LOWER(p.sku) LIKE ?',
+      'LOWER(p.name) LIKE ?'
+    ];
+    const tokenParams = [rawPattern, rawPattern];
+
+    if (compactToken) {
+      const compactPattern = `%${escapeLike(compactToken)}%`;
+      tokenClauses.push(`${COMPACT_SKU_SQL} LIKE ?`, `${COMPACT_NAME_SQL} LIKE ?`);
+      tokenParams.push(compactPattern, compactPattern);
+    }
+
+    whereParts.push(`(${tokenClauses.join(' OR ')})`);
+    params.push(...tokenParams);
   }
 
   const whereSql = `WHERE ${whereParts.join(' AND ')}`;
