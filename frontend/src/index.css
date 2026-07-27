@@ -18,6 +18,96 @@ body {
   container: inventory-check / inline-size;
 }
 
+.transaction-history-container {
+  container: transaction-history / inline-size;
+}
+
+.transaction-history-grid-header {
+  display: none;
+}
+
+.transaction-history-row + .transaction-history-row {
+  margin-top: 0.75rem;
+}
+
+@container transaction-history (min-width: 480px) {
+  .transaction-history-section-heading,
+  .transaction-history-pagination {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+@container transaction-history (min-width: 720px) {
+  .transaction-history-filter-form {
+    grid-template-columns: minmax(0, 1fr) 220px auto;
+  }
+}
+
+@container transaction-history (min-width: 1220px) {
+  .transaction-history-list {
+    border: 1px solid rgb(226 232 240);
+    border-radius: 0.375rem;
+  }
+
+  .transaction-history-grid-header,
+  .transaction-history-row {
+    display: grid;
+    grid-template-columns: 160px 120px 160px minmax(220px, 1fr) 120px 140px 150px;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .transaction-history-row {
+    border: 0;
+    border-top: 1px solid rgb(241 245 249);
+    border-radius: 0;
+    padding: 0.75rem 1rem;
+  }
+
+  .transaction-history-row + .transaction-history-row {
+    margin-top: 0;
+  }
+
+  .transaction-history-state {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .transaction-history-voucher,
+  .transaction-history-type,
+  .transaction-history-date,
+  .transaction-history-partner,
+  .transaction-history-quantity,
+  .transaction-history-admin,
+  .transaction-history-actions {
+    grid-column: auto;
+    grid-row: auto;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .transaction-history-actions {
+    justify-content: flex-end;
+  }
+
+  .transaction-history-actions a {
+    height: 2rem;
+    padding-inline: 0.75rem;
+  }
+
+  .transaction-history-card-label {
+    display: none;
+  }
+
+  .transaction-history-wide-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .inventory-check-primary-grid,
 .inventory-check-product-summary,
 .inventory-check-form-grid {

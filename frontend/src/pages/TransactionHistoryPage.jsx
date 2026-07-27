@@ -115,18 +115,18 @@ export function TransactionHistoryPage() {
   }
 
   return (
-    <section className="space-y-4">
+    <section className="transaction-history-container min-w-0 max-w-full space-y-4">
       <div>
         <h2 className="text-2xl font-semibold text-slate-900">Lịch sử giao dịch</h2>
         <p className="mt-1 text-sm text-slate-600">Tra cứu phiếu nhập, phiếu bán và các dòng sản phẩm trong phiếu.</p>
       </div>
 
-      <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]" onSubmit={handleSearch}>
-          <div className="relative">
+      <section className="min-w-0 max-w-full rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+        <form className="transaction-history-filter-form grid min-w-0 max-w-full grid-cols-1 gap-3" onSubmit={handleSearch}>
+          <div className="relative min-w-0 max-w-full">
             <input
               ref={keywordInputRef}
-              className="h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               placeholder="Tìm theo mã phiếu, sản phẩm, khách hàng, nhà cung cấp"
               value={keywordInput}
               onChange={(event) => setKeywordInput(event.target.value)}
@@ -144,7 +144,7 @@ export function TransactionHistoryPage() {
           </div>
 
           <select
-            className="h-10 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             value={typeInput}
             onChange={handleTypeChange}
           >
@@ -155,7 +155,7 @@ export function TransactionHistoryPage() {
 
           <button
             type="submit"
-            className="h-10 rounded-md bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-900"
+            className="h-10 w-full min-w-0 max-w-full rounded-md bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-900"
           >
             Tìm kiếm
           </button>
@@ -164,16 +164,16 @@ export function TransactionHistoryPage() {
         {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       </section>
 
-      <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <section className="min-w-0 max-w-full rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="transaction-history-section-heading flex min-w-0 max-w-full flex-col gap-2">
           <h3 className="text-base font-semibold text-slate-900">Danh sách phiếu</h3>
           <p className="text-sm text-slate-600">
             Tổng: <span className="font-semibold text-slate-900">{total}</span> phiếu
           </p>
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-md border border-slate-200">
-          <div className="hidden grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_150px] gap-3 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
+        <div className="transaction-history-list mt-4 min-w-0 max-w-full">
+          <div className="transaction-history-grid-header gap-3 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <span>Mã phiếu</span>
             <span>Loại phiếu</span>
             <span>Ngày tạo</span>
@@ -184,13 +184,13 @@ export function TransactionHistoryPage() {
           </div>
 
           {isLoading && (
-            <div className="px-4 py-8">
+            <div className="transaction-history-state rounded-md border border-slate-200 px-4 py-8">
               <p className="text-sm text-slate-500">Đang tải lịch sử giao dịch...</p>
             </div>
           )}
 
           {!isLoading && vouchers.length === 0 && (
-            <div className="px-4 py-10 text-center">
+            <div className="transaction-history-state rounded-md border border-slate-200 px-4 py-10 text-center">
               <p className="text-sm font-medium text-slate-700">Không tìm thấy phiếu giao dịch phù hợp.</p>
               <p className="mt-1 text-xs text-slate-500">Thử đổi từ khóa, mã phiếu hoặc loại phiếu.</p>
             </div>
@@ -199,39 +199,68 @@ export function TransactionHistoryPage() {
           {!isLoading && vouchers.map((voucher) => (
             <div
               key={voucher.id}
-              className="border-t border-slate-100 px-4 py-3 text-sm hover:bg-blue-50/50 lg:grid lg:grid-cols-[160px_120px_160px_minmax(220px,1fr)_120px_140px_150px] lg:items-center lg:gap-3"
+              className="transaction-history-row grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border border-slate-200 p-4 text-sm hover:bg-blue-50/50"
             >
-              <div className="min-w-0">
+              <div className="transaction-history-voucher col-span-2 row-start-2 min-w-0 max-w-full">
+                <span className="transaction-history-card-label mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Mã phiếu
+                </span>
                 <Link
                   to={`/admin/transaction-history/${voucher.id}`}
-                  className="truncate font-semibold text-brand-800 hover:text-brand-900 hover:underline"
+                  className="transaction-history-wide-truncate break-words font-semibold text-brand-800 [overflow-wrap:anywhere] hover:text-brand-900 hover:underline"
                 >
                   {voucher.voucher_code || `#${voucher.id}`}
                 </Link>
-                <p className="mt-1 text-xs text-slate-500 lg:hidden">{formatDateTime(voucher.occurred_at)}</p>
               </div>
-              <div className="mt-2 lg:mt-0"><VoucherTypeBadge type={voucher.voucher_type} /></div>
-              <p className="mt-2 text-slate-700 lg:mt-0">{formatDateTime(voucher.occurred_at)}</p>
-              <div className="mt-2 min-w-0 lg:mt-0">
-                <p className="truncate font-medium text-slate-900">{getPartnerName(voucher)}</p>
+              <div className="transaction-history-type col-start-1 row-start-1 min-w-0 max-w-full">
+                <span className="transaction-history-card-label mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Loại phiếu
+                </span>
+                <VoucherTypeBadge type={voucher.voucher_type} />
+              </div>
+              <div className="transaction-history-date col-start-2 row-start-1 min-w-0 max-w-full text-right text-slate-700">
+                <span className="transaction-history-card-label mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Ngày tạo
+                </span>
+                <p>{formatDateTime(voucher.occurred_at)}</p>
+              </div>
+              <div className="transaction-history-partner col-span-2 row-start-3 min-w-0 max-w-full">
+                <span className="transaction-history-card-label mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Khách hàng / Nhà cung cấp
+                </span>
+                <p className="transaction-history-wide-truncate break-words font-medium text-slate-900 [overflow-wrap:anywhere]">
+                  {getPartnerName(voucher)}
+                </p>
                 <p className="mt-0.5 text-xs text-slate-500">{getPartnerRole(voucher)}</p>
               </div>
-              <p className="mt-2 font-semibold tabular-nums text-slate-900 lg:mt-0">{Number(voucher.total_quantity || 0)}</p>
-              <p className="mt-2 text-slate-700 lg:mt-0">{voucher.admin?.username || "-"}</p>
-              <div className="mt-3 flex flex-wrap justify-start gap-2 lg:mt-0 lg:justify-end">
+              <div className="transaction-history-quantity col-start-1 row-start-4 min-w-0 max-w-full">
+                <span className="transaction-history-card-label mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Tổng số lượng
+                </span>
+                <p className="font-semibold tabular-nums text-slate-900">{Number(voucher.total_quantity || 0)}</p>
+              </div>
+              <div className="transaction-history-admin col-start-2 row-start-4 min-w-0 max-w-full text-right text-slate-700">
+                <span className="transaction-history-card-label mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Người tạo
+                </span>
+                <p className="break-words [overflow-wrap:anywhere]">{voucher.admin?.username || "-"}</p>
+              </div>
+              <div className="transaction-history-actions col-span-2 row-start-5 flex min-w-0 max-w-full flex-wrap justify-start gap-2">
                 {voucher.voucher_type === "OUT" && (
                   <Link
                     to={`/admin/transaction-history/${voucher.id}/print`}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-8 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    aria-label={`In phiếu ${voucher.voucher_code || voucher.id}`}
+                    className="inline-flex h-11 items-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     In phiếu
                   </Link>
                 )}
                 <Link
                   to={`/admin/transaction-history/${voucher.id}`}
-                  className="inline-flex h-8 items-center rounded-md border border-brand-600 bg-white px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                  aria-label={`Xem chi tiết phiếu ${voucher.voucher_code || voucher.id}`}
+                  className="inline-flex h-11 items-center rounded-md border border-brand-600 bg-white px-4 text-sm font-medium text-brand-700 hover:bg-brand-50"
                 >
                   Chi tiết
                 </Link>
@@ -240,9 +269,9 @@ export function TransactionHistoryPage() {
           ))}
         </div>
 
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="transaction-history-pagination mt-4 flex min-w-0 max-w-full flex-col gap-2">
           <p className="text-sm text-slate-600">Trang {page} / {totalPages}</p>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 max-w-full items-center gap-2">
             <button
               type="button"
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
