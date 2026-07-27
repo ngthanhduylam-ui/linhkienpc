@@ -369,6 +369,34 @@ function hasOrderDraft(order) {
   return Boolean(order?.cartItems?.length || order?.selectedCustomer || order?.orderNote?.trim());
 }
 
+function getHorizontalRevealScrollLeft(strip, activeTab, trailingControl = null) {
+  if (!strip || !activeTab) return null;
+
+  const stripRect = strip.getBoundingClientRect();
+  const tabRect = activeTab.getBoundingClientRect();
+  const trailingRect = trailingControl?.getBoundingClientRect();
+  const targetLeft = tabRect.left;
+  const targetRight = trailingRect ? Math.max(tabRect.right, trailingRect.right) : tabRect.right;
+  let nextScrollLeft = strip.scrollLeft;
+
+  if (targetLeft < stripRect.left) {
+    nextScrollLeft += targetLeft - stripRect.left;
+  } else if (targetRight > stripRect.right) {
+    nextScrollLeft += targetRight - stripRect.right;
+  } else {
+    return null;
+  }
+
+  const maxScrollLeft = Math.max(0, strip.scrollWidth - strip.clientWidth);
+  return Math.min(maxScrollLeft, Math.max(0, nextScrollLeft));
+}
+
+function isCoarsePointerInteraction(event) {
+  const pointerType = event?.nativeEvent?.pointerType;
+  if (pointerType) return pointerType === "touch" || pointerType === "pen";
+  return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches);
+}
+
 export function StockOutBulkPage() {
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -378,7 +406,9 @@ export function StockOutBulkPage() {
   const [nextOrderNumber, setNextOrderNumber] = useState(2);
   const [searchInput, setSearchInput] = useState("");
   const dropdownContainerRef = useRef(null);
+  const orderTabStripRef = useRef(null);
   const orderTabRefs = useRef({});
+  const addOrderButtonRef = useRef(null);
   const searchInputRef = useRef(null);
   const posCartRef = useRef(null);
   const cartDesktopModeMarkerRef = useRef(null);
@@ -406,6 +436,7 @@ export function StockOutBulkPage() {
   const cartItems = activeOrder?.cartItems || [];
   const selectedCustomer = activeOrder?.selectedCustomer || null;
   const orderNote = activeOrder?.orderNote || "";
+  const lastOrderId = orders[orders.length - 1]?.id;
 
   useEffect(() => {
     const cart = posCartRef.current;
@@ -564,8 +595,53 @@ export function StockOutBulkPage() {
   }, [activeProductSku, displayProducts]);
 
   useEffect(() => {
-    orderTabRefs.current[activeOrderId]?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [activeOrderId, orders.length]);
+    const strip = orderTabStripRef.current;
+    const activeTab = orderTabRefs.current[activeOrderId];
+    if (!strip || !activeTab) return undefined;
+
+    const isLastOrder = lastOrderId === activeOrderId;
+    const trailingControl = isLastOrder ? addOrderButtonRef.current : null;
+    const reducedMotionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    let animationFrame = 0;
+
+    const revealActiveTab = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const nextScrollLeft = getHorizontalRevealScrollLeft(strip, activeTab, trailingControl);
+        if (nextScrollLeft === null) return;
+
+        if (typeof strip.scrollTo === "function") {
+          strip.scrollTo({
+            left: nextScrollLeft,
+            behavior: reducedMotionQuery?.matches ? "auto" : "smooth"
+          });
+        } else {
+          strip.scrollLeft = nextScrollLeft;
+        }
+      });
+    };
+
+    revealActiveTab();
+
+    const resizeObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(revealActiveTab)
+      : null;
+    resizeObserver?.observe(strip);
+    resizeObserver?.observe(activeTab);
+    if (trailingControl) resizeObserver?.observe(trailingControl);
+
+    if (!resizeObserver) {
+      window.addEventListener("resize", revealActiveTab);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+      if (!resizeObserver) {
+        window.removeEventListener("resize", revealActiveTab);
+      }
+    };
+  }, [activeOrderId, lastOrderId, orders.length]);
 
   useEffect(() => {
     setActivePriceEditorKey("");
@@ -733,7 +809,7 @@ export function StockOutBulkPage() {
     window.setTimeout(() => searchInputRef.current?.focus({ preventScroll: true }), 0);
   }
 
-  function resetProductSearchAfterAdd() {
+  function resetProductSearchAfterAdd({ coarsePointer = false } = {}) {
     productSearchRequestRef.current += 1;
     suppressDropdownOnFocusRef.current = false;
     setSearchInput("");
@@ -743,13 +819,17 @@ export function StockOutBulkPage() {
     setProductSearchError("");
     setIsProductDropdownOpen(false);
     setActiveProductSku("");
-    focusProductSearch();
+    if (coarsePointer) {
+      searchInputRef.current?.blur();
+    } else {
+      focusProductSearch();
+    }
     window.setTimeout(() => {
       setIsProductDropdownOpen(false);
     }, 80);
   }
 
-  function handleAddToCart(product, group) {
+  function handleAddToCart(product, group, options) {
     if (isSubmitting) return;
     const maxQuantity = Number(group.quantity || 0);
     if (maxQuantity <= 0) {
@@ -785,7 +865,7 @@ export function StockOutBulkPage() {
     });
     setError("");
     setSuccess("");
-    resetProductSearchAfterAdd();
+    resetProductSearchAfterAdd(options);
   }
 
   function removeCartItem(cartKey) {
@@ -1011,7 +1091,7 @@ export function StockOutBulkPage() {
             <Link
               to="/admin"
               aria-label="Về trang quản trị"
-              className="pos-header-home flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/20 text-xl text-white/90 hover:bg-white/10"
+              className="pos-header-home pos-header-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/20 text-xl text-white/90 hover:bg-white/10"
             >
               🏠
             </Link>
@@ -1052,7 +1132,7 @@ export function StockOutBulkPage() {
                   aria-label="Xóa tìm kiếm sản phẩm"
                   disabled={isSubmitting}
                   onClick={handleClearProductSearch}
-                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="pos-product-search-clear absolute right-0 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   ×
                 </button>
@@ -1151,10 +1231,16 @@ export function StockOutBulkPage() {
                                   <button
                                     type="button"
                                     disabled={disabled}
-                                    onClick={() => handleAddToCart(product, group)}
+                                    onClick={(event) => handleAddToCart(product, group, {
+                                      coarsePointer: isCoarsePointerInteraction(event)
+                                    })}
                                     title={isFullySelected ? "Đã chọn đủ tồn" : undefined}
-                                    aria-label={isFullySelected ? `Đã chọn đủ tồn ${formatWarrantyNote(group.label)}` : undefined}
-                                    className="h-5 rounded border border-brand-200 bg-brand-50 px-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600"
+                                    aria-label={
+                                      isFullySelected
+                                        ? `Đã chọn đủ tồn ${formatWarrantyNote(group.label)}`
+                                        : `Thêm ${product.name}, nhóm ${formatWarrantyNote(group.label)}`
+                                    }
+                                    className="pos-product-group-add h-5 rounded border border-brand-200 bg-brand-50 px-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600"
                                   >
                                     {isFullySelected ? "✓ Đã chọn đủ" : hasSelected ? "+1" : "Thêm"}
                                   </button>
@@ -1182,16 +1268,20 @@ export function StockOutBulkPage() {
             )}
             </div>
 
-            <div className="pos-order-tabs flex h-full min-w-0 items-end overflow-x-auto border-l border-[#0b67c7] bg-[#0B74E5]">
+            <div ref={orderTabStripRef} className="pos-order-tabs flex h-full min-w-0 items-end overflow-x-auto border-l border-[#0b67c7] bg-[#0B74E5]">
               {orders.map((order) => {
                 const isActiveOrder = order.id === activeOrderId;
                 return (
                   <div
                     key={order.id}
                     ref={(element) => {
-                      if (element) orderTabRefs.current[order.id] = element;
+                      if (element) {
+                        orderTabRefs.current[order.id] = element;
+                      } else {
+                        delete orderTabRefs.current[order.id];
+                      }
                     }}
-                    className={`group flex h-full min-w-[92px] shrink-0 items-center border-r border-[#0b67c7] transition-colors ${
+                    className={`pos-order-tab group flex h-full min-w-[92px] shrink-0 items-center border-r border-[#0b67c7] transition-colors ${
                       isActiveOrder ? "bg-white text-slate-900 shadow-sm" : "bg-[#0B74E5] text-white hover:bg-[#0966ca]"
                     }`}
                   >
@@ -1211,10 +1301,11 @@ export function StockOutBulkPage() {
                         event.stopPropagation();
                         handleCloseOrder(order.id);
                       }}
-                      className={`mr-1 flex h-5 w-5 items-center justify-center rounded text-sm leading-none transition-opacity ${
+                      data-active={isActiveOrder ? "true" : "false"}
+                      className={`pos-order-tab-close mr-1 flex h-5 w-5 items-center justify-center rounded text-sm leading-none transition-opacity ${
                         isActiveOrder
-                          ? "text-slate-400 opacity-100 hover:bg-slate-100 hover:text-red-600"
-                          : "text-white/90 opacity-0 hover:bg-white/15 hover:text-white group-hover:opacity-100"
+                          ? "text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                          : "text-white/90 hover:bg-white/15 hover:text-white"
                       }`}
                       aria-label={`Đóng ${order.label}`}
                     >
@@ -1223,7 +1314,7 @@ export function StockOutBulkPage() {
                   </div>
                 );
               })}
-              <button type="button" disabled={isSubmitting} onClick={handleCreateOrder} className="flex h-full w-14 shrink-0 items-center justify-center border-r border-[#0b67c7] bg-[#0B74E5] text-3xl font-light text-white shadow-inner hover:bg-[#0966ca] disabled:cursor-not-allowed disabled:opacity-60" aria-label="Tạo đơn mới">
+              <button ref={addOrderButtonRef} type="button" disabled={isSubmitting} onClick={handleCreateOrder} className="pos-order-add flex h-full w-14 shrink-0 items-center justify-center border-r border-[#0b67c7] bg-[#0B74E5] text-3xl font-light text-white shadow-inner hover:bg-[#0966ca] disabled:cursor-not-allowed disabled:opacity-60" aria-label="Tạo đơn mới">
                 +
               </button>
             </div>
@@ -1245,7 +1336,7 @@ export function StockOutBulkPage() {
                   </div>
                   <p className="text-base font-medium text-slate-700">Tìm và chọn sản phẩm để bắt đầu bán hàng.</p>
                   <p className="mt-1 text-sm text-slate-500">Sản phẩm sẽ được thêm vào đơn theo từng nhóm bảo hành / ghi chú.</p>
-                  <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true, force: true })} className="mt-3 rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+                  <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true, force: true })} className="pos-cart-toolbar-action mt-3 rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
                     Thêm sản phẩm ngay
                   </button>
                 </div>
@@ -1368,10 +1459,10 @@ export function StockOutBulkPage() {
 
             <div className="pos-cart-toolbar border-t border-slate-200 bg-slate-50 px-2.5 py-2">
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true, force: true })} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true, force: true })} className="pos-cart-toolbar-action rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
                   Thêm sản phẩm
                 </button>
-                <button type="button" onClick={clearCartWithConfirm} disabled={isSubmitting || cartItems.length === 0} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={clearCartWithConfirm} disabled={isSubmitting || cartItems.length === 0} className="pos-cart-toolbar-action rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
                   Xóa toàn bộ sản phẩm
                 </button>
               </div>

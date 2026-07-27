@@ -63,6 +63,10 @@ body {
   margin: 0 0.75rem 0.5rem;
 }
 
+.pos-product-search > input {
+  padding-right: 3rem;
+}
+
 .pos-product-dropdown {
   width: auto;
   max-width: 100%;
@@ -73,6 +77,27 @@ body {
   width: 100%;
   max-width: 100%;
   overscroll-behavior-inline: contain;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pos-order-tab {
+  min-width: 7rem;
+}
+
+.pos-header-icon-button,
+.pos-product-search-clear,
+.pos-order-tab-close,
+.pos-order-add,
+.pos-product-group-add,
+.pos-cart-toolbar-action {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.pos-order-tab-close {
+  opacity: 1;
 }
 
 .pos-workspace {
@@ -396,6 +421,10 @@ body {
     flex: 0 1 auto;
   }
 
+  .pos-product-search > input {
+    padding-right: 2.5rem;
+  }
+
   .pos-order-tabs {
     width: auto;
     flex: 1 1 0%;
@@ -487,6 +516,86 @@ body {
   .pos-header-title {
     display: block;
     margin-right: 0.75rem;
+  }
+}
+
+@media (pointer: fine) {
+  @container pos-shell (min-width: 760px) {
+    .pos-order-tab {
+      min-width: 5.75rem;
+    }
+
+    .pos-header-icon-button {
+      min-width: 2.5rem;
+      min-height: 2.5rem;
+    }
+
+    .pos-product-search-clear {
+      right: 0.5rem;
+      min-width: 1.75rem;
+      min-height: 1.75rem;
+    }
+
+    .pos-order-tab-close {
+      min-width: 1.25rem;
+      min-height: 1.25rem;
+    }
+
+    .pos-order-tab-close[data-active="false"] {
+      opacity: 0;
+    }
+
+    .pos-order-tab:hover .pos-order-tab-close,
+    .pos-order-tab:focus-within .pos-order-tab-close {
+      opacity: 1;
+    }
+
+    .pos-product-group-add {
+      min-width: auto;
+      min-height: 1.25rem;
+    }
+  }
+
+  @container pos-cart (min-width: 960px) {
+    .pos-cart-toolbar-action {
+      min-width: auto;
+      min-height: revert;
+    }
+  }
+}
+
+@media (pointer: coarse) {
+  @container pos-cart (min-width: 960px) {
+    .pos-cart-grid-header,
+    .pos-cart-row-grid {
+      grid-template-columns: minmax(188px, 1fr) 112px 150px 104px 152px 120px 44px;
+    }
+  }
+
+  .pos-cart-price-editor > button,
+  .pos-cart-quantity-button,
+  .pos-cart-quantity-input,
+  .pos-cart-delete,
+  .pos-summary-action,
+  .pos-summary-panel .pos-customer-selector-input,
+  .pos-summary-panel .pos-customer-option,
+  .pos-summary-panel .pos-customer-create-button,
+  .pos-summary-panel .pos-customer-selected-change,
+  .pos-summary-panel .pos-customer-create-input,
+  .pos-summary-panel .pos-customer-create-action {
+    min-height: 2.75rem;
+  }
+
+  .pos-cart-quantity-button,
+  .pos-cart-delete {
+    width: 2.75rem;
+  }
+
+  .pos-summary-panel .pos-customer-selector-toggle {
+    top: 0.25rem;
+    right: 0;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 }
 
