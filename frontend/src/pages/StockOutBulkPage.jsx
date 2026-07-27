@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { CustomerSelector } from "../components/CustomerSelector";
@@ -194,6 +194,50 @@ function hasMoneyInputDigits(value) {
 
 function moneyInputToNumber(value, { emptyValue = 0 } = {}) {
   return parseMoneyInput(value, { emptyValue, max: MAX_MONEY_AMOUNT });
+}
+
+function AutoGrowTextarea({ autoGrow, rows, value, ...props }) {
+  const textareaRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return undefined;
+
+    if (!autoGrow) {
+      textarea.style.height = "";
+      return undefined;
+    }
+
+    const resizeToContent = () => {
+      textarea.style.height = "auto";
+      const borderHeight = textarea.offsetHeight - textarea.clientHeight;
+      textarea.style.height = `${Math.max(textarea.scrollHeight + borderHeight, 36)}px`;
+    };
+
+    resizeToContent();
+
+    if (typeof ResizeObserver !== "function") return undefined;
+
+    let observedWidth = textarea.clientWidth;
+    const resizeObserver = new ResizeObserver(() => {
+      const nextWidth = textarea.clientWidth;
+      if (nextWidth === observedWidth) return;
+      observedWidth = nextWidth;
+      resizeToContent();
+    });
+    resizeObserver.observe(textarea);
+
+    return () => resizeObserver.disconnect();
+  }, [autoGrow, value]);
+
+  return (
+    <textarea
+      {...props}
+      ref={textareaRef}
+      rows={autoGrow ? 1 : rows}
+      value={value}
+    />
+  );
 }
 
 function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
@@ -428,6 +472,7 @@ export function StockOutBulkPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [activePriceEditorKey, setActivePriceEditorKey] = useState("");
+  const [isCartDesktopMode, setIsCartDesktopMode] = useState(false);
 
   const activeOrder = useMemo(
     () => orders.find((order) => order.id === activeOrderId) || orders[0],
@@ -438,16 +483,18 @@ export function StockOutBulkPage() {
   const orderNote = activeOrder?.orderNote || "";
   const lastOrderId = orders[orders.length - 1]?.id;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const cart = posCartRef.current;
     const desktopModeMarker = cartDesktopModeMarkerRef.current;
     if (!cart || !desktopModeMarker) return undefined;
 
     const finePointerQuery = window.matchMedia?.("(pointer: fine)");
     const updateFocusEligibility = () => {
+      const isDesktopMode = window.getComputedStyle(desktopModeMarker).display !== "none";
+      setIsCartDesktopMode((current) => current === isDesktopMode ? current : isDesktopMode);
       canAutoFocusProductSearchRef.current = Boolean(
         finePointerQuery?.matches
-        && window.getComputedStyle(desktopModeMarker).display !== "none"
+        && isDesktopMode
       );
     };
 
@@ -1386,7 +1433,7 @@ export function StockOutBulkPage() {
                           </div>
                           <label className="pos-cart-sale-note block min-w-0 max-w-full">
                             <span className="pos-cart-card-label">Serial / Ghi chú</span>
-                            <textarea
+                            <AutoGrowTextarea
                               value={item.saleNote || ""}
                               maxLength={500}
                               disabled={isSubmitting}
@@ -1394,8 +1441,9 @@ export function StockOutBulkPage() {
                               placeholder="Serial / Ghi chú"
                               aria-label={`Serial / Ghi chú ${item.product.name}`}
                               rows={saleNoteRows}
+                              autoGrow={!isCartDesktopMode}
                               style={{ "--pos-sale-note-width": saleNoteWidth }}
-                              className="pos-cart-sale-note-input w-full max-w-full resize-none overflow-y-auto rounded border border-slate-200 bg-white px-2 py-1 text-[12px] leading-4 text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                              className="pos-cart-sale-note-input w-full max-w-full resize-none rounded border border-slate-200 bg-white px-2 py-1 text-[12px] leading-4 text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                             />
                           </label>
                           <div className="pos-cart-commerce min-w-0">

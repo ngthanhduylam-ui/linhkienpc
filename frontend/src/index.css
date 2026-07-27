@@ -274,7 +274,12 @@ body {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  min-height: 2.375rem;
+  min-height: 2.25rem;
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1rem;
+  padding-top: 0.3125rem;
+  padding-bottom: 0.3125rem;
 }
 
 .pos-cart-price-popover {
@@ -352,6 +357,9 @@ body {
     min-width: 3cm;
     max-width: 100%;
     min-height: 1.75rem;
+    overflow-y: auto;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
   }
 
   .pos-cart-warranty > span:last-child {
