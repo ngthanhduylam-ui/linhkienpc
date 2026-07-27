@@ -75,8 +75,35 @@ body {
   overscroll-behavior-inline: contain;
 }
 
+.pos-workspace {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
 .pos-cart-container {
   container: pos-cart / inline-size;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pos-cart-scroll-region {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pos-cart-empty {
+  padding: 3rem 1rem 1.5rem;
+}
+
+.pos-cart-toolbar {
+  position: static;
 }
 
 .pos-cart-desktop-mode-marker,
@@ -85,7 +112,7 @@ body {
 }
 
 .pos-cart-list {
-  padding: 0.75rem 0.75rem 6rem;
+  padding: 0.75rem;
   background: rgb(248 250 252);
 }
 
@@ -206,7 +233,7 @@ body {
   }
 
   .pos-cart-list {
-    padding: 0 0 3.5rem;
+    padding: 0;
     background: white;
   }
 
@@ -294,6 +321,60 @@ body {
   }
 }
 
+.pos-summary-panel {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border-top: 1px solid rgb(203 213 225);
+}
+
+.pos-summary-scroll-region,
+.pos-summary-customer,
+.pos-summary-content,
+.pos-summary-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pos-summary-scroll-region,
+.pos-summary-content {
+  overflow: visible;
+}
+
+.pos-summary-actions {
+  position: static;
+}
+
+.pos-summary-order-note {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 5.5rem;
+}
+
+.pos-summary-action,
+.pos-summary-panel .pos-customer-selector-input,
+.pos-summary-panel .pos-customer-option,
+.pos-summary-panel .pos-customer-create-button,
+.pos-summary-panel .pos-customer-selected-change,
+.pos-summary-panel .pos-customer-create-input,
+.pos-summary-panel .pos-customer-create-action {
+  min-height: 2.75rem;
+}
+
+.pos-summary-panel .pos-customer-selector-toggle {
+  top: 0.25rem;
+  right: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.pos-summary-panel .pos-customer-selected-name,
+.pos-summary-panel .pos-customer-selected-phone {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 @container pos-shell (min-width: 760px) {
   .pos-header {
     height: 3.5rem;
@@ -318,6 +399,87 @@ body {
   .pos-order-tabs {
     width: auto;
     flex: 1 1 0%;
+  }
+}
+
+@container pos-shell (min-width: 1340px) {
+  .pos-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    overflow: visible;
+  }
+
+  .pos-cart-container {
+    min-height: 0;
+  }
+
+  .pos-cart-scroll-region {
+    height: 100%;
+    overflow: auto;
+  }
+
+  .pos-cart-empty {
+    min-height: 100%;
+    padding-bottom: 5rem;
+  }
+
+  .pos-cart-list {
+    padding-bottom: 3.5rem;
+  }
+
+  .pos-cart-toolbar {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+  }
+
+  .pos-summary-panel {
+    min-height: 0;
+    border-top: 0;
+    border-left: 1px solid rgb(203 213 225);
+  }
+
+  .pos-summary-scroll-region {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .pos-summary-content {
+    flex: 0 0 auto;
+  }
+
+  .pos-summary-actions {
+    position: static;
+  }
+
+  .pos-summary-order-note {
+    min-height: auto;
+  }
+
+  .pos-summary-action,
+  .pos-summary-panel .pos-customer-selector-input,
+  .pos-summary-panel .pos-customer-option,
+  .pos-summary-panel .pos-customer-create-button,
+  .pos-summary-panel .pos-customer-selected-change,
+  .pos-summary-panel .pos-customer-create-input,
+  .pos-summary-panel .pos-customer-create-action {
+    min-height: revert;
+  }
+
+  .pos-summary-panel .pos-customer-selector-toggle {
+    top: 1.15rem;
+    right: 0.625rem;
+    width: auto;
+    height: auto;
+  }
+
+  .pos-summary-panel .pos-customer-selected-name,
+  .pos-summary-panel .pos-customer-selected-phone {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

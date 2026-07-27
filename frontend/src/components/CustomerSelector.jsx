@@ -170,23 +170,23 @@ export function CustomerSelector({ selectedCustomer, onSelect, variant = "defaul
   }
 
   const rootClassName = isPosVariant
-    ? "relative"
+    ? "pos-customer-selector relative min-w-0 max-w-full"
     : "mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3";
   const inputClassName = isPosVariant
-    ? "mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2.5 pr-8 text-sm outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+    ? "pos-customer-selector-input mt-1 h-8 w-full min-w-0 max-w-full rounded border border-slate-300 bg-white px-2.5 pr-8 text-sm outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
     : "mt-2 h-10 w-full rounded-md border border-slate-300 bg-white px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
   const dropdownClassName = isPosVariant
     ? "absolute left-0 right-0 z-40 mt-1 max-h-56 overflow-y-auto rounded border border-slate-300 bg-white shadow-xl"
     : "absolute left-0 right-0 z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg";
   const customerRowClassName = (index) =>
-    `w-full border-b border-slate-100 text-left last:border-b-0 ${
+    `pos-customer-option w-full min-w-0 max-w-full border-b border-slate-100 text-left last:border-b-0 ${
       isPosVariant ? "px-2.5 py-1.5" : "px-3 py-2"
     } ${index === activeIndex ? "bg-brand-50" : "hover:bg-brand-50"}`;
   const createButtonClassName = isPosVariant
-    ? "sticky bottom-0 w-full border-t border-slate-200 bg-slate-50 px-2.5 py-2 text-left text-xs font-semibold text-brand-700 hover:bg-brand-50 hover:text-brand-900"
+    ? "pos-customer-create-button sticky bottom-0 w-full border-t border-slate-200 bg-slate-50 px-2.5 py-2 text-left text-xs font-semibold text-brand-700 hover:bg-brand-50 hover:text-brand-900"
     : "sticky bottom-0 w-full border-t border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm font-medium text-brand-700 hover:bg-brand-50 hover:text-brand-900";
   const selectedCardClassName = isPosVariant
-    ? "mt-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 shadow-sm ring-1 ring-slate-100"
+    ? "pos-customer-selected-card mt-2 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 shadow-sm ring-1 ring-slate-100"
     : "mt-3 rounded-md border border-brand-200 bg-white px-3 py-2.5";
 
   return (
@@ -235,7 +235,7 @@ export function CustomerSelector({ selectedCustomer, onSelect, variant = "defaul
               window.setTimeout(() => inputRef.current?.focus(), 0);
             }}
             disabled={disabled}
-            className={`absolute right-2.5 text-xs text-slate-400 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`pos-customer-selector-toggle absolute right-2.5 text-xs text-slate-400 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 ${
               isPosVariant ? "top-[1.15rem]" : "top-[1.1rem]"
             }`}
           >
@@ -301,8 +301,8 @@ export function CustomerSelector({ selectedCustomer, onSelect, variant = "defaul
         <div className={selectedCardClassName}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className={isPosVariant ? "truncate text-base font-bold leading-tight text-slate-950" : "text-sm font-semibold text-slate-900"}>{selectedCustomer.name}</p>
-              {selectedCustomer.phone && <p className={isPosVariant ? "mt-1 truncate text-xs font-medium text-slate-500" : "mt-0.5 truncate text-xs text-slate-500"}>{selectedCustomer.phone}</p>}
+              <p className={isPosVariant ? "pos-customer-selected-name truncate text-base font-bold leading-tight text-slate-950" : "text-sm font-semibold text-slate-900"}>{selectedCustomer.name}</p>
+              {selectedCustomer.phone && <p className={isPosVariant ? "pos-customer-selected-phone mt-1 truncate text-xs font-medium text-slate-500" : "mt-0.5 truncate text-xs text-slate-500"}>{selectedCustomer.phone}</p>}
               {!isPosVariant && !selectedCustomer.phone && selectedCustomer.address && (
                 <p className="mt-0.5 truncate text-xs text-slate-600">{selectedCustomer.address}</p>
               )}
@@ -319,7 +319,7 @@ export function CustomerSelector({ selectedCustomer, onSelect, variant = "defaul
                 window.setTimeout(() => inputRef.current?.focus(), 0);
               }}
               className={isPosVariant
-                ? "shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                ? "pos-customer-selected-change shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
                 : "shrink-0 text-xs font-semibold text-brand-700 hover:text-brand-900 disabled:cursor-not-allowed disabled:opacity-50"
               }
             >
@@ -332,14 +332,14 @@ export function CustomerSelector({ selectedCustomer, onSelect, variant = "defaul
       {showCreateForm && (
         <div className="mt-3 space-y-2 rounded-md border border-slate-200 bg-white p-3">
           <input
-            className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+            className={`h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${isPosVariant ? "pos-customer-create-input" : ""}`}
             placeholder="Tên khách hàng *"
             value={newCustomer.name}
             disabled={disabled}
             onChange={(event) => setNewCustomer((prev) => ({ ...prev, name: event.target.value }))}
           />
           <input
-            className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+            className={`h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${isPosVariant ? "pos-customer-create-input" : ""}`}
             placeholder="Số điện thoại"
             value={newCustomer.phone}
             disabled={disabled}
@@ -359,7 +359,7 @@ export function CustomerSelector({ selectedCustomer, onSelect, variant = "defaul
               type="button"
               disabled={disabled}
               onClick={cancelCreateForm}
-              className="h-9 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`h-9 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 ${isPosVariant ? "pos-customer-create-action" : ""}`}
             >
               Hủy
             </button>
@@ -367,7 +367,7 @@ export function CustomerSelector({ selectedCustomer, onSelect, variant = "defaul
               type="button"
               disabled={disabled || isCreating}
               onClick={handleCreateCustomer}
-              className="h-9 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`h-9 rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60 ${isPosVariant ? "pos-customer-create-action" : ""}`}
             >
               {isCreating ? "Đang lưu..." : "Lưu khách hàng"}
             </button>

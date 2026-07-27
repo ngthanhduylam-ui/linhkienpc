@@ -1230,13 +1230,13 @@ export function StockOutBulkPage() {
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <main ref={posCartRef} className="pos-cart-container relative min-h-0 min-w-0 max-w-full overflow-hidden bg-white">
+        <div className="pos-workspace">
+          <main ref={posCartRef} className="pos-cart-container relative bg-white">
             <span ref={cartDesktopModeMarkerRef} className="pos-cart-desktop-mode-marker" aria-hidden="true" />
 
-            <div className="h-full overflow-auto">
+            <div className="pos-cart-scroll-region">
               {cartItems.length === 0 ? (
-                <div className="flex min-h-full flex-col items-center justify-center px-4 pb-20 text-center text-slate-500">
+                <div className="pos-cart-empty flex flex-col items-center justify-center text-center text-slate-500">
                   <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-300">
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 1.9-1.4L20 8H7" />
@@ -1366,7 +1366,7 @@ export function StockOutBulkPage() {
               )}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 bg-slate-50 px-2.5 py-2">
+            <div className="pos-cart-toolbar border-t border-slate-200 bg-slate-50 px-2.5 py-2">
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true, force: true })} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
                   Thêm sản phẩm
@@ -1378,63 +1378,65 @@ export function StockOutBulkPage() {
             </div>
           </main>
 
-          <aside className="flex min-h-0 flex-col border-l border-slate-300 bg-white">
-            <div className="border-b border-slate-200 p-3">
-              <CustomerSelector selectedCustomer={selectedCustomer} onSelect={setActiveOrderSelectedCustomer} variant="pos" disabled={isSubmitting} />
-            </div>
-
-            <div className="flex-1 overflow-auto p-3">
-              <div className="mb-3">
-                <label htmlFor="pos-order-note" className="mb-1 block text-sm font-semibold text-slate-700">
-                  Ghi chú đơn hàng
-                </label>
-                <textarea
-                  id="pos-order-note"
-                  value={orderNote}
-                  onChange={(event) => updateActiveOrderNote(event.target.value)}
-                  maxLength={500}
-                  rows={3}
-                  disabled={isSubmitting}
-                  placeholder="Nhập ghi chú chung cho đơn..."
-                  className="block w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                />
-                <p className="mt-1 text-right text-[11px] text-slate-400">{orderNote.length}/500</p>
+          <aside className="pos-summary-panel flex flex-col bg-white">
+            <div className="pos-summary-scroll-region">
+              <div className="pos-summary-customer border-b border-slate-200 p-3">
+                <CustomerSelector selectedCustomer={selectedCustomer} onSelect={setActiveOrderSelectedCustomer} variant="pos" disabled={isSubmitting} />
               </div>
 
-              <div className="divide-y divide-slate-200 border-y border-slate-200 text-sm text-slate-700">
-                <div className="flex items-center justify-between gap-3 py-2">
-                  <span>Tổng số dòng</span>
-                  <span className="font-semibold text-slate-900">{cartItems.length}</span>
+              <div className="pos-summary-content p-3">
+                <div className="mb-3">
+                  <label htmlFor="pos-order-note" className="mb-1 block text-sm font-semibold text-slate-700">
+                    Ghi chú đơn hàng
+                  </label>
+                  <textarea
+                    id="pos-order-note"
+                    value={orderNote}
+                    onChange={(event) => updateActiveOrderNote(event.target.value)}
+                    maxLength={500}
+                    rows={3}
+                    disabled={isSubmitting}
+                    placeholder="Nhập ghi chú chung cho đơn..."
+                    className="pos-summary-order-note block w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                  />
+                  <p className="mt-1 text-right text-[11px] text-slate-400">{orderNote.length}/500</p>
                 </div>
-                <div className="flex items-center justify-between gap-3 py-2">
-                  <span>Tổng số lượng</span>
-                  <span className="font-semibold text-slate-900">{totalCartQuantity}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-2">
-                  <span>Tổng tiền</span>
-                  <span className={`text-right text-base font-bold tabular-nums ${cartTotalDisplay.isWarning ? "text-amber-700" : "text-slate-950"}`}>
-                    {cartTotalDisplay.label}
-                  </span>
-                </div>
-              </div>
 
-              {error && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-              {success && <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
+                <div className="divide-y divide-slate-200 border-y border-slate-200 text-sm text-slate-700">
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <span>Tổng số dòng</span>
+                    <span className="font-semibold text-slate-900">{cartItems.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <span>Tổng số lượng</span>
+                    <span className="font-semibold text-slate-900">{totalCartQuantity}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <span>Tổng tiền</span>
+                    <span className={`text-right text-base font-bold tabular-nums ${cartTotalDisplay.isWarning ? "text-amber-700" : "text-slate-950"}`}>
+                      {cartTotalDisplay.label}
+                    </span>
+                  </div>
+                </div>
+
+                {error && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+                {success && <p className="mt-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
+              </div>
             </div>
 
-            <div className="sticky bottom-0 shrink-0 space-y-2 border-t border-slate-300 bg-white p-2.5">
+            <div className="pos-summary-actions shrink-0 space-y-2 border-t border-slate-300 bg-white p-2.5">
               <button
                 type="button"
                 onClick={handleSubmitAndPrint}
                 disabled={isSubmitting || isLoading || cartItems.length === 0}
-                className="h-10 w-full rounded-md border border-brand-700 bg-white px-5 text-sm font-bold uppercase tracking-wide text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="pos-summary-action h-10 w-full rounded-md border border-brand-700 bg-white px-5 text-sm font-bold uppercase tracking-wide text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? "Đang xử lý..." : "Bán & In phiếu"}
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting || isLoading || cartItems.length === 0}
-                className="h-11 w-full rounded-md bg-brand-700 px-5 text-base font-bold uppercase tracking-wide text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+                className="pos-summary-action h-11 w-full rounded-md bg-brand-700 px-5 text-base font-bold uppercase tracking-wide text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? "Đang xử lý..." : "Hoàn tất bán hàng"}
               </button>
