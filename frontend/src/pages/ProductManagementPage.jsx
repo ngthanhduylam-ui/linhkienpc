@@ -513,28 +513,28 @@ export function ProductManagementPage() {
   }
 
   return (
-    <section className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <section className="product-management-container min-w-0 max-w-full space-y-5">
+      <div className="product-management-heading flex min-w-0 flex-col gap-3">
+        <div className="min-w-0">
           <h2 className="text-2xl font-semibold text-slate-900">Sản phẩm</h2>
           <p className="mt-1 text-sm text-slate-600">Quản lý thông tin sản phẩm và tồn hiện tại.</p>
         </div>
         <Link
           to="/admin/products/new"
-          className="inline-flex h-11 items-center rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900"
+          className="inline-flex h-11 max-w-full items-center justify-center self-start rounded-md bg-brand-700 px-4 text-sm font-medium text-white hover:bg-brand-900"
         >
           + Thêm sản phẩm
         </Link>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-[1fr_220px]">
-          <div>
+      <div className="min-w-0 max-w-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="product-management-filter-grid grid min-w-0 gap-3">
+          <div className="min-w-0">
             <label className="mb-1 block text-sm font-medium text-slate-700">Tìm sản phẩm</label>
-            <div className="relative">
+            <div className="relative min-w-0">
               <input
                 ref={searchInputRef}
-                className="h-11 w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                className="h-11 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                 placeholder="Tìm theo tên sản phẩm, SKU hoặc loại sản phẩm"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
@@ -552,10 +552,10 @@ export function ProductManagementPage() {
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="mb-1 block text-sm font-medium text-slate-700">Trạng thái</label>
             <select
-              className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+              className="h-11 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
               value={statusFilter}
               onChange={handleStatusFilterChange}
             >
@@ -567,8 +567,8 @@ export function ProductManagementPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="hidden border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid md:grid-cols-[56px_minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3">
+      <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="product-management-grid-header border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <span>Ảnh</span>
           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">Tên sản phẩm</span>
           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">SKU</span>
@@ -582,56 +582,60 @@ export function ProductManagementPage() {
         {isLoading ? (
           <p className="px-4 py-6 text-sm text-slate-500">Đang tải danh sách sản phẩm...</p>
         ) : products.length > 0 ? (
-          <div className="divide-y divide-slate-100">
+          <div className="product-management-list min-w-0 space-y-3 bg-slate-50 p-3">
             {products.map((product) => (
               <div
                 key={product.id}
-                className="grid gap-2 px-4 py-4 md:grid-cols-[56px_minmax(0,2.5fr)_minmax(0,1.6fr)_minmax(0,1.25fr)_minmax(100px,1.2fr)_52px_92px_86px] md:items-center md:gap-3"
+                className="product-management-row min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
               >
                 <AuthenticatedImage
                   path={product.primary_image ? `/admin/products/${product.id}/images/${product.primary_image.id}/thumbnail` : ""}
                   alt={product.name}
-                  className="h-14 w-14 rounded border border-slate-200 object-contain"
+                  className="product-management-image h-14 w-14 rounded border border-slate-200 object-contain"
                 />
-                <div className="min-w-0">
+                <div className="product-management-name min-w-0">
                   <p
                     title={product.name}
-                    className="line-clamp-2 break-words font-semibold text-slate-900"
+                    className="line-clamp-2 break-words font-semibold text-slate-900 [overflow-wrap:anywhere]"
                   >
                     {product.name}
-                  </p>
-                  <p className="mt-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-slate-500 md:hidden" title={product.sku}>
-                    SKU: {product.sku}
                   </p>
                 </div>
                 <p
                   title={product.sku}
-                  className="min-w-0 truncate text-sm text-slate-700"
+                  className="product-management-sku min-w-0 text-sm text-slate-700"
                 >
-                  {product.sku}
+                  <span className="product-management-card-label">SKU</span>
+                  <span className="product-management-card-value [overflow-wrap:anywhere]">{product.sku}</span>
                 </p>
                 <p
                   title={getCategoryName(product, categories)}
-                  className="min-w-0 truncate text-sm text-slate-700"
+                  className="product-management-category min-w-0 text-sm text-slate-700"
                 >
-                  {getCategoryName(product, categories)}
+                  <span className="product-management-card-label">Loại sản phẩm</span>
+                  <span className="product-management-card-value [overflow-wrap:anywhere]">
+                    {getCategoryName(product, categories)}
+                  </span>
                 </p>
                 <p
                   className={[
-                    "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold md:text-right",
+                    "product-management-price min-w-0 text-sm font-semibold",
                     product.sale_price === null || product.sale_price === undefined ? "text-slate-400" : "text-slate-900"
                   ].join(" ")}
                   title={formatSalePrice(product.sale_price)}
                 >
-                  {formatSalePrice(product.sale_price)}
+                  <span className="product-management-card-label">Giá bán</span>
+                  <span className="product-management-card-value">{formatSalePrice(product.sale_price)}</span>
                 </p>
                 <p
-                  className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-lg font-bold text-brand-800 md:text-right"
+                  className="product-management-stock min-w-0 text-lg font-bold text-brand-800"
                   title={String(Number(product.total_quantity || 0))}
                 >
-                  {Number(product.total_quantity || 0)}
+                  <span className="product-management-card-label">Tồn</span>
+                  <span className="product-management-card-value">{Number(product.total_quantity || 0)}</span>
                 </p>
-                <div className="min-w-0 overflow-hidden md:text-center">
+                <div className="product-management-status min-w-0">
+                  <span className="product-management-card-label">Trạng thái</span>
                   <span
                     className={[
                       "inline-flex max-w-full rounded-full px-2 py-1 text-xs font-semibold ring-1",
@@ -641,16 +645,16 @@ export function ProductManagementPage() {
                     ].join(" ")}
                     title={getProductStatusBadge(product)}
                   >
-                    <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
                       {getProductStatusBadge(product)}
                     </span>
                   </span>
                 </div>
-                <div className="min-w-0 md:text-right">
-                  <div className="flex flex-wrap justify-start gap-2 md:justify-end">
+                <div className="product-management-actions min-w-0">
+                  <div className="flex min-w-0 flex-wrap justify-start gap-2">
                     <Link
                       to={`/admin/products/${product.id}/edit`}
-                      className="whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      className="product-management-action inline-flex h-11 items-center justify-center whitespace-nowrap rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
                       Sửa
                     </Link>
@@ -658,7 +662,7 @@ export function ProductManagementPage() {
                       <button
                         type="button"
                         onClick={() => handleDeactivateProduct(product)}
-                        className="whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        className="product-management-action h-11 whitespace-nowrap rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
                       >
                         Ngừng
                       </button>
@@ -666,7 +670,7 @@ export function ProductManagementPage() {
                       <button
                         type="button"
                         onClick={() => handleActivateProduct(product)}
-                        className="whitespace-nowrap rounded-md border border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                        className="product-management-action h-11 whitespace-nowrap rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
                       >
                         Khôi phục
                       </button>
@@ -684,11 +688,11 @@ export function ProductManagementPage() {
         )}
       </div>
 
-      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="product-management-pagination flex min-w-0 flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <p className="text-sm text-slate-600">
           Tổng: <span className="font-semibold text-slate-900">{total}</span> sản phẩm
         </p>
-        <div className="flex items-center justify-between gap-2 sm:justify-end">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             disabled={page <= 1 || isLoading}
@@ -697,7 +701,7 @@ export function ProductManagementPage() {
           >
             Trước
           </button>
-          <span className="min-w-28 text-center text-sm text-slate-700">
+          <span className="min-w-0 flex-1 text-center text-sm text-slate-700">
             Trang {page} / {totalPages}
           </span>
           <button

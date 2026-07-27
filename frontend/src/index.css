@@ -22,6 +22,170 @@ body {
   container: transaction-history / inline-size;
 }
 
+.product-management-container {
+  container: product-management / inline-size;
+}
+
+.product-management-filter-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.product-management-grid-header {
+  display: none;
+}
+
+.product-management-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "image name name"
+    "sku sku sku"
+    "category category category"
+    "price price stock"
+    "status status status"
+    "actions actions actions";
+  align-items: start;
+  gap: 0.75rem 1rem;
+}
+
+.product-management-image {
+  grid-area: image;
+}
+
+.product-management-name {
+  grid-area: name;
+}
+
+.product-management-sku {
+  grid-area: sku;
+}
+
+.product-management-category {
+  grid-area: category;
+}
+
+.product-management-price {
+  grid-area: price;
+}
+
+.product-management-stock {
+  grid-area: stock;
+  text-align: right;
+}
+
+.product-management-status {
+  grid-area: status;
+}
+
+.product-management-actions {
+  grid-area: actions;
+}
+
+.product-management-card-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1rem;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: rgb(100 116 139);
+}
+
+.product-management-card-value {
+  display: block;
+  min-width: 0;
+}
+
+@container product-management (min-width: 480px) {
+  .product-management-heading,
+  .product-management-pagination {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .product-management-pagination > div {
+    justify-content: flex-end;
+  }
+
+  .product-management-pagination > div > span {
+    min-width: 7rem;
+    flex: none;
+  }
+}
+
+@container product-management (min-width: 600px) {
+  .product-management-filter-grid {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+}
+
+@container product-management (min-width: 950px) {
+  .product-management-grid-header,
+  .product-management-row {
+    display: grid;
+    grid-template-columns:
+      56px
+      minmax(180px, 2.5fr)
+      minmax(140px, 1.6fr)
+      minmax(120px, 1.25fr)
+      minmax(100px, 1.2fr)
+      52px
+      92px
+      86px;
+    grid-template-areas: "image name sku category price stock status actions";
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .product-management-list {
+    background: white;
+    padding: 0;
+  }
+
+  .product-management-list > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0;
+    border-top: 1px solid rgb(241 245 249);
+  }
+
+  .product-management-row {
+    border: 0;
+    border-radius: 0;
+    padding: 1rem;
+    box-shadow: none;
+  }
+
+  .product-management-card-label {
+    display: none;
+  }
+
+  .product-management-card-value,
+  .product-management-status {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .product-management-price,
+  .product-management-stock {
+    text-align: right;
+  }
+
+  .product-management-status {
+    text-align: center;
+  }
+
+  .product-management-actions > div {
+    justify-content: flex-end;
+  }
+
+  .product-management-action {
+    height: 2.25rem;
+    padding-inline: 0.625rem;
+  }
+}
+
 .transaction-history-grid-header {
   display: none;
 }
