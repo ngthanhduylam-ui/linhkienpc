@@ -14,6 +14,48 @@ body {
   container: stock-in-products / inline-size;
 }
 
+.inventory-check-container {
+  container: inventory-check / inline-size;
+}
+
+.inventory-check-primary-grid,
+.inventory-check-product-summary,
+.inventory-check-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.inventory-check-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.inventory-check-sku {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.inventory-check-table-scroll {
+  overscroll-behavior-inline: contain;
+}
+
+@container inventory-check (min-width: 560px) {
+  .inventory-check-product-summary {
+    grid-template-columns: minmax(0, 1fr) 130px;
+    align-items: center;
+  }
+}
+
+@container inventory-check (min-width: 960px) {
+  .inventory-check-primary-grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+
+  .inventory-check-detail-card {
+    position: sticky;
+    top: 1.5rem;
+  }
+}
+
 .stock-in-products-grid-header {
   display: none;
 }
