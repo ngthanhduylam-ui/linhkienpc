@@ -22,6 +22,93 @@ body {
   container: transaction-history / inline-size;
 }
 
+.pos-shell-container {
+  container: pos-shell / inline-size;
+  height: 100vh;
+  min-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  .pos-shell-container {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+}
+
+.pos-header {
+  height: 6.75rem;
+}
+
+.pos-header-layout {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  grid-template-rows: 3.5rem 3.25rem;
+  grid-template-areas:
+    "home tabs"
+    "search search";
+}
+
+.pos-header-home {
+  grid-area: home;
+  place-self: center;
+}
+
+.pos-header-title {
+  display: none;
+}
+
+.pos-product-search {
+  grid-area: search;
+  width: auto;
+  margin: 0 0.75rem 0.5rem;
+}
+
+.pos-product-dropdown {
+  width: auto;
+  max-width: 100%;
+}
+
+.pos-order-tabs {
+  grid-area: tabs;
+  width: 100%;
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+}
+
+@container pos-shell (min-width: 760px) {
+  .pos-header {
+    height: 3.5rem;
+  }
+
+  .pos-header-layout {
+    display: flex;
+    align-items: center;
+  }
+
+  .pos-header-home {
+    margin-left: 0.75rem;
+    margin-right: 0.5rem;
+  }
+
+  .pos-product-search {
+    width: min(560px, 46cqw);
+    margin: 0 0.5rem 0 0;
+    flex: 0 1 auto;
+  }
+
+  .pos-order-tabs {
+    width: auto;
+    flex: 1 1 0%;
+  }
+}
+
+@container pos-shell (min-width: 1280px) {
+  .pos-header-title {
+    display: block;
+    margin-right: 0.75rem;
+  }
+}
+
 .product-management-container {
   container: product-management / inline-size;
 }

@@ -18,6 +18,7 @@ import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
 const MAX_MONEY_AMOUNT = 999999999999999;
+const POS_KEYBOARD_FOCUS_MIN_WIDTH = 960;
 
 function normalizeWarrantyValue(value) {
   if (value === NO_NOTE_WARRANTY_VALUE) return NO_NOTE_WARRANTY_VALUE;
@@ -209,7 +210,7 @@ function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
     if (!isOpen) return;
     setDraftValue(currentValue === null || currentValue === undefined ? "" : formatMoneyInput(currentValue));
     setDraftError("");
-    window.setTimeout(() => inputRef.current?.focus(), 0);
+    window.setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
   }, [currentValue, isOpen]);
 
   useEffect(() => {
@@ -370,6 +371,7 @@ function hasOrderDraft(order) {
 }
 
 export function StockOutBulkPage() {
+  const posShellRef = useRef(null);
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -380,6 +382,7 @@ export function StockOutBulkPage() {
   const dropdownContainerRef = useRef(null);
   const orderTabRefs = useRef({});
   const searchInputRef = useRef(null);
+  const canAutoFocusProductSearchRef = useRef(false);
   const suppressDropdownOnFocusRef = useRef(false);
   const productSearchRequestRef = useRef(0);
   const submitInFlightRef = useRef(false);
@@ -403,6 +406,49 @@ export function StockOutBulkPage() {
   const cartItems = activeOrder?.cartItems || [];
   const selectedCustomer = activeOrder?.selectedCustomer || null;
   const orderNote = activeOrder?.orderNote || "";
+
+  useEffect(() => {
+    const shell = posShellRef.current;
+    if (!shell) return undefined;
+
+    const finePointerQuery = window.matchMedia?.("(pointer: fine)");
+    const updateFocusEligibility = () => {
+      canAutoFocusProductSearchRef.current = Boolean(
+        finePointerQuery?.matches
+        && shell.getBoundingClientRect().width >= POS_KEYBOARD_FOCUS_MIN_WIDTH
+      );
+    };
+
+    updateFocusEligibility();
+
+    const resizeObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(updateFocusEligibility)
+      : null;
+    resizeObserver?.observe(shell);
+
+    if (!resizeObserver) {
+      window.addEventListener("resize", updateFocusEligibility);
+    }
+
+    if (typeof finePointerQuery?.addEventListener === "function") {
+      finePointerQuery.addEventListener("change", updateFocusEligibility);
+    } else {
+      finePointerQuery?.addListener?.(updateFocusEligibility);
+    }
+
+    return () => {
+      resizeObserver?.disconnect();
+      if (!resizeObserver) {
+        window.removeEventListener("resize", updateFocusEligibility);
+      }
+      if (typeof finePointerQuery?.removeEventListener === "function") {
+        finePointerQuery.removeEventListener("change", updateFocusEligibility);
+      } else {
+        finePointerQuery?.removeListener?.(updateFocusEligibility);
+      }
+      canAutoFocusProductSearchRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 250);
@@ -678,15 +724,17 @@ export function StockOutBulkPage() {
     focusProductSearch();
   }
 
-  function focusProductSearch({ showDropdown = false } = {}) {
-    suppressDropdownOnFocusRef.current = !showDropdown;
-    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  function focusProductSearch({ showDropdown = false, force = false } = {}) {
     if (showDropdown) setIsProductDropdownOpen(true);
+    if (!force && !canAutoFocusProductSearchRef.current) return;
+
+    suppressDropdownOnFocusRef.current = !showDropdown;
+    window.setTimeout(() => searchInputRef.current?.focus({ preventScroll: true }), 0);
   }
 
   function resetProductSearchAfterAdd() {
     productSearchRequestRef.current += 1;
-    suppressDropdownOnFocusRef.current = true;
+    suppressDropdownOnFocusRef.current = false;
     setSearchInput("");
     setDebouncedSearch("");
     setSearchProducts([]);
@@ -694,10 +742,7 @@ export function StockOutBulkPage() {
     setProductSearchError("");
     setIsProductDropdownOpen(false);
     setActiveProductSku("");
-    window.setTimeout(() => {
-      searchInputRef.current?.focus();
-      setIsProductDropdownOpen(false);
-    }, 0);
+    focusProductSearch();
     window.setTimeout(() => {
       setIsProductDropdownOpen(false);
     }, 80);
@@ -869,6 +914,7 @@ export function StockOutBulkPage() {
     if (isSubmitting || submitInFlightRef.current) return;
 
     submitInFlightRef.current = true;
+    let shouldRefocusAfterSuccess = false;
     setError("");
     setSuccess("");
     const submittedOrderId = activeOrderId;
@@ -920,7 +966,7 @@ export function StockOutBulkPage() {
       } else {
         setSuccess(`Bán tại quầy thành công ${result?.items?.length || payload.items.length} dòng sản phẩm.${voucherText}`);
       }
-      focusProductSearch();
+      shouldRefocusAfterSuccess = true;
 
       try {
         await reloadProducts();
@@ -935,6 +981,9 @@ export function StockOutBulkPage() {
     } finally {
       submitInFlightRef.current = false;
       setIsSubmitting(false);
+      if (shouldRefocusAfterSuccess) {
+        window.setTimeout(() => focusProductSearch(), 0);
+      }
     }
   }
 
@@ -954,19 +1003,19 @@ export function StockOutBulkPage() {
   }
 
   return (
-    <div className="flex h-screen min-h-screen flex-col overflow-hidden bg-slate-100 text-slate-900">
-      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center bg-[#0B74E5] text-white shadow-sm">
-          <div className="relative flex h-full w-full min-w-0 items-center bg-[#0B74E5]">
+    <div ref={posShellRef} className="pos-shell-container flex w-full min-w-0 max-w-full flex-col bg-slate-100 text-slate-900">
+      <form onSubmit={handleSubmit} className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col">
+        <header className="pos-header shrink-0 bg-[#0B74E5] text-white shadow-sm">
+          <div className="pos-header-layout relative h-full w-full min-w-0 max-w-full bg-[#0B74E5]">
             <Link
               to="/admin"
               aria-label="Về trang quản trị"
-              className="ml-3 mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/20 text-xl text-white/90 hover:bg-white/10"
+              className="pos-header-home flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/20 text-xl text-white/90 hover:bg-white/10"
             >
               🏠
             </Link>
-            <div className="mr-3 hidden shrink-0 text-sm font-semibold tracking-wide text-white/95 xl:block">Bán tại quầy</div>
-            <div ref={dropdownContainerRef} className="relative mr-2 w-[min(560px,46vw)] min-w-[300px]">
+            <div className="pos-header-title shrink-0 text-sm font-semibold tracking-wide text-white/95">Bán tại quầy</div>
+            <div ref={dropdownContainerRef} className="pos-product-search relative min-w-0 max-w-full">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-slate-400">⌕</span>
               <input
                 ref={searchInputRef}
@@ -1008,13 +1057,13 @@ export function StockOutBulkPage() {
                 </button>
               )}
             {showSearchLoadingState && (
-              <div className="absolute left-0 top-12 z-50 w-[min(520px,calc(100vw-24px))] rounded-md border border-slate-300 bg-white px-3 py-3 text-sm text-slate-500 shadow-xl">
+              <div className="pos-product-dropdown absolute inset-x-0 top-12 z-50 rounded-md border border-slate-300 bg-white px-3 py-3 text-sm text-slate-500 shadow-xl">
                 Đang tìm sản phẩm...
               </div>
             )}
 
             {showSearchErrorState && (
-              <div className="absolute left-0 top-12 z-50 w-[min(520px,calc(100vw-24px))] rounded-md border border-red-200 bg-white px-3 py-3 text-sm shadow-xl">
+              <div className="pos-product-dropdown absolute inset-x-0 top-12 z-50 rounded-md border border-red-200 bg-white px-3 py-3 text-sm shadow-xl">
                 <p className="font-medium text-red-700">Không thể tải kết quả tìm kiếm.</p>
                 <p className="mt-1 text-xs text-slate-500">{productSearchError}</p>
               </div>
@@ -1022,7 +1071,7 @@ export function StockOutBulkPage() {
 
             {isProductDropdownOpen && displayProducts.length > 0 && (
               <div
-                className="absolute left-0 top-12 z-50 max-h-[55vh] w-[clamp(520px,40vw,760px)] max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-300 bg-white shadow-xl"
+                className="pos-product-dropdown absolute inset-x-0 top-12 z-50 max-h-[55dvh] overflow-y-auto rounded-md border border-slate-300 bg-white shadow-xl"
               >
                 {!debouncedSearch && (
                   <p className="border-b border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase text-slate-500">
@@ -1055,8 +1104,8 @@ export function StockOutBulkPage() {
                           className="h-9 w-9 rounded border border-slate-200 object-contain"
                         />
                         <div className="min-w-0">
-                          <p className={`truncate text-[13px] font-semibold ${hasAvailableInventory ? "text-slate-900" : "text-slate-500"}`}>{product.name}</p>
-                          <p className={`truncate text-[11px] ${hasAvailableInventory ? "text-slate-500" : "text-slate-400"}`}>{product.sku}</p>
+                          <p className={`line-clamp-2 break-words text-[13px] font-semibold [overflow-wrap:anywhere] ${hasAvailableInventory ? "text-slate-900" : "text-slate-500"}`}>{product.name}</p>
+                          <p className={`break-all text-[11px] ${hasAvailableInventory ? "text-slate-500" : "text-slate-400"}`}>{product.sku}</p>
                         </div>
                         <div className="text-right text-[11px] text-slate-500">
                           <p className={`font-semibold ${hasAvailableInventory ? "text-slate-800" : "text-slate-400"}`}>Tồn: {Number(product.total_quantity || 0)}</p>
@@ -1122,7 +1171,7 @@ export function StockOutBulkPage() {
 
             {isProductDropdownOpen && !showSearchLoadingState && !showSearchErrorState && (showEmptyState || showNoResultState) && (
               <div
-                className="absolute left-0 top-12 z-50 w-[min(520px,calc(100vw-24px))] rounded-md border border-slate-300 bg-white p-2.5 text-sm shadow-xl"
+                className="pos-product-dropdown absolute inset-x-0 top-12 z-50 rounded-md border border-slate-300 bg-white p-2.5 text-sm shadow-xl"
               >
                 <p className="text-slate-700">Không tìm thấy sản phẩm. Vui lòng thêm sản phẩm ở mục Sản phẩm trước.</p>
                 <Link to="/admin/products" className="mt-2 inline-flex rounded border border-brand-600 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
@@ -1132,7 +1181,7 @@ export function StockOutBulkPage() {
             )}
             </div>
 
-            <div className="flex h-full min-w-0 flex-1 items-end overflow-x-auto border-l border-[#0b67c7] bg-[#0B74E5]">
+            <div className="pos-order-tabs flex h-full min-w-0 items-end overflow-x-auto border-l border-[#0b67c7] bg-[#0B74E5]">
               {orders.map((order) => {
                 const isActiveOrder = order.id === activeOrderId;
                 return (
@@ -1194,7 +1243,7 @@ export function StockOutBulkPage() {
                   </div>
                   <p className="text-base font-medium text-slate-700">Tìm và chọn sản phẩm để bắt đầu bán hàng.</p>
                   <p className="mt-1 text-sm text-slate-500">Sản phẩm sẽ được thêm vào đơn theo từng nhóm bảo hành / ghi chú.</p>
-                  <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true })} className="mt-3 rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+                  <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true, force: true })} className="mt-3 rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
                     Thêm sản phẩm ngay
                   </button>
                 </div>
@@ -1297,7 +1346,7 @@ export function StockOutBulkPage() {
 
             <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 bg-slate-50 px-2.5 py-2">
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true })} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="button" disabled={isSubmitting} onClick={() => focusProductSearch({ showDropdown: true, force: true })} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
                   Thêm sản phẩm
                 </button>
                 <button type="button" onClick={clearCartWithConfirm} disabled={isSubmitting || cartItems.length === 0} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
