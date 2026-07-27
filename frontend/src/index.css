@@ -6,6 +6,73 @@ body {
   @apply bg-slate-50 text-slate-900 antialiased;
 }
 
+.admin-page-container {
+  container: admin-page / inline-size;
+}
+
+.stock-in-products-container {
+  container: stock-in-products / inline-size;
+}
+
+.stock-in-products-grid-header {
+  display: none;
+}
+
+@container stock-in-products (min-width: 900px) {
+  .stock-in-products-grid-header {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.25fr) minmax(130px, 0.5fr) minmax(240px, 1fr) 120px 48px;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .stock-in-products-list {
+    background: white;
+    padding: 0;
+  }
+
+  .stock-in-products-list > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0;
+    border-top: 1px solid rgb(241 245 249);
+  }
+
+  .stock-in-product-row {
+    grid-template-columns: minmax(220px, 1.25fr) minmax(130px, 0.5fr) minmax(240px, 1fr) 120px 48px;
+    align-items: center;
+    border: 0;
+    border-radius: 0;
+    padding: 0.625rem 1rem;
+    box-shadow: none;
+  }
+
+  .stock-in-product-main {
+    display: block;
+  }
+
+  .stock-in-product-name,
+  .stock-in-product-category,
+  .stock-in-product-sku {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stock-in-mobile-delete,
+  .stock-in-field-label {
+    display: none;
+  }
+
+  .stock-in-note-input,
+  .stock-in-quantity-input {
+    height: 2.25rem;
+    padding-inline: 0.5rem;
+  }
+
+  .stock-in-desktop-delete {
+    display: flex;
+  }
+}
+
 @media print {
   @page {
     size: A4;

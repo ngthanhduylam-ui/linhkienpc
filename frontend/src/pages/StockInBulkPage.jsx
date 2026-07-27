@@ -41,6 +41,7 @@ export function StockInBulkPage() {
   const searchInputRef = useRef(null);
   const rowNoteRefs = useRef({});
   const rowQuantityRefs = useRef({});
+  const selectedProductsGridHeaderRef = useRef(null);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,7 +148,11 @@ export function StockInBulkPage() {
     setHasFocusedProductSearch(false);
     setSuccess("");
     setError("");
-    window.setTimeout(() => rowNoteRefs.current[rowId]?.focus() || rowQuantityRefs.current[rowId]?.focus(), 0);
+    window.setTimeout(() => {
+      const gridHeader = selectedProductsGridHeaderRef.current;
+      if (!gridHeader || window.getComputedStyle(gridHeader).display === "none") return;
+      rowNoteRefs.current[rowId]?.focus({ preventScroll: true });
+    }, 0);
   }
 
   function handleClearProductSearch() {
@@ -382,9 +387,12 @@ export function StockInBulkPage() {
                     </div>
                   )}
 
-                  <div className="mt-5 rounded-md border border-slate-200">
+                  <div className="stock-in-products-container mt-5 min-w-0 max-w-full rounded-md border border-slate-200">
                     <div>
-                      <div className="grid grid-cols-[minmax(220px,1.25fr)_minmax(130px,0.5fr)_minmax(240px,1fr)_120px_48px] items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-600">
+                      <div
+                        ref={selectedProductsGridHeaderRef}
+                        className="stock-in-products-grid-header border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-600"
+                      >
                         <span>Tên sản phẩm</span>
                         <span>SKU</span>
                         <span>Nhóm bảo hành / ghi chú</span>
@@ -398,50 +406,80 @@ export function StockInBulkPage() {
                           <p className="mt-1 text-sm text-slate-500">Tìm sản phẩm ở ô phía trên để thêm vào danh sách nhập hàng.</p>
                         </div>
                       ) : (
-                        <div className="divide-y divide-slate-100">
+                        <div className="stock-in-products-list space-y-3 bg-slate-50 p-3">
                           {items.map((item) => (
                             <div
                               key={item.rowId}
-                              className="grid grid-cols-[minmax(220px,1.25fr)_minmax(130px,0.5fr)_minmax(240px,1fr)_120px_48px] items-center gap-3 px-4 py-2.5 text-sm hover:bg-blue-50/50"
+                              className="stock-in-product-row grid min-w-0 max-w-full grid-cols-1 gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm hover:bg-blue-50/50"
                             >
-                              <div className="min-w-0">
-                                <p className="truncate font-semibold text-slate-900">{item.product.name}</p>
-                                <p className="mt-0.5 truncate text-xs text-slate-500">{getCategoryName(item.product, categories)}</p>
+                              <div className="stock-in-product-main flex min-w-0 items-start gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="stock-in-product-name break-words font-semibold text-slate-900">{item.product.name}</p>
+                                  <p className="stock-in-product-category mt-0.5 break-words text-xs text-slate-500">
+                                    {getCategoryName(item.product, categories)}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeItem(item.rowId)}
+                                  className="stock-in-mobile-delete flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 text-lg text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                  aria-label="Xóa sản phẩm"
+                                >
+                                  ×
+                                </button>
                               </div>
-                              <p className="truncate text-sm text-slate-600" title={item.sku}>
+                              <p className="stock-in-product-sku min-w-0 break-all text-sm text-slate-600" title={item.sku}>
                                 {item.sku}
                               </p>
-                              <input
-                                ref={(element) => {
-                                  if (element) rowNoteRefs.current[item.rowId] = element;
-                                }}
-                                className="h-9 w-full rounded border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                value={item.note}
-                                onChange={(event) => updateItem(item.rowId, { note: event.target.value })}
-                                onKeyDown={(event) => handleNoteKeyDown(event, item.rowId)}
-                                autoCapitalize="off"
-                                autoCorrect="off"
-                                autoComplete="off"
-                                spellCheck={false}
-                                placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
-                              />
-                              <input
-                                ref={(element) => {
-                                  if (element) rowQuantityRefs.current[item.rowId] = element;
-                                }}
-                                type="number"
-                                min={1}
-                                step={1}
-                                className="h-9 w-full rounded border border-slate-300 bg-white px-2 text-right text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                value={item.quantity}
-                                onChange={(event) => updateItem(item.rowId, { quantity: event.target.value })}
-                                onKeyDown={handleQuantityKeyDown}
-                                placeholder="SL"
-                              />
+                              <div className="min-w-0">
+                                <label
+                                  htmlFor={`stock-in-note-${item.rowId}`}
+                                  className="stock-in-field-label mb-1.5 block text-xs font-semibold text-slate-600"
+                                >
+                                  Nhóm bảo hành / ghi chú
+                                </label>
+                                <input
+                                  id={`stock-in-note-${item.rowId}`}
+                                  ref={(element) => {
+                                    if (element) rowNoteRefs.current[item.rowId] = element;
+                                  }}
+                                  className="stock-in-note-input h-11 w-full min-w-0 max-w-full rounded border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                  value={item.note}
+                                  onChange={(event) => updateItem(item.rowId, { note: event.target.value })}
+                                  onKeyDown={(event) => handleNoteKeyDown(event, item.rowId)}
+                                  autoCapitalize="off"
+                                  autoCorrect="off"
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                  placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
+                                />
+                              </div>
+                              <div className="min-w-0">
+                                <label
+                                  htmlFor={`stock-in-quantity-${item.rowId}`}
+                                  className="stock-in-field-label mb-1.5 block text-xs font-semibold text-slate-600"
+                                >
+                                  Số lượng
+                                </label>
+                                <input
+                                  id={`stock-in-quantity-${item.rowId}`}
+                                  ref={(element) => {
+                                    if (element) rowQuantityRefs.current[item.rowId] = element;
+                                  }}
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  className="stock-in-quantity-input h-11 w-full min-w-0 max-w-full rounded border border-slate-300 bg-white px-3 text-right text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                  value={item.quantity}
+                                  onChange={(event) => updateItem(item.rowId, { quantity: event.target.value })}
+                                  onKeyDown={handleQuantityKeyDown}
+                                  placeholder="SL"
+                                />
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => removeItem(item.rowId)}
-                                className="mx-auto flex h-8 w-8 items-center justify-center rounded text-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                className="stock-in-desktop-delete mx-auto hidden h-8 w-8 items-center justify-center rounded text-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
                                 aria-label="Xóa sản phẩm"
                               >
                                 ×

@@ -10,10 +10,10 @@ export function AdminLayout() {
   const { admin, logout } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen min-w-0 bg-slate-50">
       <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className="md:pl-72">
+      <div className="w-full min-w-0 max-w-full md:pl-72">
         <AdminHeader
           onOpenMenu={() => setIsSidebarOpen(true)}
           adminName={admin?.display_name || admin?.username}
@@ -28,7 +28,7 @@ export function AdminLayout() {
             }
           }}
         />
-        <main className="mx-auto max-w-7xl p-4 sm:p-6">
+        <main className="admin-page-container mx-auto w-full min-w-0 max-w-7xl p-4 sm:p-6">
           <Outlet />
         </main>
       </div>
