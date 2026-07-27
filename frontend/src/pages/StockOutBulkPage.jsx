@@ -1369,6 +1369,9 @@ export function StockOutBulkPage() {
                               <p className="pos-cart-product-name line-clamp-2 break-words text-[13px] font-semibold text-slate-900 [overflow-wrap:anywhere]">
                                 {item.product.name}
                               </p>
+                              <p className="pos-cart-product-sku mt-0.5 text-[10px] font-normal leading-[0.875rem] text-slate-500 [overflow-wrap:anywhere]" title={item.sku}>
+                                SKU: {item.sku}
+                              </p>
                             </div>
                           </div>
                           <div className="pos-cart-sku min-w-0 text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>
