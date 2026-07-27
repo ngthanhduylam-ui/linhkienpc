@@ -18,7 +18,6 @@ import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const NO_NOTE_WARRANTY_VALUE = "__NO_NOTE__";
 const MAX_MONEY_AMOUNT = 999999999999999;
-const POS_KEYBOARD_FOCUS_MIN_WIDTH = 960;
 
 function normalizeWarrantyValue(value) {
   if (value === NO_NOTE_WARRANTY_VALUE) return NO_NOTE_WARRANTY_VALUE;
@@ -247,7 +246,7 @@ function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
   }
 
   return (
-    <div ref={containerRef} className="relative text-right">
+    <div ref={containerRef} className="pos-cart-price-editor relative min-w-0 text-right">
       <button
         type="button"
         disabled={disabled}
@@ -271,7 +270,7 @@ function PriceEditor({ item, isOpen, disabled, onOpen, onClose, onApply }) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-40 mt-1 w-80 rounded-md border border-slate-200 bg-white p-4 text-left shadow-xl">
+        <div className="pos-cart-price-popover absolute top-full z-40 mt-1 rounded-md border border-slate-200 bg-white p-4 text-left shadow-xl">
           <p className="text-sm font-semibold text-slate-900">Thông tin giá</p>
           <div className="mt-3 space-y-3 text-sm">
             <div className="flex justify-between gap-4">
@@ -371,7 +370,6 @@ function hasOrderDraft(order) {
 }
 
 export function StockOutBulkPage() {
-  const posShellRef = useRef(null);
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -382,6 +380,8 @@ export function StockOutBulkPage() {
   const dropdownContainerRef = useRef(null);
   const orderTabRefs = useRef({});
   const searchInputRef = useRef(null);
+  const posCartRef = useRef(null);
+  const cartDesktopModeMarkerRef = useRef(null);
   const canAutoFocusProductSearchRef = useRef(false);
   const suppressDropdownOnFocusRef = useRef(false);
   const productSearchRequestRef = useRef(0);
@@ -408,14 +408,15 @@ export function StockOutBulkPage() {
   const orderNote = activeOrder?.orderNote || "";
 
   useEffect(() => {
-    const shell = posShellRef.current;
-    if (!shell) return undefined;
+    const cart = posCartRef.current;
+    const desktopModeMarker = cartDesktopModeMarkerRef.current;
+    if (!cart || !desktopModeMarker) return undefined;
 
     const finePointerQuery = window.matchMedia?.("(pointer: fine)");
     const updateFocusEligibility = () => {
       canAutoFocusProductSearchRef.current = Boolean(
         finePointerQuery?.matches
-        && shell.getBoundingClientRect().width >= POS_KEYBOARD_FOCUS_MIN_WIDTH
+        && window.getComputedStyle(desktopModeMarker).display !== "none"
       );
     };
 
@@ -424,7 +425,7 @@ export function StockOutBulkPage() {
     const resizeObserver = typeof ResizeObserver === "function"
       ? new ResizeObserver(updateFocusEligibility)
       : null;
-    resizeObserver?.observe(shell);
+    resizeObserver?.observe(cart);
 
     if (!resizeObserver) {
       window.addEventListener("resize", updateFocusEligibility);
@@ -1003,7 +1004,7 @@ export function StockOutBulkPage() {
   }
 
   return (
-    <div ref={posShellRef} className="pos-shell-container flex w-full min-w-0 max-w-full flex-col bg-slate-100 text-slate-900">
+    <div className="pos-shell-container flex w-full min-w-0 max-w-full flex-col bg-slate-100 text-slate-900">
       <form onSubmit={handleSubmit} className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col">
         <header className="pos-header shrink-0 bg-[#0B74E5] text-white shadow-sm">
           <div className="pos-header-layout relative h-full w-full min-w-0 max-w-full bg-[#0B74E5]">
@@ -1230,7 +1231,8 @@ export function StockOutBulkPage() {
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <main className="relative min-h-0 overflow-hidden bg-white">
+          <main ref={posCartRef} className="pos-cart-container relative min-h-0 min-w-0 max-w-full overflow-hidden bg-white">
+            <span ref={cartDesktopModeMarkerRef} className="pos-cart-desktop-mode-marker" aria-hidden="true" />
 
             <div className="h-full overflow-auto">
               {cartItems.length === 0 ? (
@@ -1248,8 +1250,8 @@ export function StockOutBulkPage() {
                   </button>
                 </div>
               ) : (
-                <div className="min-w-[960px] pb-14">
-                  <div className="grid grid-cols-[minmax(220px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 border-b border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <div className="pos-cart-list min-w-0 max-w-full pb-14">
+                  <div className="pos-cart-grid-header border-b border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     <span>Sản phẩm</span>
                     <span>SKU</span>
                     <span>Nhóm bảo hành / ghi chú</span>
@@ -1264,76 +1266,96 @@ export function StockOutBulkPage() {
                     const saleNoteRows = Math.min(Math.max(Math.ceil(((item.saleNote || "").length + 3) / 38), 1), 4);
 
                     return (
-                      <div key={item.cartKey} className="border-b border-slate-200 text-sm hover:bg-blue-50/60">
-                        <div className="grid grid-cols-[minmax(220px,1fr)_112px_150px_104px_132px_120px_32px] items-center gap-2 px-3 py-1.5">
-                          <div className="flex min-w-0 items-start gap-2">
+                      <div key={item.cartKey} className="pos-cart-row border border-slate-200 bg-white text-sm shadow-sm hover:bg-blue-50/60">
+                        <div className="pos-cart-row-grid min-w-0 max-w-full">
+                          <div className="pos-cart-product flex min-w-0 items-start gap-2">
                             <AuthenticatedImage
                               path={item.product?.primary_image ? `/admin/products/${item.product.id}/images/${item.product.primary_image.id}/thumbnail` : ""}
                               alt={item.product.name}
                               className="h-9 w-9 shrink-0 rounded border border-slate-200 object-contain"
                             />
                             <div className="min-w-0">
-                              <p className="truncate text-[13px] font-semibold text-slate-900">{item.product.name}</p>
-                              <textarea
-                                value={item.saleNote || ""}
-                                maxLength={500}
-                                disabled={isSubmitting}
-                                onChange={(event) => updateCartItemSaleNote(item.cartKey, event.target.value)}
-                                placeholder="Serial / Ghi chú"
-                                aria-label={`Serial / Ghi chú ${item.product.name}`}
-                                rows={saleNoteRows}
-                                style={{ width: saleNoteWidth, minWidth: "3cm", maxWidth: "100%" }}
-                                className="mt-1 min-h-7 resize-none overflow-y-auto rounded border border-slate-200 bg-white px-2 py-1 text-[12px] leading-4 text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
-                              />
+                              <p className="pos-cart-product-name line-clamp-2 break-words text-[13px] font-semibold text-slate-900 [overflow-wrap:anywhere]">
+                                {item.product.name}
+                              </p>
                             </div>
                           </div>
-                          <div className="min-w-0 break-all text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>
-                            {item.sku}
+                          <div className="pos-cart-sku min-w-0 text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>
+                            <span className="pos-cart-card-label">SKU</span>
+                            <span className="block [overflow-wrap:anywhere]">{item.sku}</span>
                           </div>
-                          <div className="min-w-0 truncate rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-brand-800" title={formatWarrantyNote(item.warrantyLabel)}>
-                            {formatWarrantyNote(item.warrantyLabel)}
+                          <div className="pos-cart-warranty min-w-0" title={formatWarrantyNote(item.warrantyLabel)}>
+                            <span className="pos-cart-card-label">Nhóm bảo hành / ghi chú</span>
+                            <span className="block rounded bg-blue-50 px-2 py-1.5 text-[11px] font-medium leading-4 text-brand-800 [overflow-wrap:anywhere]">
+                              {formatWarrantyNote(item.warrantyLabel)}
+                            </span>
                           </div>
-                          <PriceEditor
-                            item={item}
-                            isOpen={activePriceEditorKey === item.cartKey}
-                            disabled={isSubmitting}
-                            onOpen={() => setActivePriceEditorKey(item.cartKey)}
-                            onClose={() => setActivePriceEditorKey("")}
-                            onApply={(priceState) => updateCartItemPrice(item.cartKey, priceState)}
-                          />
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              disabled={isSubmitting || Number(item.quantity) <= 1}
-                              onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) - 1)}
-                              className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              -
-                            </button>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              value={item.quantity}
+                          <label className="pos-cart-sale-note block min-w-0 max-w-full">
+                            <span className="pos-cart-card-label">Serial / Ghi chú</span>
+                            <textarea
+                              value={item.saleNote || ""}
+                              maxLength={500}
                               disabled={isSubmitting}
-                              onChange={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
-                              onBlur={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
-                              className="h-8 w-14 min-w-[3.5rem] rounded border border-slate-300 bg-white px-1 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:text-slate-950 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
-                              aria-label={`Số lượng ${item.product.name} ${formatWarrantyNote(item.warrantyLabel)}`}
+                              onChange={(event) => updateCartItemSaleNote(item.cartKey, event.target.value)}
+                              placeholder="Serial / Ghi chú"
+                              aria-label={`Serial / Ghi chú ${item.product.name}`}
+                              rows={saleNoteRows}
+                              style={{ "--pos-sale-note-width": saleNoteWidth }}
+                              className="pos-cart-sale-note-input w-full max-w-full resize-none overflow-y-auto rounded border border-slate-200 bg-white px-2 py-1 text-[12px] leading-4 text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                             />
-                            <button
-                              type="button"
-                              disabled={isSubmitting || Number(item.quantity) >= Number(item.maxQuantity || 0)}
-                              onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) + 1)}
-                              className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              +
-                            </button>
+                          </label>
+                          <div className="pos-cart-commerce min-w-0">
+                            <div className="pos-cart-price min-w-0">
+                              <span className="pos-cart-card-label">Đơn giá</span>
+                              <PriceEditor
+                                item={item}
+                                isOpen={activePriceEditorKey === item.cartKey}
+                                disabled={isSubmitting}
+                                onOpen={() => setActivePriceEditorKey(item.cartKey)}
+                                onClose={() => setActivePriceEditorKey("")}
+                                onApply={(priceState) => updateCartItemPrice(item.cartKey, priceState)}
+                              />
+                            </div>
+                            <div className="pos-cart-quantity min-w-0">
+                              <span className="pos-cart-card-label">Số lượng</span>
+                              <div className="flex min-w-0 items-center justify-start gap-2">
+                                <button
+                                  type="button"
+                                  disabled={isSubmitting || Number(item.quantity) <= 1}
+                                  onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) - 1)}
+                                  className="pos-cart-quantity-button flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                  aria-label={`Giảm số lượng ${item.product.name}`}
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  value={item.quantity}
+                                  disabled={isSubmitting}
+                                  onChange={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
+                                  onBlur={(event) => updateCartItemQuantity(item.cartKey, event.target.value)}
+                                  className="pos-cart-quantity-input h-8 w-14 min-w-[3.5rem] rounded border border-slate-300 bg-white px-1 text-center text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:text-slate-950 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                                  aria-label={`Số lượng ${item.product.name} ${formatWarrantyNote(item.warrantyLabel)}`}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isSubmitting || Number(item.quantity) >= Number(item.maxQuantity || 0)}
+                                  onClick={() => updateCartItemQuantity(item.cartKey, Number(item.quantity) + 1)}
+                                  className="pos-cart-quantity-button flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                  aria-label={`Tăng số lượng ${item.product.name}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <div className={`text-right text-[12px] font-semibold tabular-nums ${lineTotal.isMuted ? "text-slate-400" : "text-slate-900"}`}>
-                            {lineTotal.label}
+                          <div className={`pos-cart-line-total min-w-0 text-[12px] font-semibold tabular-nums ${lineTotal.isMuted ? "text-slate-400" : "text-slate-900"}`}>
+                            <span className="pos-cart-card-label">Thành tiền</span>
+                            <span className="block">{lineTotal.label}</span>
                           </div>
-                          <button type="button" disabled={isSubmitting} onClick={() => removeCartItem(item.cartKey)} className="flex h-8 w-8 items-center justify-center rounded text-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Xóa sản phẩm">
+                          <button type="button" disabled={isSubmitting} onClick={() => removeCartItem(item.cartKey)} className="pos-cart-delete flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-lg text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Xóa ${item.product.name}`}>
                             ×
                           </button>
                         </div>
