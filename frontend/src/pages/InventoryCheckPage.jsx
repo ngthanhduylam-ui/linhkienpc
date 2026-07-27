@@ -71,6 +71,7 @@ export function InventoryCheckPage() {
   const [products, setProducts] = useState([]);
   const [activeProducts, setActiveProducts] = useState([]);
   const [hasFocusedProductSearch, setHasFocusedProductSearch] = useState(false);
+  const [isProductResultsOpen, setIsProductResultsOpen] = useState(false);
   const [recentProducts, setRecentProducts] = useState(() => readRecentItems(RECENT_PRODUCTS_KEY));
   const [selectedSku, setSelectedSku] = useState("");
   const [detail, setDetail] = useState(null);
@@ -185,6 +186,7 @@ export function InventoryCheckPage() {
     setDebouncedSearch("");
     setProducts([]);
     setHasFocusedProductSearch(true);
+    setIsProductResultsOpen(true);
     setSelectedSku("");
     setDetail(null);
     setSuccess("");
@@ -193,6 +195,8 @@ export function InventoryCheckPage() {
   }
 
   function handleSelectProduct(product) {
+    setHasFocusedProductSearch(false);
+    setIsProductResultsOpen(false);
     setRecentProducts(saveRecentItem(RECENT_PRODUCTS_KEY, product, 20));
     loadProductDetail(product.sku);
   }
@@ -407,12 +411,20 @@ export function InventoryCheckPage() {
                 className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                 placeholder="Nhập tên sản phẩm hoặc SKU"
                 value={searchInput}
-                onFocus={() => setHasFocusedProductSearch(true)}
+                onFocus={() => {
+                  setHasFocusedProductSearch(true);
+                  setIsProductResultsOpen(true);
+                }}
                 onKeyDown={(event) => {
-                  if (event.key === "Escape") setHasFocusedProductSearch(false);
+                  if (event.key === "Escape") {
+                    setHasFocusedProductSearch(false);
+                    setIsProductResultsOpen(false);
+                  }
                 }}
                 onChange={(event) => {
                   setSearchInput(event.target.value);
+                  setHasFocusedProductSearch(true);
+                  setIsProductResultsOpen(true);
                   setSuccess("");
                 }}
               />
@@ -428,9 +440,11 @@ export function InventoryCheckPage() {
               )}
             </div>
 
-            {isSearching && <p className="mt-3 text-sm text-slate-500">Đang tìm sản phẩm...</p>}
+            {isProductResultsOpen && isSearching && (
+              <p className="mt-3 text-sm text-slate-500">Đang tìm sản phẩm...</p>
+            )}
 
-            {!isSearching && debouncedSearch && products.length === 0 && (
+            {isProductResultsOpen && !isSearching && debouncedSearch && products.length === 0 && (
               <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3">
                 <p className="text-sm font-medium text-slate-700">Không tìm thấy sản phẩm phù hợp.</p>
                 <p className="mt-1 text-xs text-slate-500">
@@ -445,7 +459,7 @@ export function InventoryCheckPage() {
               </div>
             )}
 
-            {displayProducts.length > 0 && (
+            {isProductResultsOpen && displayProducts.length > 0 && (
               <div className="mt-3 min-w-0 max-w-full divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
                 {!debouncedSearch && (
                   <p className="bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-500">Sản phẩm gần đây</p>
