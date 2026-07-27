@@ -1372,8 +1372,8 @@ export function StockOutBulkPage() {
                             </div>
                           </div>
                           <div className="pos-cart-sku min-w-0 text-[12px] font-medium leading-4 text-slate-600" title={item.sku}>
-                            <span className="pos-cart-card-label">SKU</span>
-                            <span className="block [overflow-wrap:anywhere]">{item.sku}</span>
+                            <span className="pos-cart-card-label pos-cart-sku-label">SKU:</span>
+                            <span className="pos-cart-sku-value [overflow-wrap:anywhere]">{item.sku}</span>
                           </div>
                           <div className="pos-cart-warranty min-w-0" title={formatWarrantyNote(item.warrantyLabel)}>
                             <span className="pos-cart-card-label">Nhóm bảo hành / ghi chú</span>
@@ -1441,10 +1441,10 @@ export function StockOutBulkPage() {
                                 </button>
                               </div>
                             </div>
-                          </div>
-                          <div className={`pos-cart-line-total min-w-0 text-[12px] font-semibold tabular-nums ${lineTotal.isMuted ? "text-slate-400" : "text-slate-900"}`}>
-                            <span className="pos-cart-card-label">Thành tiền</span>
-                            <span className="block">{lineTotal.label}</span>
+                            <div className={`pos-cart-line-total min-w-0 text-[12px] font-semibold tabular-nums ${lineTotal.isMuted ? "text-slate-400" : "text-slate-900"}`}>
+                              <span className="pos-cart-card-label">Thành tiền</span>
+                              <span className="block">{lineTotal.label}</span>
+                            </div>
                           </div>
                           <button type="button" disabled={isSubmitting} onClick={() => removeCartItem(item.cartKey)} className="pos-cart-delete flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-lg text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Xóa ${item.product.name}`}>
                             ×
