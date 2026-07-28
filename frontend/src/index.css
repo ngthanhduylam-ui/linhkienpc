@@ -951,6 +951,31 @@ body {
   word-break: break-word;
 }
 
+.inventory-check-stock-summary {
+  display: flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  max-width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.375rem 0.75rem;
+}
+
+.inventory-check-stock-label {
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.inventory-check-stock-value {
+  flex: 0 0 auto;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.75rem;
+}
+
 .inventory-check-table-scroll {
   overscroll-behavior-inline: contain;
 }
@@ -959,6 +984,31 @@ body {
   .inventory-check-product-summary {
     grid-template-columns: minmax(0, 1fr) 130px;
     align-items: center;
+  }
+
+  .inventory-check-stock-summary {
+    min-height: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    padding: 0.75rem 1rem;
+    text-align: center;
+  }
+
+  .inventory-check-stock-label {
+    order: 2;
+    margin-top: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1rem;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+  }
+
+  .inventory-check-stock-value {
+    order: 1;
+    font-size: 2.25rem;
+    line-height: 1;
   }
 }
 
