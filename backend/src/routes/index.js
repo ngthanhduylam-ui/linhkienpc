@@ -12,6 +12,7 @@ const stockTxAdminRoutes = require('../modules/stockTransaction/stockTransaction
 const authAdminRoutes = require('../modules/auth/auth.route');
 const customerAdminRoutes = require('../modules/customer/customer.route');
 const supplierAdminRoutes = require('../modules/supplier/supplier.route');
+const skuCategoryRuleAdminRoutes = require('../modules/skuCategoryRule/skuCategoryRule.route');
 const productController = require('../modules/product/product.controller');
 const categoryController = require('../modules/category/category.controller');
 const productValidators = require('../modules/product/product.validation');
@@ -36,6 +37,7 @@ router.use('/admin/auth', authAdminRoutes);
 router.use('/admin/categories', requireAuth, categoryAdminRoutes);
 router.use('/admin/customers', requireAuth, customerAdminRoutes);
 router.use('/admin/suppliers', requireAuth, supplierAdminRoutes);
+router.use('/admin/sku-category-rules', requireAuth, skuCategoryRuleAdminRoutes);
 router.use('/admin/products', requireAuth, productAdminRoutes);
 router.use('/admin/inventory-check', requireAuth, inventoryCheckAdminRoutes);
 router.use('/admin/stock-vouchers', requireAuth, stockVoucherAdminRoutes);

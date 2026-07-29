@@ -19,6 +19,7 @@ const StockInBulkPage = lazyNamed(() => import("./pages/StockInBulkPage"), "Stoc
 const StockInPage = lazyNamed(() => import("./pages/StockInPage"), "StockInPage");
 const StockOutBulkPage = lazyNamed(() => import("./pages/StockOutBulkPage"), "StockOutBulkPage");
 const StockOutPage = lazyNamed(() => import("./pages/StockOutPage"), "StockOutPage");
+const SkuCategoryRulesPage = lazyNamed(() => import("./pages/SkuCategoryRulesPage"), "SkuCategoryRulesPage");
 const SupplierListPage = lazyNamed(() => import("./pages/SupplierListPage"), "SupplierListPage");
 const TransactionHistoryPage = lazyNamed(() => import("./pages/TransactionHistoryPage"), "TransactionHistoryPage");
 const TransactionVoucherDetailPage = lazyNamed(
@@ -73,6 +74,7 @@ export const appRouter = createBrowserRouter([
           { path: "stock-out-single", element: withSuspense(<StockOutPage />) },
           { path: "stock-out-bulk", element: <Navigate to="/admin/stock-out" replace /> },
           { path: "inventory-check", element: withSuspense(<InventoryCheckPage />) },
+          { path: "settings/sku-rules", element: withSuspense(<SkuCategoryRulesPage />) },
           { path: "online-listing", element: withSuspense(<OnlineListingPage />) },
           { path: "transaction-history", element: withSuspense(<TransactionHistoryPage />) },
           { path: "transaction-history/:voucherId", element: withSuspense(<TransactionVoucherDetailPage />) }

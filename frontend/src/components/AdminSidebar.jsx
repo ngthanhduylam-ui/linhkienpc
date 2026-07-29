@@ -15,6 +15,10 @@ const salesItems = [
   { label: "Lịch sử giao dịch", to: "/admin/transaction-history", icon: "history" }
 ];
 
+const settingsItems = [
+  { label: "Cài đặt", to: "/admin/settings/sku-rules", icon: "settings" }
+];
+
 function navClassName({ isActive }) {
   return `relative flex min-h-11 min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none transition-colors before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-r-full focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
     isActive
@@ -107,6 +111,13 @@ function SidebarIcon({ name, className = "" }) {
           <path d="M3 3v5h5M12 7v5l3 2" />
         </svg>
       );
+    case "settings":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -170,6 +181,7 @@ export function AdminSidebar({ isOpen, onClose }) {
 
           <SidebarNavGroup title="Quản lý kho" items={inventoryItems} onNavigate={onClose} />
           <SidebarNavGroup title="Quản lý bán hàng" items={salesItems} divided onNavigate={onClose} />
+          <SidebarNavGroup title="Hệ thống" items={settingsItems} divided onNavigate={onClose} />
         </nav>
       </aside>
     </>

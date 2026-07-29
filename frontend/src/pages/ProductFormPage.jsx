@@ -22,6 +22,12 @@ import {
   handleMoneyInputChange,
   parseMoneyInput
 } from "../utils/moneyInput";
+import { listSkuCategoryRules } from "../services/skuCategoryRules.service";
+import {
+  extractSecondSkuToken,
+  getPreferredCategoryRuleToken,
+  resolveSkuCategorySuggestion
+} from "../utils/skuCategoryRules";
 
 const SKU_PATTERN = /^[a-z0-9]+(\.[a-z0-9]+)*$/i;
 const SKU_FORMAT_MESSAGE = "SKU không hợp lệ. Chỉ dùng chữ thường, số và dấu chấm.";
@@ -31,38 +37,6 @@ const MAX_SALE_PRICE = 999999999999999;
 const SALE_PRICE_INTEGER_MESSAGE = "Giá bán phải là số nguyên không âm.";
 const SALE_PRICE_MAX_MESSAGE = "Giá bán vượt quá giới hạn cho phép.";
 const CATEGORY_REQUIRED_MESSAGE = "Vui lòng chọn loại sản phẩm.";
-const SKU_CATEGORY_ALIASES = {
-  display: ["lcd"],
-  barebone: ["bb", "barebone"],
-  case: ["case"],
-  nguon: ["psu", "nguon"],
-  hdd: ["hdd"],
-  ssd: ["ssd"],
-  vga: ["vga"],
-  ram: ["ram"],
-  mainboard: ["main", "mainboard"],
-  cpu: ["cpu"],
-  tanNhietCpu: ["fcpu"],
-  laptop: ["lap", "laptop"]
-};
-const SKU_CATEGORY_LABELS = {
-  display: ["man hinh", "lcd"],
-  barebone: ["barebone"],
-  case: ["case"],
-  nguon: ["nguon"],
-  hdd: ["hdd"],
-  ssd: ["ssd"],
-  vga: ["vga"],
-  ram: ["ram"],
-  mainboard: ["mainboard"],
-  cpu: ["cpu"],
-  tanNhietCpu: ["tan nhiet cpu"],
-  laptop: ["laptop"]
-};
-const SKU_CATEGORY_PREFIX_BY_NAME = {
-  "tan nhiet cpu": "fcpu"
-};
-const SKU_CATEGORY_PREFIX_TOKENS = new Set(["2nd", "new", "used"]);
 const MAX_PRODUCT_IMAGES = 5;
 const MAX_UPLOAD_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_SOURCE_IMAGE_BYTES = 50 * 1024 * 1024;
@@ -204,9 +178,9 @@ function toDotToken(value) {
   return normalizeSkuChunk(value).replace(/\s+/g, ".").replace(/\.+/g, ".").replace(/^\.+|\.+$/g, "");
 }
 
-function buildSuggestedSku(productName, category, condition) {
+function buildSuggestedSku(productName, category, condition, skuCategoryRules) {
   const categoryPrefix =
-    SKU_CATEGORY_PREFIX_BY_NAME[normalizeText(category?.name)] ||
+    getPreferredCategoryRuleToken(skuCategoryRules, category) ||
     toDotToken(category?.code || category?.name || "");
   const normalizedName = normalizeSkuChunk(productName);
   if (!categoryPrefix || !normalizedName) return "";
@@ -215,37 +189,6 @@ function buildSuggestedSku(productName, category, condition) {
 
 function getCategoryById(categories, categoryId) {
   return categories.find((item) => Number(item.id) === Number(categoryId)) || null;
-}
-
-function getSkuTokens(sku) {
-  return normalizeText(sku)
-    .split(/[^a-z0-9]+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
-}
-
-function getCategoryAliasFromSku(sku) {
-  const tokens = getSkuTokens(sku);
-  for (const token of tokens) {
-    if (SKU_CATEGORY_PREFIX_TOKENS.has(token)) continue;
-    const matched = Object.entries(SKU_CATEGORY_ALIASES).find(([, aliases]) => aliases.includes(token));
-    if (matched) return matched[0];
-  }
-  return "";
-}
-
-function getCategoryByAlias(categories, alias) {
-  if (!alias) return null;
-  const labels = SKU_CATEGORY_LABELS[alias] || [alias];
-  for (const label of labels) {
-    const matchedCategory = categories.find((item) => {
-      const categoryCode = normalizeText(item.code);
-      const categoryName = normalizeText(item.name);
-      return categoryCode === label || categoryCode.startsWith(`${label}-`) || categoryName === label;
-    });
-    if (matchedCategory) return matchedCategory;
-  }
-  return null;
 }
 
 function getConditionFromSku(sku) {
@@ -324,10 +267,11 @@ export function ProductFormPage() {
   const isEditMode = Boolean(id);
   const categorySelectRef = useRef(null);
   const hasUserEditedSkuRef = useRef(false);
-  const lastClearedCategorySkuRef = useRef("");
+  const categorySelectionTokenRef = useRef("");
   const pendingImagesRef = useRef([]);
 
   const [categories, setCategories] = useState([]);
+  const [skuCategoryRules, setSkuCategoryRules] = useState([]);
   const [form, setForm] = useState({
     name: searchParams.get("name") || "",
     sku: "",
@@ -401,6 +345,22 @@ export function ProductFormPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    listSkuCategoryRules()
+      .then((items) => {
+        if (active) setSkuCategoryRules(items);
+      })
+      .catch((err) => {
+        if (active) setError(err?.message || "Không thể tải quy ước gợi ý danh mục từ SKU.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isEditMode) return undefined;
     let active = true;
 
@@ -421,6 +381,7 @@ export function ProductFormPage() {
         });
         setIsSkuManuallyEdited(true);
         setCategorySelectionSource(product?.category_id ? "manual" : "empty");
+        categorySelectionTokenRef.current = extractSecondSkuToken(product?.sku);
       } catch (err) {
         if (active) setError(err?.message || "Không thể tải sản phẩm.");
       } finally {
@@ -455,30 +416,32 @@ export function ProductFormPage() {
 
   useEffect(() => {
     if (isEditMode || isSkuManuallyEdited || !form.name.trim() || !selectedCategory) return;
-    const suggestedSku = buildSuggestedSku(form.name, selectedCategory, form.condition);
+    const suggestedSku = buildSuggestedSku(form.name, selectedCategory, form.condition, skuCategoryRules);
     if (suggestedSku) {
       setForm((prev) => ({ ...prev, sku: suggestedSku }));
     }
-  }, [form.condition, form.name, isEditMode, isSkuManuallyEdited, selectedCategory]);
+  }, [form.condition, form.name, isEditMode, isSkuManuallyEdited, selectedCategory, skuCategoryRules]);
 
   useEffect(() => {
-    if (!categories.length || categorySelectionSource === "manual") return;
-    if (isEditMode && !hasUserEditedSkuRef.current) return;
-    if (categorySelectionSource === "empty" && lastClearedCategorySkuRef.current === form.sku) return;
+    if (!categories.length || !skuCategoryRules.length) return;
+    const suggestion = resolveSkuCategorySuggestion({
+      sku: form.sku,
+      rules: skuCategoryRules,
+      categories,
+      selectionSource: categorySelectionSource,
+      guardedToken: categorySelectionTokenRef.current,
+      currentCategoryId: form.category_id,
+      isEditMode,
+      hasUserEditedSku: hasUserEditedSkuRef.current
+    });
+    if (!suggestion) return;
 
-    const categoryAlias = getCategoryAliasFromSku(form.sku);
-    const matchedCategory = getCategoryByAlias(categories, categoryAlias);
-    if (!matchedCategory) return;
-
-    const matchedCategoryId = String(matchedCategory.id);
-    if (form.category_id === matchedCategoryId && categorySelectionSource === "suggested") return;
-
-    setForm((prev) => ({ ...prev, category_id: matchedCategoryId }));
+    setForm((prev) => ({ ...prev, category_id: suggestion.categoryId }));
     setCategorySelectionSource("suggested");
-    lastClearedCategorySkuRef.current = "";
+    categorySelectionTokenRef.current = suggestion.token;
     setCategoryInlineInfo("Đã gợi ý từ SKU");
     clearFieldError("category_id");
-  }, [categories, categorySelectionSource, form.category_id, form.sku, isEditMode]);
+  }, [categories, categorySelectionSource, form.category_id, form.sku, isEditMode, skuCategoryRules]);
 
   function updateForm(patch) {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -511,7 +474,7 @@ export function ProductFormPage() {
     const nextCategoryId = event.target.value;
     updateForm({ category_id: nextCategoryId });
     setCategorySelectionSource(nextCategoryId ? "manual" : "empty");
-    lastClearedCategorySkuRef.current = nextCategoryId ? "" : form.sku;
+    categorySelectionTokenRef.current = extractSecondSkuToken(form.sku);
     setCategoryInlineInfo("");
     clearFieldError("category_id");
   }
