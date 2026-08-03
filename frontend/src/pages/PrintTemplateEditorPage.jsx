@@ -12,12 +12,16 @@ import {
   cloneEditableTemplateConfig,
   compareTemplateConfigs,
   createNoticeEditorItems,
+  equalizeVisibleProductTableColumns,
   getSectionForFieldPath,
   moveNoticeItem,
   normalizeEditableTemplateConfig,
+  resetProductTableColumnWidthsFromSystem,
   resetSectionLayoutFromSystem,
+  resizeAdjacentProductTableColumns,
   selectEditorSection,
   updateDraftSectionField,
+  updateProductTableColumnWeight,
   updateSectionVisibility,
   validateTemplateEditorDraft
 } from "../utils/printTemplateEditor";
@@ -187,6 +191,32 @@ export function PrintTemplateEditorPage() {
     clearFeedback();
     setForcedDirty(false);
     setDraft((current) => updateSectionVisibility(current, sectionName, visible));
+  }
+
+  function updateProductColumnWeight(columnId, value) {
+    clearFeedback();
+    setForcedDirty(false);
+    const normalizedValue = value === "" ? "" : Number(value);
+    setDraft((current) => updateProductTableColumnWeight(current, columnId, normalizedValue));
+  }
+
+  function equalizeProductColumns() {
+    clearFeedback();
+    setDraft((current) => equalizeVisibleProductTableColumns(current));
+    setForcedDirty(true);
+  }
+
+  function resetProductColumnWidths() {
+    if (!settings || savingRef.current) return;
+    clearFeedback();
+    setDraft((current) => resetProductTableColumnWidthsFromSystem(current, settings.system_template.config));
+    setForcedDirty(true);
+  }
+
+  function resizeProductColumns(leftId, rightId, deltaWeight) {
+    clearFeedback();
+    setDraft((current) => resizeAdjacentProductTableColumns(current, leftId, rightId, deltaWeight));
+    setForcedDirty(true);
   }
 
   function updateNotice(key, value) {
@@ -398,6 +428,7 @@ export function PrintTemplateEditorPage() {
                 config={draft}
                 selectedSection={selectedSection}
                 onSelectSection={selectSection}
+                onResizeProductColumns={resizeProductColumns}
               />
             </main>
             <PrintTemplateInspector
@@ -413,6 +444,9 @@ export function PrintTemplateEditorPage() {
               onNoticeRemove={removeNotice}
               onNoticeMove={reorderNotice}
               onResetSectionLayout={resetSelectedSectionLayout}
+              onProductColumnWeightChange={updateProductColumnWeight}
+              onEqualizeProductColumns={equalizeProductColumns}
+              onResetProductColumnWidths={resetProductColumnWidths}
             />
           </div>
         </form>

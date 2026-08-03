@@ -2,17 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   PRINT_TEMPLATE_LAYOUT_DEFAULTS,
+  PRODUCT_TABLE_COLUMN_DEFINITIONS,
+  PRODUCT_TABLE_COLUMN_WIDTH_DEFAULTS,
   PRINT_TEMPLATE_SECTION_DEFINITIONS,
   cloneEditableTemplateConfig,
   compareTemplateConfigs,
   createNoticeEditorItems,
   deriveSafePreviewLayout,
+  deriveVisibleColumnPercentages,
+  equalizeVisibleProductTableColumns,
   getSectionForFieldPath,
   getSectionNavigatorItems,
   getVisibleProductColumns,
   moveNoticeItem,
   normalizeEditableTemplateConfig,
+  resetProductTableColumnWidthsFromSystem,
   resetSectionLayoutFromSystem,
+  resizeAdjacentProductTableColumns,
   selectEditorSection,
   serializeNoticeEditorItems,
   updateDraftSectionField,
@@ -65,6 +71,15 @@ function config(overrides = {}) {
 function keyedDraft(source = config()) {
   let id = 0;
   return cloneEditableTemplateConfig(source, () => `key-${++id}`);
+}
+
+function version2Config() {
+  const source = config();
+  source.schemaVersion = 2;
+  Object.entries(PRINT_TEMPLATE_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
+    source.sections[sectionName] = { ...source.sections[sectionName], ...defaults };
+  });
+  return source;
 }
 
 test("clones Custom independently without mutating the API config", () => {
@@ -136,7 +151,7 @@ test("notice stable keys never enter persisted JSON", () => {
 });
 
 test("rejects an unsupported schema version", () => {
-  assert.throws(() => keyedDraft(config({ schemaVersion: 3 })), /chưa được hỗ trợ/);
+  assert.throws(() => keyedDraft(config({ schemaVersion: 4 })), /chưa được hỗ trợ/);
 });
 
 test("version 1 upgrade preserves content and visibility without mutating its source", () => {
@@ -146,7 +161,7 @@ test("version 1 upgrade preserves content and visibility without mutating its so
   const snapshot = structuredClone(source);
   const upgraded = upgradePrintTemplateConfigToLatest(source);
   assert.deepEqual(source, snapshot);
-  assert.equal(upgraded.schemaVersion, 2);
+  assert.equal(upgraded.schemaVersion, 3);
   assert.equal(upgraded.sections.shopHeader.name, "Tên Custom v1");
   assert.equal(upgraded.sections.totals.visible, false);
   assert.deepEqual(
@@ -159,14 +174,28 @@ test("version 1 upgrade preserves content and visibility without mutating its so
       textAlign: PRINT_TEMPLATE_LAYOUT_DEFAULTS.documentTitle.textAlign
     }
   );
+  assert.deepEqual(upgraded.sections.productTable.columnWidthWeights, PRODUCT_TABLE_COLUMN_WIDTH_DEFAULTS);
 });
 
-test("version 2 draft clone and serialization retain layout without editor-only fields", () => {
+test("version 2 upgrades to version 3 and preserves existing layout fields", () => {
+  const source = version2Config();
+  source.sections.productTable.cellPaddingMm = 3;
+  source.sections.productTable.showDiscount = false;
+  const snapshot = structuredClone(source);
+  const upgraded = upgradePrintTemplateConfigToLatest(source);
+  assert.deepEqual(source, snapshot);
+  assert.equal(upgraded.schemaVersion, 3);
+  assert.equal(upgraded.sections.productTable.cellPaddingMm, 3);
+  assert.equal(upgraded.sections.productTable.showDiscount, false);
+  assert.deepEqual(upgraded.sections.productTable.columnWidthWeights, PRODUCT_TABLE_COLUMN_WIDTH_DEFAULTS);
+});
+
+test("version 3 draft clone and serialization retain layout without editor-only fields", () => {
   const draft = keyedDraft();
   draft.sections.documentTitle.fontSizePt = "20";
   draft.sections.documentTitle.textAlign = "right";
   const persisted = normalizeEditableTemplateConfig(draft);
-  assert.equal(persisted.schemaVersion, 2);
+  assert.equal(persisted.schemaVersion, 3);
   assert.equal(persisted.sections.documentTitle.fontSizePt, 20);
   assert.equal(persisted.sections.documentTitle.textAlign, "right");
   assert.equal(typeof persisted.sections.documentTitle.fontSizePt, "number");
@@ -199,6 +228,23 @@ test("validates layout ranges, numeric strings as draft inputs, and alignments",
   assert.equal(validateTemplateEditorDraft(draft).valid, false);
   assert.equal(validateTemplateEditorDraft(draft).errors.some((error) => error.field.endsWith("cellPaddingMm")), true);
   assert.equal(validateTemplateEditorDraft(draft).errors.some((error) => error.field.endsWith("textAlign")), true);
+});
+
+test("validates product column weights as bounded finite numbers", () => {
+  const draft = keyedDraft();
+  draft.sections.productTable.columnWidthWeights.index = 0;
+  draft.sections.productTable.columnWidthWeights.quantity = "13";
+  draft.sections.productTable.columnWidthWeights.lineTotal = Infinity;
+  const result = validateTemplateEditorDraft(draft);
+  assert.equal(result.valid, false);
+  assert.deepEqual(
+    result.errors.filter((error) => error.field.includes("columnWidthWeights")).map((error) => error.field),
+    [
+      "sections.productTable.columnWidthWeights.index",
+      "sections.productTable.columnWidthWeights.quantity",
+      "sections.productTable.columnWidthWeights.lineTotal"
+    ]
+  );
 });
 
 test("safe preview layout clamps invalid numeric drafts and maps alignment allowlists", () => {
@@ -270,9 +316,11 @@ test("cancel can restore the last saved Custom config", () => {
   const draft = keyedDraft(saved);
   draft.sections.shopHeader.phone = "000";
   draft.sections.shopHeader.fontSizePt = 14;
+  draft.sections.productTable.columnWidthWeights.productName = 50;
   const restored = keyedDraft(saved);
   assert.equal(compareTemplateConfigs(restored, saved), false);
   assert.equal(restored.sections.shopHeader.fontSizePt, PRINT_TEMPLATE_LAYOUT_DEFAULTS.shopHeader.fontSizePt);
+  assert.equal(restored.sections.productTable.columnWidthWeights.productName, PRODUCT_TABLE_COLUMN_WIDTH_DEFAULTS.productName);
   assert.equal(serializeNoticeEditorItems(restored.sections.notes.items)[0], "Dòng một");
 });
 
@@ -292,6 +340,98 @@ test("hidden product fields alter preview columns while preserving their fixed o
     getVisibleProductColumns(productTable).map((column) => column.id),
     ["productName", "quantity", "unitPrice", "lineTotal"]
   );
+});
+
+test("physical product columns keep the production order and exclude nested sale notes", () => {
+  assert.deepEqual(
+    PRODUCT_TABLE_COLUMN_DEFINITIONS.map((column) => column.id),
+    ["index", "productName", "quantity", "unitPrice", "discount", "lineTotal"]
+  );
+  assert.equal(PRODUCT_TABLE_COLUMN_DEFINITIONS.some((column) => column.id === "saleNote"), false);
+});
+
+test("visible column percentages normalize deterministically to exactly 100 percent", () => {
+  const table = keyedDraft().sections.productTable;
+  const columns = deriveVisibleColumnPercentages(table);
+  assert.equal(Number(columns.reduce((sum, column) => sum + column.percentage, 0).toFixed(4)), 100);
+  assert.deepEqual(columns.map((column) => column.id), PRODUCT_TABLE_COLUMN_DEFINITIONS.map((column) => column.id));
+  columns.forEach((column) => assert.equal(Number.isFinite(column.percentage), true));
+});
+
+test("hidden column weights remain stored while visible widths renormalize", () => {
+  const draft = keyedDraft();
+  const discountWeight = draft.sections.productTable.columnWidthWeights.discount;
+  draft.sections.productTable.showDiscount = false;
+  const visible = deriveVisibleColumnPercentages(draft.sections.productTable);
+  assert.equal(visible.some((column) => column.id === "discount"), false);
+  assert.equal(draft.sections.productTable.columnWidthWeights.discount, discountWeight);
+  assert.equal(Number(visible.reduce((sum, column) => sum + column.percentage, 0).toFixed(4)), 100);
+});
+
+test("one visible product column gets 100 percent and no visible columns is safe", () => {
+  const draft = keyedDraft();
+  PRODUCT_TABLE_COLUMN_DEFINITIONS.forEach((column) => {
+    draft.sections.productTable[column.key] = column.id === "productName";
+  });
+  assert.deepEqual(deriveVisibleColumnPercentages(draft.sections.productTable).map(({ id, percentage }) => ({ id, percentage })), [
+    { id: "productName", percentage: 100 }
+  ]);
+  draft.sections.productTable.showProductName = false;
+  assert.deepEqual(deriveVisibleColumnPercentages(draft.sections.productTable), []);
+});
+
+test("equalizing visible columns leaves hidden weights untouched", () => {
+  const draft = keyedDraft();
+  draft.sections.productTable.showDiscount = false;
+  const hiddenWeight = draft.sections.productTable.columnWidthWeights.discount;
+  const equalized = equalizeVisibleProductTableColumns(draft);
+  const visibleWeights = getVisibleProductColumns(equalized.sections.productTable)
+    .map((column) => equalized.sections.productTable.columnWidthWeights[column.id]);
+  assert.equal(new Set(visibleWeights).size, 1);
+  assert.equal(equalized.sections.productTable.columnWidthWeights.discount, hiddenWeight);
+});
+
+test("width-only reset preserves product visibility and typography", () => {
+  const system = keyedDraft();
+  const draft = keyedDraft();
+  draft.sections.productTable.showDiscount = false;
+  draft.sections.productTable.fontSizePt = 12;
+  draft.sections.productTable.columnWidthWeights.productName = 60;
+  const reset = resetProductTableColumnWidthsFromSystem(draft, system);
+  assert.equal(reset.sections.productTable.showDiscount, false);
+  assert.equal(reset.sections.productTable.fontSizePt, 12);
+  assert.deepEqual(reset.sections.productTable.columnWidthWeights, system.sections.productTable.columnWidthWeights);
+});
+
+test("adjacent column resize preserves pair total, order, hidden weights, and minimums", () => {
+  const draft = keyedDraft();
+  draft.sections.productTable.showDiscount = false;
+  const before = draft.sections.productTable.columnWidthWeights;
+  const resized = resizeAdjacentProductTableColumns(draft, "productName", "quantity", 8);
+  const after = resized.sections.productTable.columnWidthWeights;
+  assert.equal(after.productName + after.quantity, before.productName + before.quantity);
+  assert.equal(after.discount, before.discount);
+  assert.deepEqual(getVisibleProductColumns(resized.sections.productTable).map((column) => column.id), [
+    "index", "productName", "quantity", "unitPrice", "lineTotal"
+  ]);
+  const clamped = resizeAdjacentProductTableColumns(resized, "productName", "quantity", 999);
+  assert.equal(clamped.sections.productTable.columnWidthWeights.productName, 100);
+  assert.equal(clamped.sections.productTable.columnWidthWeights.quantity, 4);
+});
+
+test("width changes participate in dirty comparison and safe serialization only", () => {
+  const saved = normalizeEditableTemplateConfig(keyedDraft());
+  const draft = keyedDraft(saved);
+  draft.sections.productTable.columnWidthWeights.productName = 80;
+  draft.productColumnDragState = { active: true };
+  draft.active_template = "custom";
+  draft.previewSample = SALE_DELIVERY_NOTE_PREVIEW_SAMPLE;
+  assert.equal(compareTemplateConfigs(draft, saved), true);
+  const serialized = normalizeEditableTemplateConfig(draft);
+  assert.equal(serialized.sections.productTable.columnWidthWeights.productName, 80);
+  assert.equal("productColumnDragState" in serialized, false);
+  assert.equal("active_template" in serialized, false);
+  assert.equal("previewSample" in serialized, false);
 });
 
 test("all eight visual-editor sections are defined once", () => {

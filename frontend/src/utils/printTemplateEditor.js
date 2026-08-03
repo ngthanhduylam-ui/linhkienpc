@@ -1,6 +1,6 @@
 import { cloneTemplateConfig } from "./printTemplateSettings.js";
 
-export const PRINT_TEMPLATE_SCHEMA_VERSION = 2;
+export const PRINT_TEMPLATE_SCHEMA_VERSION = 3;
 export const PRINT_TEMPLATE_LIMITS = Object.freeze({
   marginMin: 0,
   marginMax: 30,
@@ -69,6 +69,16 @@ export const PRODUCT_TABLE_COLUMN_DEFINITIONS = Object.freeze([
   { key: "showLineTotal", id: "lineTotal", label: "Thành tiền" }
 ]);
 
+export const PRODUCT_TABLE_COLUMN_WIDTH_LIMITS = Object.freeze([1, 100]);
+export const PRODUCT_TABLE_COLUMN_WIDTH_DEFAULTS = Object.freeze({
+  index: 11,
+  productName: 91,
+  quantity: 13,
+  unitPrice: 27,
+  discount: 27,
+  lineTotal: 27
+});
+
 const SECTION_IDS = new Set(PRINT_TEMPLATE_SECTION_DEFINITIONS.map((section) => section.id));
 
 let noticeKeySequence = 0;
@@ -122,16 +132,23 @@ export function upgradePrintTemplateConfigToLatest(config) {
   if (!isPlainObject(config) || !isPlainObject(config.paper) || !isPlainObject(config.sections)) {
     throw configurationError("Cấu hình Mẫu tùy chỉnh không đầy đủ.");
   }
-  if (![1, PRINT_TEMPLATE_SCHEMA_VERSION].includes(config.schemaVersion)) {
+  if (![1, 2, PRINT_TEMPLATE_SCHEMA_VERSION].includes(config.schemaVersion)) {
     throw configurationError("Phiên bản cấu hình Mẫu tùy chỉnh chưa được hỗ trợ.");
   }
 
   const upgraded = cloneTemplateConfig(config);
   if (upgraded.schemaVersion === 1) {
-    upgraded.schemaVersion = PRINT_TEMPLATE_SCHEMA_VERSION;
+    upgraded.schemaVersion = 2;
     Object.entries(PRINT_TEMPLATE_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
       upgraded.sections[sectionName] = { ...upgraded.sections[sectionName], ...defaults };
     });
+  }
+  if (upgraded.schemaVersion === 2) {
+    upgraded.schemaVersion = 3;
+    upgraded.sections.productTable = {
+      ...upgraded.sections.productTable,
+      columnWidthWeights: { ...PRODUCT_TABLE_COLUMN_WIDTH_DEFAULTS }
+    };
   }
   assertEditableConfig(upgraded);
   return upgraded;
@@ -225,7 +242,11 @@ export function stripEditorOnlyFields(draft) {
         fontSizePt: Number(sections.productTable.fontSizePt),
         headerFontSizePt: Number(sections.productTable.headerFontSizePt),
         cellPaddingMm: Number(sections.productTable.cellPaddingMm),
-        spacingAfterMm: Number(sections.productTable.spacingAfterMm)
+        spacingAfterMm: Number(sections.productTable.spacingAfterMm),
+        columnWidthWeights: Object.fromEntries(PRODUCT_TABLE_COLUMN_DEFINITIONS.map(({ id }) => [
+          id,
+          Number(sections.productTable.columnWidthWeights[id])
+        ]))
       },
       totals: {
         visible: sections.totals.visible,
@@ -315,6 +336,9 @@ export function resetSectionLayoutFromSystem(draft, systemConfig, sectionName) {
   const systemSection = systemConfig?.sections?.[sectionName];
   if (!draft?.sections?.[sectionName] || !systemSection || !fields) return draft;
   const resetValues = Object.fromEntries(fields.map((field) => [field, systemSection[field]]));
+  if (sectionName === "productTable") {
+    resetValues.columnWidthWeights = { ...systemSection.columnWidthWeights };
+  }
   return {
     ...draft,
     sections: {
@@ -361,6 +385,96 @@ export function selectEditorSection(currentSection, nextSection) {
 
 export function getVisibleProductColumns(productTable) {
   return PRODUCT_TABLE_COLUMN_DEFINITIONS.filter((column) => Boolean(productTable?.[column.key]));
+}
+
+function safeColumnWeight(weights, columnId) {
+  const value = weights?.[columnId];
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : PRODUCT_TABLE_COLUMN_WIDTH_DEFAULTS[columnId];
+}
+
+export function deriveVisibleColumnPercentages(productTable) {
+  const columns = getVisibleProductColumns(productTable);
+  if (columns.length === 0) return [];
+  if (columns.length === 1) {
+    const [column] = columns;
+    return [{ ...column, weight: safeColumnWeight(productTable?.columnWidthWeights, column.id), percentage: 100 }];
+  }
+
+  const weighted = columns.map((column) => ({
+    ...column,
+    weight: safeColumnWeight(productTable?.columnWidthWeights, column.id)
+  }));
+  const total = weighted.reduce((sum, column) => sum + column.weight, 0);
+  let allocated = 0;
+  return weighted.map((column, index) => {
+    const percentage = index === weighted.length - 1
+      ? Number((100 - allocated).toFixed(4))
+      : Number(((column.weight / total) * 100).toFixed(4));
+    allocated += percentage;
+    return { ...column, percentage };
+  });
+}
+
+export function updateProductTableColumnWeight(draft, columnId, value) {
+  if (!PRODUCT_TABLE_COLUMN_DEFINITIONS.some((column) => column.id === columnId)) return draft;
+  return {
+    ...draft,
+    sections: {
+      ...draft.sections,
+      productTable: {
+        ...draft.sections.productTable,
+        columnWidthWeights: {
+          ...draft.sections.productTable.columnWidthWeights,
+          [columnId]: value
+        }
+      }
+    }
+  };
+}
+
+export function equalizeVisibleProductTableColumns(draft) {
+  const productTable = draft?.sections?.productTable;
+  const visibleColumns = getVisibleProductColumns(productTable);
+  if (visibleColumns.length === 0) return draft;
+  const visibleTotal = visibleColumns.reduce(
+    (sum, column) => sum + safeColumnWeight(productTable.columnWidthWeights, column.id),
+    0
+  );
+  const equalWeight = Number((visibleTotal / visibleColumns.length).toFixed(4));
+  const nextWeights = { ...productTable.columnWidthWeights };
+  visibleColumns.forEach((column) => { nextWeights[column.id] = equalWeight; });
+  return updateDraftSectionField(draft, "productTable", "columnWidthWeights", nextWeights);
+}
+
+export function resetProductTableColumnWidthsFromSystem(draft, systemConfig) {
+  const systemWeights = systemConfig?.sections?.productTable?.columnWidthWeights;
+  if (!draft?.sections?.productTable || !systemWeights) return draft;
+  return updateDraftSectionField(draft, "productTable", "columnWidthWeights", { ...systemWeights });
+}
+
+export function resizeAdjacentProductTableColumns(draft, leftId, rightId, deltaWeight) {
+  const productTable = draft?.sections?.productTable;
+  const visible = getVisibleProductColumns(productTable);
+  const leftIndex = visible.findIndex((column) => column.id === leftId);
+  if (leftIndex < 0 || visible[leftIndex + 1]?.id !== rightId || !Number.isFinite(deltaWeight)) return draft;
+
+  const [minimum, maximum] = PRODUCT_TABLE_COLUMN_WIDTH_LIMITS;
+  const left = safeColumnWeight(productTable.columnWidthWeights, leftId);
+  const right = safeColumnWeight(productTable.columnWidthWeights, rightId);
+  const pairTotal = left + right;
+  if (pairTotal < minimum * 2) return draft;
+  const lowerBound = Math.max(minimum, pairTotal - maximum);
+  const upperBound = Math.min(maximum, pairTotal - minimum);
+  const nextLeft = Math.min(upperBound, Math.max(lowerBound, left + deltaWeight));
+  const nextRight = pairTotal - nextLeft;
+  const nextWeights = {
+    ...productTable.columnWidthWeights,
+    [leftId]: Number(nextLeft.toFixed(4)),
+    [rightId]: Number(nextRight.toFixed(4))
+  };
+  return updateDraftSectionField(draft, "productTable", "columnWidthWeights", nextWeights);
 }
 
 export function getSectionNavigatorItems(draft, selectedSection) {
@@ -468,6 +582,25 @@ export function validateTemplateEditorDraft(draft) {
         });
       }
     });
+  });
+
+  const widthKeys = PRODUCT_TABLE_COLUMN_DEFINITIONS.map((column) => column.id);
+  const rawWeights = draft?.sections?.productTable?.columnWidthWeights;
+  const normalizedWeights = config.sections.productTable.columnWidthWeights;
+  widthKeys.forEach((key) => {
+    const rawValue = rawWeights?.[key];
+    const value = normalizedWeights[key];
+    if (
+      typeof rawValue !== "number"
+      || !Number.isFinite(value)
+      || value < PRODUCT_TABLE_COLUMN_WIDTH_LIMITS[0]
+      || value > PRODUCT_TABLE_COLUMN_WIDTH_LIMITS[1]
+    ) {
+      errors.push({
+        field: `sections.productTable.columnWidthWeights.${key}`,
+        message: `Tỷ lệ phải từ ${PRODUCT_TABLE_COLUMN_WIDTH_LIMITS[0]} đến ${PRODUCT_TABLE_COLUMN_WIDTH_LIMITS[1]}.`
+      });
+    }
   });
 
   if (!["left", "center", "right"].includes(config.sections.documentTitle.textAlign)) {

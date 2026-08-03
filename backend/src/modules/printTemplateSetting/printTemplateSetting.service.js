@@ -71,7 +71,7 @@ function validateStoredCustom(row, { selectionConflict = false } = {}) {
   if (
     config === null
     || schemaVersion === null
-    || ![1, SYSTEM_TEMPLATE_SCHEMA_VERSION].includes(schemaVersion)
+    || ![1, 2, SYSTEM_TEMPLATE_SCHEMA_VERSION].includes(schemaVersion)
     || Number(config.schemaVersion) !== schemaVersion
   ) {
     throw new AppError(

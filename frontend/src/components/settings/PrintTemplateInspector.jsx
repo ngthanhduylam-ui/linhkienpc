@@ -1,7 +1,10 @@
 import {
   PRINT_TEMPLATE_LAYOUT_LIMITS,
   PRINT_TEMPLATE_LIMITS,
+  PRODUCT_TABLE_COLUMN_DEFINITIONS,
+  PRODUCT_TABLE_COLUMN_WIDTH_LIMITS,
   PRINT_TEMPLATE_SECTION_DEFINITIONS,
+  deriveVisibleColumnPercentages,
   getSectionNavigatorItems
 } from "../../utils/printTemplateEditor";
 
@@ -182,6 +185,67 @@ function VisibilityToggle({ checked, onChange }) {
   );
 }
 
+function ProductTableColumnWidthControls({ values, fieldErrors, onWeightChange, onEqualize, onReset }) {
+  const renderedColumns = deriveVisibleColumnPercentages(values);
+  const percentages = new Map(renderedColumns.map((column) => [column.id, column.percentage]));
+  const narrowColumns = renderedColumns.filter((column) => column.percentage < 5);
+
+  return (
+    <section className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-3" aria-label="Độ rộng cột">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-700">Độ rộng cột</p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">
+        Các cột đang hiển thị được tự cân bằng theo tỷ lệ đã đặt.
+      </p>
+      {renderedColumns.length === 0 && (
+        <InspectorWarning>Không có cột vật lý nào đang hiển thị. Bản nháp vẫn được giữ nguyên.</InspectorWarning>
+      )}
+      {narrowColumns.length > 0 && (
+        <InspectorWarning>
+          Cột {narrowColumns.map((column) => column.label).join(", ")} đang rất hẹp trong bản xem trước.
+        </InspectorWarning>
+      )}
+      <div className="mt-3 grid min-w-0 grid-cols-1 gap-2">
+        {PRODUCT_TABLE_COLUMN_DEFINITIONS.map((column) => {
+          const visible = Boolean(values[column.key]);
+          const error = fieldErrors[`sections.productTable.columnWidthWeights.${column.id}`];
+          return (
+            <label key={column.id} className="block min-w-0 rounded-lg border border-slate-200 bg-white p-2.5">
+              <span className="flex min-w-0 items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                <span className="min-w-0 break-words">{column.label}</span>
+                <span className={`shrink-0 ${visible ? "text-emerald-700" : "text-slate-400"}`}>
+                  {visible ? `Hiển thị: ${Number(percentages.get(column.id) ?? 0).toFixed(1)}%` : "Đang ẩn"}
+                </span>
+              </span>
+              <span className="mt-1.5 flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-xs text-slate-500">Tỷ lệ</span>
+                <input
+                  type="number"
+                  min={PRODUCT_TABLE_COLUMN_WIDTH_LIMITS[0]}
+                  max={PRODUCT_TABLE_COLUMN_WIDTH_LIMITS[1]}
+                  step="0.5"
+                  value={values.columnWidthWeights[column.id]}
+                  onChange={(event) => onWeightChange(column.id, event.target.value)}
+                  aria-invalid={Boolean(error)}
+                  className={`h-9 min-w-0 flex-1 rounded-md border bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 ${error ? "border-red-400" : "border-slate-300"}`}
+                />
+              </span>
+              {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
+            </label>
+          );
+        })}
+      </div>
+      <div className="mt-3 grid min-w-0 grid-cols-1 gap-2">
+        <button type="button" onClick={onEqualize} className="min-h-10 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+          Cân bằng các cột đang hiển thị
+        </button>
+        <button type="button" onClick={onReset} className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+          Khôi phục độ rộng mặc định
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function PrintTemplateInspector({
   draft,
   selectedSection,
@@ -194,7 +258,10 @@ export function PrintTemplateInspector({
   onNoticeAdd,
   onNoticeRemove,
   onNoticeMove,
-  onResetSectionLayout
+  onResetSectionLayout,
+  onProductColumnWeightChange,
+  onEqualizeProductColumns,
+  onResetProductColumnWidths
 }) {
   const selectedDefinition = PRINT_TEMPLATE_SECTION_DEFINITIONS.find((section) => section.id === selectedSection)
     || PRINT_TEMPLATE_SECTION_DEFINITIONS[0];
@@ -279,6 +346,13 @@ export function PrintTemplateInspector({
             ]}
             values={selectedConfig}
             onChange={(field, value) => onSectionFieldChange("productTable", field, value)}
+          />
+          <ProductTableColumnWidthControls
+            values={selectedConfig}
+            fieldErrors={fieldErrors}
+            onWeightChange={onProductColumnWeightChange}
+            onEqualize={onEqualizeProductColumns}
+            onReset={onResetProductColumnWidths}
           />
         </div>
       );

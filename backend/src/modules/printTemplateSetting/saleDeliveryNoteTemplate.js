@@ -5,8 +5,16 @@ const AppError = require('../../utils/AppError');
 // manages/duplicates settings, Phase 3 edits Custom, Phase 4 integrates rendering,
 // and Phase 5 adds per-print fallback behavior.
 const DOCUMENT_TYPE = 'sale_delivery_note';
-const SYSTEM_TEMPLATE_SCHEMA_VERSION = 2;
+const SYSTEM_TEMPLATE_SCHEMA_VERSION = 3;
 const MAX_CONFIG_BYTES = 32 * 1024;
+const PRODUCT_TABLE_COLUMN_KEYS = Object.freeze([
+  'index',
+  'productName',
+  'quantity',
+  'unitPrice',
+  'discount',
+  'lineTotal'
+]);
 
 const VERSION_2_LAYOUT_DEFAULTS = deepFreeze({
   shopHeader: { fontSizePt: 9, spacingAfterMm: 0 },
@@ -27,6 +35,18 @@ const VERSION_2_LAYOUT_DEFAULTS = deepFreeze({
   totals: { fontSizePt: 9, textAlign: 'right', spacingAfterMm: 3 },
   signatures: { fontSizePt: 9, writingSpaceMm: 14, spacingAfterMm: 0 },
   notes: { fontSizePt: 8.25, spacingBeforeMm: 2 }
+});
+
+// A4 content width is 196 mm at the current 7 mm margins. The production
+// renderer uses 11 mm for STT, 13 mm for quantity, 27 mm for each money
+// column, and leaves the remaining 91 mm to the product-name column.
+const VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS = deepFreeze({
+  index: 11,
+  productName: 91,
+  quantity: 13,
+  unitPrice: 27,
+  discount: 27,
+  lineTotal: 27
 });
 
 const SYSTEM_TEMPLATE_CONFIG = deepFreeze({
@@ -75,7 +95,8 @@ const SYSTEM_TEMPLATE_CONFIG = deepFreeze({
       showUnitPrice: true,
       showDiscount: true,
       showLineTotal: true,
-      ...VERSION_2_LAYOUT_DEFAULTS.productTable
+      ...VERSION_2_LAYOUT_DEFAULTS.productTable,
+      columnWidthWeights: VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS
     },
     totals: {
       visible: true,
@@ -217,7 +238,7 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
     throw new AppError('Invalid custom print template configuration.', 400, 'PRINT_TEMPLATE_VALIDATION_ERROR', errors);
   }
 
-  const acceptedVersions = allowLegacy ? [1, SYSTEM_TEMPLATE_SCHEMA_VERSION] : [SYSTEM_TEMPLATE_SCHEMA_VERSION];
+  const acceptedVersions = allowLegacy ? [1, 2, SYSTEM_TEMPLATE_SCHEMA_VERSION] : [SYSTEM_TEMPLATE_SCHEMA_VERSION];
   if (!Number.isInteger(config.schemaVersion) || !acceptedVersions.includes(config.schemaVersion)) {
     errors.push({
       field: 'body.custom_template_config.schemaVersion',
@@ -226,7 +247,8 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
         : `must equal ${SYSTEM_TEMPLATE_SCHEMA_VERSION}`
     });
   }
-  const isVersion2 = config.schemaVersion === SYSTEM_TEMPLATE_SCHEMA_VERSION;
+  const hasVersion2Layout = config.schemaVersion >= 2;
+  const isVersion3 = config.schemaVersion === 3;
 
   const paperField = 'body.custom_template_config.paper';
   if (validateObject(config.paper, paperField, ['size', 'orientation', 'marginMm'], errors)) {
@@ -251,7 +273,7 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
     const shop = config.sections.shopHeader;
     const shopField = `${sectionsField}.shopHeader`;
     const shopKeys = ['visible', 'showLogo', 'name', 'address', 'phone', 'email'];
-    if (isVersion2) shopKeys.push('fontSizePt', 'spacingAfterMm');
+    if (hasVersion2Layout) shopKeys.push('fontSizePt', 'spacingAfterMm');
     if (validateObject(shop, shopField, shopKeys, errors)) {
       validateBoolean(shop.visible, `${shopField}.visible`, errors);
       validateBoolean(shop.showLogo, `${shopField}.showLogo`, errors);
@@ -259,7 +281,7 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
       validatePlainText(shop.address, `${shopField}.address`, { max: 240 }, errors);
       validatePlainText(shop.phone, `${shopField}.phone`, { max: 50 }, errors);
       validatePlainText(shop.email, `${shopField}.email`, { max: 120 }, errors);
-      if (isVersion2) {
+      if (hasVersion2Layout) {
         validateNumber(shop.fontSizePt, `${shopField}.fontSizePt`, { min: 7, max: 14 }, errors);
         validateNumber(shop.spacingAfterMm, `${shopField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
       }
@@ -268,11 +290,11 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
     const title = config.sections.documentTitle;
     const titleField = `${sectionsField}.documentTitle`;
     const titleKeys = ['visible', 'text'];
-    if (isVersion2) titleKeys.push('textAlign', 'fontSizePt', 'spacingBeforeMm', 'spacingAfterMm');
+    if (hasVersion2Layout) titleKeys.push('textAlign', 'fontSizePt', 'spacingBeforeMm', 'spacingAfterMm');
     if (validateObject(title, titleField, titleKeys, errors)) {
       validateBoolean(title.visible, `${titleField}.visible`, errors);
       validatePlainText(title.text, `${titleField}.text`, { max: 120 }, errors);
-      if (isVersion2) {
+      if (hasVersion2Layout) {
         validateEnum(title.textAlign, `${titleField}.textAlign`, ['left', 'center', 'right'], errors);
         validateNumber(title.fontSizePt, `${titleField}.fontSizePt`, { min: 12, max: 28 }, errors);
         validateNumber(title.spacingBeforeMm, `${titleField}.spacingBeforeMm`, { min: 0, max: 15 }, errors);
@@ -283,26 +305,26 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
     const metadata = config.sections.receiptMetadata;
     const metadataField = `${sectionsField}.receiptMetadata`;
     const metadataKeys = ['visible', 'showVoucherCode', 'showDate', 'showTime'];
-    if (isVersion2) metadataKeys.push('fontSizePt');
+    if (hasVersion2Layout) metadataKeys.push('fontSizePt');
     if (validateObject(metadata, metadataField, metadataKeys, errors)) {
       validateBoolean(metadata.visible, `${metadataField}.visible`, errors);
       validateBoolean(metadata.showVoucherCode, `${metadataField}.showVoucherCode`, errors);
       validateBoolean(metadata.showDate, `${metadataField}.showDate`, errors);
       validateBoolean(metadata.showTime, `${metadataField}.showTime`, errors);
-      if (isVersion2) validateNumber(metadata.fontSizePt, `${metadataField}.fontSizePt`, { min: 7, max: 14 }, errors);
+      if (hasVersion2Layout) validateNumber(metadata.fontSizePt, `${metadataField}.fontSizePt`, { min: 7, max: 14 }, errors);
     }
 
     const customer = config.sections.customerInformation;
     const customerField = `${sectionsField}.customerInformation`;
     const customerKeys = ['visible', 'showName', 'showPhone', 'showAddress', 'showNote'];
-    if (isVersion2) customerKeys.push('fontSizePt', 'spacingAfterMm');
+    if (hasVersion2Layout) customerKeys.push('fontSizePt', 'spacingAfterMm');
     if (validateObject(customer, customerField, customerKeys, errors)) {
       validateBoolean(customer.visible, `${customerField}.visible`, errors);
       validateBoolean(customer.showName, `${customerField}.showName`, errors);
       validateBoolean(customer.showPhone, `${customerField}.showPhone`, errors);
       validateBoolean(customer.showAddress, `${customerField}.showAddress`, errors);
       validateBoolean(customer.showNote, `${customerField}.showNote`, errors);
-      if (isVersion2) {
+      if (hasVersion2Layout) {
         validateNumber(customer.fontSizePt, `${customerField}.fontSizePt`, { min: 7, max: 14 }, errors);
         validateNumber(customer.spacingAfterMm, `${customerField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
       }
@@ -320,24 +342,33 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
       'showDiscount',
       'showLineTotal'
     ];
-    if (isVersion2) productTableKeys.push('fontSizePt', 'headerFontSizePt', 'cellPaddingMm', 'spacingAfterMm');
+    if (hasVersion2Layout) productTableKeys.push('fontSizePt', 'headerFontSizePt', 'cellPaddingMm', 'spacingAfterMm');
+    if (isVersion3) productTableKeys.push('columnWidthWeights');
     if (validateObject(productTable, productTableField, productTableKeys, errors)) {
       productTableKeys.slice(0, 8).forEach((key) => validateBoolean(productTable[key], `${productTableField}.${key}`, errors));
-      if (isVersion2) {
+      if (hasVersion2Layout) {
         validateNumber(productTable.fontSizePt, `${productTableField}.fontSizePt`, { min: 7, max: 13 }, errors);
         validateNumber(productTable.headerFontSizePt, `${productTableField}.headerFontSizePt`, { min: 7, max: 13 }, errors);
         validateNumber(productTable.cellPaddingMm, `${productTableField}.cellPaddingMm`, { min: 0.5, max: 4 }, errors);
         validateNumber(productTable.spacingAfterMm, `${productTableField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
+      }
+      if (isVersion3) {
+        const weightsField = `${productTableField}.columnWidthWeights`;
+        if (validateObject(productTable.columnWidthWeights, weightsField, PRODUCT_TABLE_COLUMN_KEYS, errors)) {
+          PRODUCT_TABLE_COLUMN_KEYS.forEach((key) => {
+            validateNumber(productTable.columnWidthWeights[key], `${weightsField}.${key}`, { min: 1, max: 100 }, errors);
+          });
+        }
       }
     }
 
     const totals = config.sections.totals;
     const totalsField = `${sectionsField}.totals`;
     const totalsKeys = ['visible', 'showGrossTotal', 'showDiscountTotal', 'showGrandTotal'];
-    if (isVersion2) totalsKeys.push('fontSizePt', 'textAlign', 'spacingAfterMm');
+    if (hasVersion2Layout) totalsKeys.push('fontSizePt', 'textAlign', 'spacingAfterMm');
     if (validateObject(totals, totalsField, totalsKeys, errors)) {
       totalsKeys.slice(0, 4).forEach((key) => validateBoolean(totals[key], `${totalsField}.${key}`, errors));
-      if (isVersion2) {
+      if (hasVersion2Layout) {
         validateNumber(totals.fontSizePt, `${totalsField}.fontSizePt`, { min: 7, max: 14 }, errors);
         validateEnum(totals.textAlign, `${totalsField}.textAlign`, ['left', 'right'], errors);
         validateNumber(totals.spacingAfterMm, `${totalsField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
@@ -347,13 +378,13 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
     const signatures = config.sections.signatures;
     const signaturesField = `${sectionsField}.signatures`;
     const signatureKeys = ['visible', 'sellerLabel', 'sellerHint', 'customerLabel', 'customerHint'];
-    if (isVersion2) signatureKeys.push('fontSizePt', 'writingSpaceMm', 'spacingAfterMm');
+    if (hasVersion2Layout) signatureKeys.push('fontSizePt', 'writingSpaceMm', 'spacingAfterMm');
     if (validateObject(signatures, signaturesField, signatureKeys, errors)) {
       validateBoolean(signatures.visible, `${signaturesField}.visible`, errors);
       signatureKeys.slice(1, 5).forEach((key) => {
         validatePlainText(signatures[key], `${signaturesField}.${key}`, { max: 100 }, errors);
       });
-      if (isVersion2) {
+      if (hasVersion2Layout) {
         validateNumber(signatures.fontSizePt, `${signaturesField}.fontSizePt`, { min: 7, max: 14 }, errors);
         validateNumber(signatures.writingSpaceMm, `${signaturesField}.writingSpaceMm`, { min: 10, max: 60 }, errors);
         validateNumber(signatures.spacingAfterMm, `${signaturesField}.spacingAfterMm`, { min: 0, max: 20 }, errors);
@@ -363,7 +394,7 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
     const notes = config.sections.notes;
     const notesField = `${sectionsField}.notes`;
     const notesKeys = ['visible', 'title', 'items'];
-    if (isVersion2) notesKeys.push('fontSizePt', 'spacingBeforeMm');
+    if (hasVersion2Layout) notesKeys.push('fontSizePt', 'spacingBeforeMm');
     if (validateObject(notes, notesField, notesKeys, errors)) {
       validateBoolean(notes.visible, `${notesField}.visible`, errors);
       validatePlainText(notes.title, `${notesField}.title`, { max: 60 }, errors);
@@ -377,7 +408,7 @@ function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
           validatePlainText(item, `${notesField}.items[${index}]`, { max: 500 }, errors);
         });
       }
-      if (isVersion2) {
+      if (hasVersion2Layout) {
         validateNumber(notes.fontSizePt, `${notesField}.fontSizePt`, { min: 6, max: 12 }, errors);
         validateNumber(notes.spacingBeforeMm, `${notesField}.spacingBeforeMm`, { min: 0, max: 20 }, errors);
       }
@@ -396,10 +427,19 @@ function upgradeSaleDeliveryNoteConfigToLatest(config) {
   if (validated.schemaVersion === SYSTEM_TEMPLATE_SCHEMA_VERSION) return validated;
 
   const upgraded = JSON.parse(JSON.stringify(validated));
-  upgraded.schemaVersion = SYSTEM_TEMPLATE_SCHEMA_VERSION;
-  Object.entries(VERSION_2_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
-    upgraded.sections[sectionName] = { ...upgraded.sections[sectionName], ...defaults };
-  });
+  if (upgraded.schemaVersion === 1) {
+    upgraded.schemaVersion = 2;
+    Object.entries(VERSION_2_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
+      upgraded.sections[sectionName] = { ...upgraded.sections[sectionName], ...defaults };
+    });
+  }
+  if (upgraded.schemaVersion === 2) {
+    upgraded.schemaVersion = 3;
+    upgraded.sections.productTable = {
+      ...upgraded.sections.productTable,
+      columnWidthWeights: { ...VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS }
+    };
+  }
   return validateCustomTemplateConfig(upgraded);
 }
 
@@ -407,7 +447,9 @@ module.exports = {
   DOCUMENT_TYPE,
   SYSTEM_TEMPLATE_SCHEMA_VERSION,
   MAX_CONFIG_BYTES,
+  PRODUCT_TABLE_COLUMN_KEYS,
   VERSION_2_LAYOUT_DEFAULTS,
+  VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS,
   SYSTEM_TEMPLATE_CONFIG,
   cloneSystemTemplateConfig,
   validateCustomTemplateConfig,

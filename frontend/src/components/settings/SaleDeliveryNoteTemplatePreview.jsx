@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ptcLogoUrl from "../../assets/ptc-logo.png";
-import { deriveSafePreviewLayout, getVisibleProductColumns } from "../../utils/printTemplateEditor";
+import { deriveSafePreviewLayout, deriveVisibleColumnPercentages } from "../../utils/printTemplateEditor";
 import { SALE_DELIVERY_NOTE_PREVIEW_SAMPLE } from "./saleDeliveryNotePreviewSample";
 import "./SaleDeliveryNoteTemplatePreview.css";
 
@@ -54,13 +54,70 @@ function PreviewCustomerLine({ label, value, wide = false }) {
   );
 }
 
+function ColumnResizeHandle({ leftColumn, rightColumn, tableRef, visibleWeightTotal, onResize }) {
+  const dragRef = useRef(null);
+
+  function finishDrag(event) {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handlePointerDown(event) {
+    if (event.pointerType === "touch") return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragRef.current = { pointerId: event.pointerId, lastClientX: event.clientX };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerMove(event) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const tableWidth = tableRef.current?.getBoundingClientRect().width;
+    if (!tableWidth || !Number.isFinite(tableWidth)) return;
+    const deltaPixels = event.clientX - drag.lastClientX;
+    drag.lastClientX = event.clientX;
+    if (deltaPixels === 0) return;
+    onResize(leftColumn.id, rightColumn.id, (deltaPixels / tableWidth) * visibleWeightTotal);
+  }
+
+  function handleKeyDown(event) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = event.shiftKey ? 5 : 1;
+    onResize(leftColumn.id, rightColumn.id, event.key === "ArrowLeft" ? -step : step);
+  }
+
+  return (
+    <span
+      role="separator"
+      tabIndex={0}
+      aria-orientation="vertical"
+      aria-label={`Điều chỉnh độ rộng giữa ${leftColumn.label} và ${rightColumn.label}`}
+      className="template-preview-column-resize-handle"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+    />
+  );
+}
+
 export function SaleDeliveryNoteTemplatePreview({
   config,
   sampleData = SALE_DELIVERY_NOTE_PREVIEW_SAMPLE,
   selectedSection,
-  onSelectSection
+  onSelectSection,
+  onResizeProductColumns
 }) {
   const stageRef = useRef(null);
+  const productTableRef = useRef(null);
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
@@ -91,7 +148,11 @@ export function SaleDeliveryNoteTemplatePreview({
   const signatures = sections.signatures;
   const notes = sections.notes;
   const layout = deriveSafePreviewLayout(config);
-  const columns = getVisibleProductColumns(table);
+  const columns = deriveVisibleColumnPercentages(table);
+  const visibleWeightTotal = columns.reduce((sum, column) => sum + column.weight, 0);
+  const columnResizeEnabled = selectedSection === "productTable"
+    && columns.length > 1
+    && typeof onResizeProductColumns === "function";
   const showHeader = shop.visible || metadata.visible;
   const headerClass = shop.visible && metadata.visible
     ? "has-shop-and-meta"
@@ -215,10 +276,28 @@ export function SaleDeliveryNoteTemplatePreview({
               className="template-preview-table-wrap"
             >
               {columns.length > 0 ? (
-                <table className="template-preview-table">
+                <table ref={productTableRef} className="template-preview-table">
+                  <colgroup>
+                    {columns.map((column) => (
+                      <col key={column.id} style={{ width: `${column.percentage}%` }} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr>
-                      {columns.map((column) => <th key={column.id} className={`is-${column.id}`}>{column.label}</th>)}
+                      {columns.map((column, index) => (
+                        <th key={column.id} className={`is-${column.id}`}>
+                          {column.label}
+                          {columnResizeEnabled && index < columns.length - 1 && (
+                            <ColumnResizeHandle
+                              leftColumn={column}
+                              rightColumn={columns[index + 1]}
+                              tableRef={productTableRef}
+                              visibleWeightTotal={visibleWeightTotal}
+                              onResize={onResizeProductColumns}
+                            />
+                          )}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>

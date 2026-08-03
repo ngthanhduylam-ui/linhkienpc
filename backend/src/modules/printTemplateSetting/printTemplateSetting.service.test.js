@@ -7,7 +7,9 @@ const {
   SYSTEM_TEMPLATE_CONFIG,
   SYSTEM_TEMPLATE_SCHEMA_VERSION,
   MAX_CONFIG_BYTES,
+  PRODUCT_TABLE_COLUMN_KEYS,
   VERSION_2_LAYOUT_DEFAULTS,
+  VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS,
   cloneSystemTemplateConfig,
   validateCustomTemplateConfig,
   upgradeSaleDeliveryNoteConfigToLatest
@@ -28,6 +30,14 @@ function legacyConfig() {
       delete config.sections[sectionName][field];
     });
   });
+  delete config.sections.productTable.columnWidthWeights;
+  return config;
+}
+
+function version2Config() {
+  const config = cloneSystemConfig();
+  config.schemaVersion = 2;
+  delete config.sections.productTable.columnWidthWeights;
   return config;
 }
 
@@ -83,10 +93,12 @@ function mockTransactions(t, responses, queries = []) {
 }
 
 describe('print template settings service', { concurrency: false }, () => {
-test('system template definition is immutable and validates as schema version 2', () => {
-  assert.equal(SYSTEM_TEMPLATE_SCHEMA_VERSION, 2);
+test('system template definition is immutable and validates as schema version 3', () => {
+  assert.equal(SYSTEM_TEMPLATE_SCHEMA_VERSION, 3);
   assert.equal(Object.isFrozen(SYSTEM_TEMPLATE_CONFIG), true);
   assert.equal(Object.isFrozen(SYSTEM_TEMPLATE_CONFIG.sections.productTable), true);
+  assert.equal(Object.isFrozen(SYSTEM_TEMPLATE_CONFIG.sections.productTable.columnWidthWeights), true);
+  assert.deepEqual(SYSTEM_TEMPLATE_CONFIG.sections.productTable.columnWidthWeights, VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS);
   assert.deepEqual(validateCustomTemplateConfig(cloneSystemConfig()), cloneSystemConfig());
 });
 
@@ -94,14 +106,17 @@ test('returned system config is a structurally independent safe clone', () => {
   const first = cloneSystemTemplateConfig();
   const second = cloneSystemTemplateConfig();
   first.sections.documentTitle.text = 'Changed by API client';
+  first.sections.productTable.columnWidthWeights.index = 99;
   assert.notEqual(first.sections.documentTitle.text, second.sections.documentTitle.text);
+  assert.equal(second.sections.productTable.columnWidthWeights.index, 11);
+  assert.equal(SYSTEM_TEMPLATE_CONFIG.sections.productTable.columnWidthWeights.index, 11);
   assert.equal(
     SYSTEM_TEMPLATE_CONFIG.sections.documentTitle.text,
     'PHIẾU BÁN & GIAO HÀNG'
   );
 });
 
-test('version 1 upgrades to version 2 without mutating content or visibility', () => {
+test('version 1 upgrades sequentially to version 3 without mutating content or visibility', () => {
   const source = legacyConfig();
   source.sections.shopHeader.name = 'Cửa hàng tùy chỉnh';
   source.sections.customerInformation.visible = false;
@@ -111,7 +126,7 @@ test('version 1 upgrades to version 2 without mutating content or visibility', (
 
   assert.deepEqual(source, snapshot);
   assert.notEqual(upgraded, source);
-  assert.equal(upgraded.schemaVersion, 2);
+  assert.equal(upgraded.schemaVersion, 3);
   assert.equal(upgraded.sections.shopHeader.name, 'Cửa hàng tùy chỉnh');
   assert.equal(upgraded.sections.customerInformation.visible, false);
   Object.entries(VERSION_2_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
@@ -119,7 +134,54 @@ test('version 1 upgrades to version 2 without mutating content or visibility', (
       assert.equal(upgraded.sections[sectionName][field], value);
     });
   });
+  assert.deepEqual(upgraded.sections.productTable.columnWidthWeights, VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS);
   assert.deepEqual(validateCustomTemplateConfig(upgraded), upgraded);
+});
+
+test('version 2 upgrades to version 3 by adding only the default table widths', () => {
+  const source = version2Config();
+  source.sections.documentTitle.text = 'CUSTOM V2';
+  source.sections.productTable.showDiscount = false;
+  source.sections.productTable.cellPaddingMm = 3;
+  const snapshot = structuredClone(source);
+  const upgraded = upgradeSaleDeliveryNoteConfigToLatest(source);
+  assert.deepEqual(source, snapshot);
+  assert.equal(upgraded.schemaVersion, 3);
+  assert.equal(upgraded.sections.documentTitle.text, 'CUSTOM V2');
+  assert.equal(upgraded.sections.productTable.showDiscount, false);
+  assert.equal(upgraded.sections.productTable.cellPaddingMm, 3);
+  assert.deepEqual(upgraded.sections.productTable.columnWidthWeights, VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS);
+});
+
+test('version 3 table widths enforce exact keys, finite numeric bounds, and field-level errors', () => {
+  PRODUCT_TABLE_COLUMN_KEYS.forEach((key) => {
+    for (const boundary of [1, 100]) {
+      const config = cloneSystemConfig();
+      config.sections.productTable.columnWidthWeights[key] = boundary;
+      assert.doesNotThrow(() => validateCustomTemplateConfig(config));
+    }
+    for (const invalid of [0, -1, 101, '11', NaN, Infinity]) {
+      const config = cloneSystemConfig();
+      config.sections.productTable.columnWidthWeights[key] = invalid;
+      assert.throws(
+        () => validateCustomTemplateConfig(config),
+        (error) => error.details.some((detail) => detail.field.endsWith(`.columnWidthWeights.${key}`))
+      );
+    }
+  });
+
+  const missing = cloneSystemConfig();
+  delete missing.sections.productTable.columnWidthWeights.quantity;
+  assert.throws(
+    () => validateCustomTemplateConfig(missing),
+    (error) => error.details.some((detail) => detail.field.endsWith('.columnWidthWeights.quantity'))
+  );
+  const unknown = cloneSystemConfig();
+  unknown.sections.productTable.columnWidthWeights.sku = 10;
+  assert.throws(
+    () => validateCustomTemplateConfig(unknown),
+    (error) => error.details.some((detail) => detail.field.endsWith('.columnWidthWeights.sku'))
+  );
 });
 
 test('version 2 layout fields enforce exact keys, enums, finite numbers, and boundaries', () => {
@@ -207,7 +269,7 @@ test('strict validation rejects unknown fields at every level', () => {
 
 test('strict validation rejects invalid schema, paper, orientation, numeric range, and section types', () => {
   const config = cloneSystemConfig();
-  config.schemaVersion = 3;
+  config.schemaVersion = 4;
   config.paper.size = 'A5';
   config.paper.orientation = 'landscape';
   config.paper.marginMm = 99;
@@ -296,7 +358,7 @@ test('GET reports immutable system availability and absent custom template', asy
     system_template: {
       available: true,
       immutable: true,
-      schema_version: 2,
+      schema_version: 3,
       config: cloneSystemConfig()
     },
     custom_template: { exists: false, schema_version: null, config: null }
@@ -325,12 +387,30 @@ test('GET reports a valid saved custom template without selecting it', () => {
   const config = cloneSystemConfig();
   const result = service.mapSettings(settingsRow({
     custom_template_config: config,
-    custom_template_schema_version: 2
+    custom_template_schema_version: 3
   }));
   assert.equal(result.active_template, 'system');
   assert.equal(result.custom_template.exists, true);
-  assert.equal(result.custom_template.schema_version, 2);
+  assert.equal(result.custom_template.schema_version, 3);
   assert.deepEqual(result.custom_template.config, config);
+});
+
+test('GET upgrades a stored version 2 Custom in memory and preserves active selection', () => {
+  const source = version2Config();
+  source.sections.productTable.showDiscount = false;
+  const result = service.mapSettings(settingsRow({
+    active_template: 'custom',
+    custom_template_config: JSON.stringify(source),
+    custom_template_schema_version: 2
+  }));
+  assert.equal(result.active_template, 'custom');
+  assert.equal(result.custom_template.schema_version, 3);
+  assert.equal(result.custom_template.config.schemaVersion, 3);
+  assert.equal(result.custom_template.config.sections.productTable.showDiscount, false);
+  assert.deepEqual(
+    result.custom_template.config.sections.productTable.columnWidthWeights,
+    VERSION_3_PRODUCT_TABLE_WIDTH_DEFAULTS
+  );
 });
 
 test('GET upgrades a stored version 1 Custom in memory while preserving active selection', () => {
@@ -342,8 +422,8 @@ test('GET upgrades a stored version 1 Custom in memory while preserving active s
     custom_template_schema_version: 1
   }));
   assert.equal(result.active_template, 'custom');
-  assert.equal(result.custom_template.schema_version, 2);
-  assert.equal(result.custom_template.config.schemaVersion, 2);
+  assert.equal(result.custom_template.schema_version, 3);
+  assert.equal(result.custom_template.config.schemaVersion, 3);
   assert.equal(result.custom_template.config.sections.documentTitle.text, 'TIÊU ĐỀ V1');
   assert.equal(result.custom_template.config.sections.documentTitle.textAlign, 'center');
 });
@@ -385,7 +465,7 @@ test('custom selection succeeds only when the stored custom config is valid', as
   const config = cloneSystemConfig();
   const customRow = settingsRow({
     custom_template_config: JSON.stringify(config),
-    custom_template_schema_version: 2
+    custom_template_schema_version: 3
   });
   const { queries } = mockTransactions(t, [
     [[customRow]],
@@ -416,11 +496,11 @@ test('saving custom replaces the singleton config without activating it or inser
   secondConfig.sections.documentTitle.text = 'PHIẾU BÁN HÀNG';
   const firstUpdatedRow = settingsRow({
     custom_template_config: JSON.stringify(firstConfig),
-    custom_template_schema_version: 2
+    custom_template_schema_version: 3
   });
   const secondUpdatedRow = settingsRow({
     custom_template_config: JSON.stringify(secondConfig),
-    custom_template_schema_version: 2
+    custom_template_schema_version: 3
   });
   const { queries } = mockTransactions(t, [
     [[settingsRow()]],
@@ -446,7 +526,7 @@ test('system config returned by GET can initialize Custom without activating it'
   const submittedClone = getResult.system_template.config;
   const updatedRow = settingsRow({
     custom_template_config: JSON.stringify(submittedClone),
-    custom_template_schema_version: 2
+    custom_template_schema_version: 3
   });
   mockTransactions(t, [
     [[settingsRow()]],
@@ -473,7 +553,7 @@ test('changing active selection does not alter the stored custom configuration',
   const config = cloneSystemConfig();
   const currentRow = settingsRow({
     custom_template_config: JSON.stringify(config),
-    custom_template_schema_version: 2
+    custom_template_schema_version: 3
   });
   const { queries } = mockTransactions(t, [
     [[currentRow]],
@@ -490,7 +570,7 @@ test('service writes only print-template settings and never sale, product, or tr
   const config = cloneSystemConfig();
   const updatedRow = settingsRow({
     custom_template_config: JSON.stringify(config),
-    custom_template_schema_version: 2
+    custom_template_schema_version: 3
   });
   const { queries } = mockTransactions(t, [
     [[settingsRow()]],

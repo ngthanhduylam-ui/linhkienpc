@@ -267,6 +267,7 @@
 }
 
 .template-preview-table th {
+  position: relative;
   background: #e2e8f0;
   font-size: var(--template-table-header-font-size, 9pt);
   text-align: center;
@@ -274,12 +275,10 @@
 }
 
 .template-preview-table .is-index {
-  width: 11mm;
   text-align: center;
 }
 
 .template-preview-table .is-quantity {
-  width: 13mm;
   text-align: center;
 }
 
@@ -287,8 +286,46 @@
 .template-preview-table .is-discount,
 .template-preview-table .is-lineTotal,
 .template-preview-table .is-money {
-  width: 27mm;
   text-align: right;
+}
+
+.template-preview-column-resize-handle {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.template-preview-column-resize-handle::after {
+  position: absolute;
+  top: 15%;
+  right: 4px;
+  bottom: 15%;
+  width: 2px;
+  border-radius: 999px;
+  background: #2563eb;
+  content: "";
+  opacity: 0.45;
+}
+
+.template-preview-column-resize-handle:hover::after,
+.template-preview-column-resize-handle:focus-visible::after {
+  opacity: 1;
+}
+
+.template-preview-column-resize-handle:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+@media (pointer: coarse) {
+  .template-preview-column-resize-handle {
+    display: none;
+  }
 }
 
 .template-preview-table .is-productName {
