@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { SettingsSectionNav } from "../components/settings/SettingsSectionNav";
 import {
   getSaleDeliveryNoteTemplateSettings,
@@ -336,24 +337,42 @@ export function PrintTemplateSettingsPage() {
 
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 {settings.custom_template.exists
-                  ? "Một cấu hình tùy chỉnh duy nhất đã được lưu. Trình chỉnh sửa sẽ được bổ sung ở giai đoạn tiếp theo."
+                  ? "Một cấu hình tùy chỉnh duy nhất đã được lưu và sẵn sàng để chỉnh sửa nội dung."
                   : "Tạo một bản sao từ Mẫu gốc hệ thống để chỉnh sửa ở bước tiếp theo."}
               </p>
               {!customSelectable && (
                 <p className="mt-2 text-xs font-semibold text-amber-700">Cần tạo Mẫu tùy chỉnh trước khi có thể chọn.</p>
               )}
-              <button
-                type="button"
-                onClick={handleCreateOrResetCustom}
-                disabled={operationBusy}
-                className="mt-4 min-h-10 max-w-full rounded-lg border border-brand-300 px-4 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
-              >
-                {customAction
-                  ? (customAction === "reset" ? "Đang khởi tạo lại..." : "Đang tạo...")
-                  : (settings.custom_template.exists
-                      ? "Khởi tạo lại từ Mẫu gốc"
-                      : "Tạo mẫu tùy chỉnh")}
-              </button>
+              <div className="mt-4 flex min-w-0 flex-wrap gap-2">
+                {settings.custom_template.exists && (
+                  <Link
+                    to="/admin/settings/print-template/edit"
+                    aria-disabled={operationBusy}
+                    onClick={(event) => {
+                      if (operationBusy) event.preventDefault();
+                    }}
+                    className={`inline-flex min-h-10 max-w-full items-center rounded-lg px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+                      operationBusy
+                        ? "pointer-events-none bg-slate-200 text-slate-500"
+                        : "bg-brand-500 text-white hover:bg-brand-700"
+                    }`}
+                  >
+                    Chỉnh sửa mẫu tùy chỉnh
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCreateOrResetCustom}
+                  disabled={operationBusy}
+                  className="min-h-10 max-w-full rounded-lg border border-brand-300 px-4 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  {customAction
+                    ? (customAction === "reset" ? "Đang khởi tạo lại..." : "Đang tạo...")
+                    : (settings.custom_template.exists
+                        ? "Khởi tạo lại từ Mẫu gốc"
+                        : "Tạo mẫu tùy chỉnh")}
+                </button>
+              </div>
             </article>
           </section>
 

@@ -1037,6 +1037,28 @@ body {
   container-type: inline-size;
 }
 
+.print-template-editor-page {
+  container-name: print-template-editor;
+  container-type: inline-size;
+}
+
+.print-template-editor-actions {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 10;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.print-template-visual-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
 .print-template-card-grid {
   display: grid;
   min-width: 0;
@@ -1061,6 +1083,29 @@ body {
 @container print-template-settings (min-width: 760px) {
   .print-template-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container print-template-editor (min-width: 620px) {
+  .print-template-editor-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+}
+
+@container print-template-editor (min-width: 980px) {
+  .print-template-visual-editor {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  }
+
+  .print-template-inspector {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 
