@@ -1,6 +1,7 @@
 ﻿SOURCE database/schema/admins.sql;
 SOURCE database/schema/categories.sql;
 SOURCE database/schema/sku_category_rules.sql;
+SOURCE database/schema/print_template_settings.sql;
 SOURCE database/schema/products.sql;
 SOURCE database/schema/product_images.sql;
 SOURCE database/schema/warranty_batches.sql;
