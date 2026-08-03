@@ -200,6 +200,10 @@ export function apiPost(path, body = {}, options = {}) {
   return request(path, { ...options, method: "POST", body });
 }
 
+export function apiPut(path, body = {}, options = {}) {
+  return request(path, { ...options, method: "PUT", body });
+}
+
 export function apiPatch(path, body = {}, options = {}) {
   return request(path, { ...options, method: "PATCH", body });
 }

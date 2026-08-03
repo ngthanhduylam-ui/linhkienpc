@@ -1032,6 +1032,38 @@ body {
   container-type: inline-size;
 }
 
+.print-template-settings-page {
+  container-name: print-template-settings;
+  container-type: inline-size;
+}
+
+.print-template-card-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.print-template-action-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@container print-template-settings (min-width: 560px) {
+  .print-template-action-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+@container print-template-settings (min-width: 760px) {
+  .print-template-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .sku-rules-grid {
   display: grid;
   min-width: 0;

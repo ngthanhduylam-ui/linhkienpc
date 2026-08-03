@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SettingsSectionNav } from "../components/settings/SettingsSectionNav";
 import { listActiveCategories } from "../services/inventoryOperations.service";
 import {
   createSkuCategoryRule,
@@ -622,6 +623,8 @@ export function SkuCategoryRulesPage() {
 
   return (
     <div className="sku-rules-page min-w-0 max-w-full space-y-5">
+      <SettingsSectionNav />
+
       <header className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-900">Quy ước gợi ý danh mục từ SKU</h1>

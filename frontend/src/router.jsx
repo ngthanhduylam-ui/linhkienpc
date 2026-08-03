@@ -14,6 +14,10 @@ const InventoryCheckPage = lazyNamed(() => import("./pages/InventoryCheckPage"),
 const OnlineListingPage = lazyNamed(() => import("./pages/OnlineListingPage"), "OnlineListingPage");
 const ProductFormPage = lazyNamed(() => import("./pages/ProductFormPage"), "ProductFormPage");
 const ProductManagementPage = lazyNamed(() => import("./pages/ProductManagementPage"), "ProductManagementPage");
+const PrintTemplateSettingsPage = lazyNamed(
+  () => import("./pages/PrintTemplateSettingsPage"),
+  "PrintTemplateSettingsPage"
+);
 const PublicSearchPage = lazyNamed(() => import("./pages/PublicSearchPage"), "PublicSearchPage");
 const StockInBulkPage = lazyNamed(() => import("./pages/StockInBulkPage"), "StockInBulkPage");
 const StockInPage = lazyNamed(() => import("./pages/StockInPage"), "StockInPage");
@@ -75,6 +79,7 @@ export const appRouter = createBrowserRouter([
           { path: "stock-out-bulk", element: <Navigate to="/admin/stock-out" replace /> },
           { path: "inventory-check", element: withSuspense(<InventoryCheckPage />) },
           { path: "settings/sku-rules", element: withSuspense(<SkuCategoryRulesPage />) },
+          { path: "settings/print-template", element: withSuspense(<PrintTemplateSettingsPage />) },
           { path: "online-listing", element: withSuspense(<OnlineListingPage />) },
           { path: "transaction-history", element: withSuspense(<TransactionHistoryPage />) },
           { path: "transaction-history/:voucherId", element: withSuspense(<TransactionVoucherDetailPage />) }
