@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ptcLogoUrl from "../../assets/ptc-logo.png";
-import { getVisibleProductColumns } from "../../utils/printTemplateEditor";
+import { deriveSafePreviewLayout, getVisibleProductColumns } from "../../utils/printTemplateEditor";
 import { SALE_DELIVERY_NOTE_PREVIEW_SAMPLE } from "./saleDeliveryNotePreviewSample";
 import "./SaleDeliveryNoteTemplatePreview.css";
 
@@ -90,6 +90,7 @@ export function SaleDeliveryNoteTemplatePreview({
   const totals = sections.totals;
   const signatures = sections.signatures;
   const notes = sections.notes;
+  const layout = deriveSafePreviewLayout(config);
   const columns = getVisibleProductColumns(table);
   const showHeader = shop.visible || metadata.visible;
   const headerClass = shop.visible && metadata.visible
@@ -115,7 +116,26 @@ export function SaleDeliveryNoteTemplatePreview({
             width: `${LOGICAL_PAGE_WIDTH}px`,
             height: `${LOGICAL_PAGE_HEIGHT}px`,
             transform: `scale(${scale})`,
-            "--template-preview-margin": `${Number(config.paper.marginMm) || 0}mm`
+            "--template-preview-margin": `${Math.min(30, Math.max(0, Number(config.paper.marginMm) || 0))}mm`,
+            "--template-shop-font-size": `${layout.shopHeader.fontSizePt}pt`,
+            "--template-shop-spacing-after": `${layout.shopHeader.spacingAfterMm}mm`,
+            "--template-meta-font-size": `${layout.receiptMetadata.fontSizePt}pt`,
+            "--template-title-font-size": `${layout.documentTitle.fontSizePt}pt`,
+            "--template-title-spacing-before": `${layout.documentTitle.spacingBeforeMm}mm`,
+            "--template-title-spacing-after": `${layout.documentTitle.spacingAfterMm}mm`,
+            "--template-customer-font-size": `${layout.customerInformation.fontSizePt}pt`,
+            "--template-customer-spacing-after": `${layout.customerInformation.spacingAfterMm}mm`,
+            "--template-table-font-size": `${layout.productTable.fontSizePt}pt`,
+            "--template-table-header-font-size": `${layout.productTable.headerFontSizePt}pt`,
+            "--template-table-cell-padding": `${layout.productTable.cellPaddingMm}mm`,
+            "--template-table-spacing-after": `${layout.productTable.spacingAfterMm}mm`,
+            "--template-totals-font-size": `${layout.totals.fontSizePt}pt`,
+            "--template-totals-spacing-after": `${layout.totals.spacingAfterMm}mm`,
+            "--template-signatures-font-size": `${layout.signatures.fontSizePt}pt`,
+            "--template-signatures-writing-space": `${layout.signatures.writingSpaceMm}mm`,
+            "--template-signatures-spacing-after": `${layout.signatures.spacingAfterMm}mm`,
+            "--template-notes-font-size": `${layout.notes.fontSizePt}pt`,
+            "--template-notes-spacing-before": `${layout.notes.spacingBeforeMm}mm`
           }}
           aria-label="Bản xem trước Phiếu bán và giao hàng với dữ liệu minh họa"
         >
@@ -165,7 +185,7 @@ export function SaleDeliveryNoteTemplatePreview({
               label="Tiêu đề phiếu"
               selectedSection={selectedSection}
               onSelectSection={onSelectSection}
-              className="template-preview-title"
+              className={`template-preview-title align-${layout.documentTitle.textAlign}`}
             >
               <h1>{sections.documentTitle.text}</h1>
             </SelectableSection>
@@ -235,7 +255,7 @@ export function SaleDeliveryNoteTemplatePreview({
               label="Tổng tiền"
               selectedSection={selectedSection}
               onSelectSection={onSelectSection}
-              className="template-preview-summary-row"
+              className={`template-preview-summary-row align-${layout.totals.textAlign}`}
             >
               <div className="template-preview-summary-box">
                 <div className="template-preview-summary-grid">

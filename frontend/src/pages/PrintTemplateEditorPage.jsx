@@ -15,6 +15,7 @@ import {
   getSectionForFieldPath,
   moveNoticeItem,
   normalizeEditableTemplateConfig,
+  resetSectionLayoutFromSystem,
   selectEditorSection,
   updateDraftSectionField,
   updateSectionVisibility,
@@ -256,6 +257,13 @@ export function PrintTemplateEditorPage() {
     setForcedDirty(true);
   }
 
+  function resetSelectedSectionLayout(sectionName) {
+    if (!settings || savingRef.current) return;
+    clearFeedback();
+    setDraft((current) => resetSectionLayoutFromSystem(current, settings.system_template.config, sectionName));
+    setForcedDirty(true);
+  }
+
   function cancelDraftChanges() {
     if (!dirty || !originalConfig || savingRef.current) return;
     if (!window.confirm("Hoàn tác toàn bộ thay đổi chưa lưu và trở về Mẫu tùy chỉnh đã lưu gần nhất?")) return;
@@ -404,6 +412,7 @@ export function PrintTemplateEditorPage() {
               onNoticeAdd={addNotice}
               onNoticeRemove={removeNotice}
               onNoticeMove={reorderNotice}
+              onResetSectionLayout={resetSelectedSectionLayout}
             />
           </div>
         </form>

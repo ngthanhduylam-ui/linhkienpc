@@ -7,8 +7,10 @@ const {
   SYSTEM_TEMPLATE_CONFIG,
   SYSTEM_TEMPLATE_SCHEMA_VERSION,
   MAX_CONFIG_BYTES,
+  VERSION_2_LAYOUT_DEFAULTS,
   cloneSystemTemplateConfig,
-  validateCustomTemplateConfig
+  validateCustomTemplateConfig,
+  upgradeSaleDeliveryNoteConfigToLatest
 } = require('./saleDeliveryNoteTemplate');
 
 const originalQuery = pool.query;
@@ -16,6 +18,17 @@ const originalGetConnection = pool.getConnection;
 
 function cloneSystemConfig() {
   return JSON.parse(JSON.stringify(SYSTEM_TEMPLATE_CONFIG));
+}
+
+function legacyConfig() {
+  const config = cloneSystemConfig();
+  config.schemaVersion = 1;
+  Object.keys(VERSION_2_LAYOUT_DEFAULTS).forEach((sectionName) => {
+    Object.keys(VERSION_2_LAYOUT_DEFAULTS[sectionName]).forEach((field) => {
+      delete config.sections[sectionName][field];
+    });
+  });
+  return config;
 }
 
 function settingsRow(overrides = {}) {
@@ -70,8 +83,8 @@ function mockTransactions(t, responses, queries = []) {
 }
 
 describe('print template settings service', { concurrency: false }, () => {
-test('system template definition is immutable and validates as schema version 1', () => {
-  assert.equal(SYSTEM_TEMPLATE_SCHEMA_VERSION, 1);
+test('system template definition is immutable and validates as schema version 2', () => {
+  assert.equal(SYSTEM_TEMPLATE_SCHEMA_VERSION, 2);
   assert.equal(Object.isFrozen(SYSTEM_TEMPLATE_CONFIG), true);
   assert.equal(Object.isFrozen(SYSTEM_TEMPLATE_CONFIG.sections.productTable), true);
   assert.deepEqual(validateCustomTemplateConfig(cloneSystemConfig()), cloneSystemConfig());
@@ -85,6 +98,80 @@ test('returned system config is a structurally independent safe clone', () => {
   assert.equal(
     SYSTEM_TEMPLATE_CONFIG.sections.documentTitle.text,
     'PHIẾU BÁN & GIAO HÀNG'
+  );
+});
+
+test('version 1 upgrades to version 2 without mutating content or visibility', () => {
+  const source = legacyConfig();
+  source.sections.shopHeader.name = 'Cửa hàng tùy chỉnh';
+  source.sections.customerInformation.visible = false;
+  const snapshot = JSON.parse(JSON.stringify(source));
+
+  const upgraded = upgradeSaleDeliveryNoteConfigToLatest(source);
+
+  assert.deepEqual(source, snapshot);
+  assert.notEqual(upgraded, source);
+  assert.equal(upgraded.schemaVersion, 2);
+  assert.equal(upgraded.sections.shopHeader.name, 'Cửa hàng tùy chỉnh');
+  assert.equal(upgraded.sections.customerInformation.visible, false);
+  Object.entries(VERSION_2_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
+    Object.entries(defaults).forEach(([field, value]) => {
+      assert.equal(upgraded.sections[sectionName][field], value);
+    });
+  });
+  assert.deepEqual(validateCustomTemplateConfig(upgraded), upgraded);
+});
+
+test('version 2 layout fields enforce exact keys, enums, finite numbers, and boundaries', () => {
+  const numericFields = [
+    ['shopHeader', 'fontSizePt', 7, 14],
+    ['shopHeader', 'spacingAfterMm', 0, 15],
+    ['receiptMetadata', 'fontSizePt', 7, 14],
+    ['documentTitle', 'fontSizePt', 12, 28],
+    ['documentTitle', 'spacingBeforeMm', 0, 15],
+    ['documentTitle', 'spacingAfterMm', 0, 15],
+    ['customerInformation', 'fontSizePt', 7, 14],
+    ['customerInformation', 'spacingAfterMm', 0, 15],
+    ['productTable', 'fontSizePt', 7, 13],
+    ['productTable', 'headerFontSizePt', 7, 13],
+    ['productTable', 'cellPaddingMm', 0.5, 4],
+    ['productTable', 'spacingAfterMm', 0, 15],
+    ['totals', 'fontSizePt', 7, 14],
+    ['totals', 'spacingAfterMm', 0, 15],
+    ['signatures', 'fontSizePt', 7, 14],
+    ['signatures', 'writingSpaceMm', 10, 60],
+    ['signatures', 'spacingAfterMm', 0, 20],
+    ['notes', 'fontSizePt', 6, 12],
+    ['notes', 'spacingBeforeMm', 0, 20]
+  ];
+
+  numericFields.forEach(([section, field, min, max]) => {
+    for (const boundary of [min, max]) {
+      const config = cloneSystemConfig();
+      config.sections[section][field] = boundary;
+      assert.doesNotThrow(() => validateCustomTemplateConfig(config));
+    }
+    for (const invalid of [min - 0.1, max + 0.1, NaN, Infinity, String(min)]) {
+      const config = cloneSystemConfig();
+      config.sections[section][field] = invalid;
+      assert.throws(
+        () => validateCustomTemplateConfig(config),
+        (error) => error.details.some((detail) => detail.field.endsWith(`.${section}.${field}`))
+      );
+    }
+  });
+
+  const invalidTitleAlign = cloneSystemConfig();
+  invalidTitleAlign.sections.documentTitle.textAlign = 'justify';
+  assert.throws(() => validateCustomTemplateConfig(invalidTitleAlign), /Invalid custom/);
+  const invalidTotalsAlign = cloneSystemConfig();
+  invalidTotalsAlign.sections.totals.textAlign = 'center';
+  assert.throws(() => validateCustomTemplateConfig(invalidTotalsAlign), /Invalid custom/);
+  const unknown = cloneSystemConfig();
+  unknown.sections.notes.style = { color: 'red' };
+  assert.throws(
+    () => validateCustomTemplateConfig(unknown),
+    (error) => error.details.some((detail) => detail.field.endsWith('.notes.style'))
   );
 });
 
@@ -120,7 +207,7 @@ test('strict validation rejects unknown fields at every level', () => {
 
 test('strict validation rejects invalid schema, paper, orientation, numeric range, and section types', () => {
   const config = cloneSystemConfig();
-  config.schemaVersion = 2;
+  config.schemaVersion = 3;
   config.paper.size = 'A5';
   config.paper.orientation = 'landscape';
   config.paper.marginMm = 99;
@@ -209,7 +296,7 @@ test('GET reports immutable system availability and absent custom template', asy
     system_template: {
       available: true,
       immutable: true,
-      schema_version: 1,
+      schema_version: 2,
       config: cloneSystemConfig()
     },
     custom_template: { exists: false, schema_version: null, config: null }
@@ -238,12 +325,27 @@ test('GET reports a valid saved custom template without selecting it', () => {
   const config = cloneSystemConfig();
   const result = service.mapSettings(settingsRow({
     custom_template_config: config,
-    custom_template_schema_version: 1
+    custom_template_schema_version: 2
   }));
   assert.equal(result.active_template, 'system');
   assert.equal(result.custom_template.exists, true);
-  assert.equal(result.custom_template.schema_version, 1);
+  assert.equal(result.custom_template.schema_version, 2);
   assert.deepEqual(result.custom_template.config, config);
+});
+
+test('GET upgrades a stored version 1 Custom in memory while preserving active selection', () => {
+  const source = legacyConfig();
+  source.sections.documentTitle.text = 'TIÊU ĐỀ V1';
+  const result = service.mapSettings(settingsRow({
+    active_template: 'custom',
+    custom_template_config: JSON.stringify(source),
+    custom_template_schema_version: 1
+  }));
+  assert.equal(result.active_template, 'custom');
+  assert.equal(result.custom_template.schema_version, 2);
+  assert.equal(result.custom_template.config.schemaVersion, 2);
+  assert.equal(result.custom_template.config.sections.documentTitle.text, 'TIÊU ĐỀ V1');
+  assert.equal(result.custom_template.config.sections.documentTitle.textAlign, 'center');
 });
 
 test('active selection accepts only system or custom', () => {
@@ -283,7 +385,7 @@ test('custom selection succeeds only when the stored custom config is valid', as
   const config = cloneSystemConfig();
   const customRow = settingsRow({
     custom_template_config: JSON.stringify(config),
-    custom_template_schema_version: 1
+    custom_template_schema_version: 2
   });
   const { queries } = mockTransactions(t, [
     [[customRow]],
@@ -314,11 +416,11 @@ test('saving custom replaces the singleton config without activating it or inser
   secondConfig.sections.documentTitle.text = 'PHIẾU BÁN HÀNG';
   const firstUpdatedRow = settingsRow({
     custom_template_config: JSON.stringify(firstConfig),
-    custom_template_schema_version: 1
+    custom_template_schema_version: 2
   });
   const secondUpdatedRow = settingsRow({
     custom_template_config: JSON.stringify(secondConfig),
-    custom_template_schema_version: 1
+    custom_template_schema_version: 2
   });
   const { queries } = mockTransactions(t, [
     [[settingsRow()]],
@@ -344,7 +446,7 @@ test('system config returned by GET can initialize Custom without activating it'
   const submittedClone = getResult.system_template.config;
   const updatedRow = settingsRow({
     custom_template_config: JSON.stringify(submittedClone),
-    custom_template_schema_version: 1
+    custom_template_schema_version: 2
   });
   mockTransactions(t, [
     [[settingsRow()]],
@@ -371,7 +473,7 @@ test('changing active selection does not alter the stored custom configuration',
   const config = cloneSystemConfig();
   const currentRow = settingsRow({
     custom_template_config: JSON.stringify(config),
-    custom_template_schema_version: 1
+    custom_template_schema_version: 2
   });
   const { queries } = mockTransactions(t, [
     [[currentRow]],
@@ -388,7 +490,7 @@ test('service writes only print-template settings and never sale, product, or tr
   const config = cloneSystemConfig();
   const updatedRow = settingsRow({
     custom_template_config: JSON.stringify(config),
-    custom_template_schema_version: 1
+    custom_template_schema_version: 2
   });
   const { queries } = mockTransactions(t, [
     [[settingsRow()]],

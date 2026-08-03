@@ -1,6 +1,6 @@
 import { cloneTemplateConfig } from "./printTemplateSettings.js";
 
-export const PRINT_TEMPLATE_SCHEMA_VERSION = 1;
+export const PRINT_TEMPLATE_SCHEMA_VERSION = 2;
 export const PRINT_TEMPLATE_LIMITS = Object.freeze({
   marginMin: 0,
   marginMax: 30,
@@ -14,6 +14,40 @@ export const PRINT_TEMPLATE_LIMITS = Object.freeze({
   noticeCount: 10,
   noticeText: 500
 });
+
+export const PRINT_TEMPLATE_LAYOUT_DEFAULTS = Object.freeze({
+  shopHeader: Object.freeze({ fontSizePt: 9, spacingAfterMm: 0 }),
+  receiptMetadata: Object.freeze({ fontSizePt: 9 }),
+  documentTitle: Object.freeze({
+    textAlign: "center",
+    fontSizePt: 16.5,
+    spacingBeforeMm: 4,
+    spacingAfterMm: 4
+  }),
+  customerInformation: Object.freeze({ fontSizePt: 9, spacingAfterMm: 4 }),
+  productTable: Object.freeze({ fontSizePt: 9, headerFontSizePt: 9, cellPaddingMm: 2, spacingAfterMm: 1.5 }),
+  totals: Object.freeze({ fontSizePt: 9, textAlign: "right", spacingAfterMm: 3 }),
+  signatures: Object.freeze({ fontSizePt: 9, writingSpaceMm: 14, spacingAfterMm: 0 }),
+  notes: Object.freeze({ fontSizePt: 8.25, spacingBeforeMm: 2 })
+});
+
+export const PRINT_TEMPLATE_LAYOUT_LIMITS = Object.freeze({
+  shopHeader: Object.freeze({ fontSizePt: [7, 14], spacingAfterMm: [0, 15] }),
+  receiptMetadata: Object.freeze({ fontSizePt: [7, 14] }),
+  documentTitle: Object.freeze({ fontSizePt: [12, 28], spacingBeforeMm: [0, 15], spacingAfterMm: [0, 15] }),
+  customerInformation: Object.freeze({ fontSizePt: [7, 14], spacingAfterMm: [0, 15] }),
+  productTable: Object.freeze({ fontSizePt: [7, 13], headerFontSizePt: [7, 13], cellPaddingMm: [0.5, 4], spacingAfterMm: [0, 15] }),
+  totals: Object.freeze({ fontSizePt: [7, 14], spacingAfterMm: [0, 15] }),
+  signatures: Object.freeze({ fontSizePt: [7, 14], writingSpaceMm: [10, 60], spacingAfterMm: [0, 20] }),
+  notes: Object.freeze({ fontSizePt: [6, 12], spacingBeforeMm: [0, 20] })
+});
+
+export const PRINT_TEMPLATE_LAYOUT_FIELDS = Object.freeze(
+  Object.fromEntries(Object.entries(PRINT_TEMPLATE_LAYOUT_DEFAULTS).map(([section, defaults]) => [
+    section,
+    Object.freeze(Object.keys(defaults))
+  ]))
+);
 
 export const PRINT_TEMPLATE_SECTION_DEFINITIONS = Object.freeze([
   { id: "shopHeader", label: "Thông tin cửa hàng" },
@@ -84,6 +118,25 @@ function assertEditableConfig(config) {
   }
 }
 
+export function upgradePrintTemplateConfigToLatest(config) {
+  if (!isPlainObject(config) || !isPlainObject(config.paper) || !isPlainObject(config.sections)) {
+    throw configurationError("Cấu hình Mẫu tùy chỉnh không đầy đủ.");
+  }
+  if (![1, PRINT_TEMPLATE_SCHEMA_VERSION].includes(config.schemaVersion)) {
+    throw configurationError("Phiên bản cấu hình Mẫu tùy chỉnh chưa được hỗ trợ.");
+  }
+
+  const upgraded = cloneTemplateConfig(config);
+  if (upgraded.schemaVersion === 1) {
+    upgraded.schemaVersion = PRINT_TEMPLATE_SCHEMA_VERSION;
+    Object.entries(PRINT_TEMPLATE_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
+      upgraded.sections[sectionName] = { ...upgraded.sections[sectionName], ...defaults };
+    });
+  }
+  assertEditableConfig(upgraded);
+  return upgraded;
+}
+
 export function createNoticeEditorItems(items, createKey = defaultNoticeKey) {
   if (!Array.isArray(items)) {
     throw configurationError("Danh sách lưu ý không hợp lệ.");
@@ -97,9 +150,9 @@ export function serializeNoticeEditorItems(items) {
 }
 
 export function cloneEditableTemplateConfig(config, createKey = defaultNoticeKey) {
-  assertEditableConfig(config);
-  const draft = cloneTemplateConfig(config);
-  draft.sections.notes.items = createNoticeEditorItems(config.sections.notes.items, createKey);
+  const upgraded = upgradePrintTemplateConfigToLatest(config);
+  const draft = cloneTemplateConfig(upgraded);
+  draft.sections.notes.items = createNoticeEditorItems(upgraded.sections.notes.items, createKey);
   return draft;
 }
 
@@ -132,24 +185,33 @@ export function stripEditorOnlyFields(draft) {
         name: String(sections.shopHeader.name ?? "").trim(),
         address: String(sections.shopHeader.address ?? "").trim(),
         phone: String(sections.shopHeader.phone ?? "").trim(),
-        email: String(sections.shopHeader.email ?? "").trim()
+        email: String(sections.shopHeader.email ?? "").trim(),
+        fontSizePt: Number(sections.shopHeader.fontSizePt),
+        spacingAfterMm: Number(sections.shopHeader.spacingAfterMm)
       },
       documentTitle: {
         visible: sections.documentTitle.visible,
-        text: String(sections.documentTitle.text ?? "").trim()
+        text: String(sections.documentTitle.text ?? "").trim(),
+        textAlign: sections.documentTitle.textAlign,
+        fontSizePt: Number(sections.documentTitle.fontSizePt),
+        spacingBeforeMm: Number(sections.documentTitle.spacingBeforeMm),
+        spacingAfterMm: Number(sections.documentTitle.spacingAfterMm)
       },
       receiptMetadata: {
         visible: sections.receiptMetadata.visible,
         showVoucherCode: sections.receiptMetadata.showVoucherCode,
         showDate: sections.receiptMetadata.showDate,
-        showTime: sections.receiptMetadata.showTime
+        showTime: sections.receiptMetadata.showTime,
+        fontSizePt: Number(sections.receiptMetadata.fontSizePt)
       },
       customerInformation: {
         visible: sections.customerInformation.visible,
         showName: sections.customerInformation.showName,
         showPhone: sections.customerInformation.showPhone,
         showAddress: sections.customerInformation.showAddress,
-        showNote: sections.customerInformation.showNote
+        showNote: sections.customerInformation.showNote,
+        fontSizePt: Number(sections.customerInformation.fontSizePt),
+        spacingAfterMm: Number(sections.customerInformation.spacingAfterMm)
       },
       productTable: {
         visible: sections.productTable.visible,
@@ -159,25 +221,37 @@ export function stripEditorOnlyFields(draft) {
         showQuantity: sections.productTable.showQuantity,
         showUnitPrice: sections.productTable.showUnitPrice,
         showDiscount: sections.productTable.showDiscount,
-        showLineTotal: sections.productTable.showLineTotal
+        showLineTotal: sections.productTable.showLineTotal,
+        fontSizePt: Number(sections.productTable.fontSizePt),
+        headerFontSizePt: Number(sections.productTable.headerFontSizePt),
+        cellPaddingMm: Number(sections.productTable.cellPaddingMm),
+        spacingAfterMm: Number(sections.productTable.spacingAfterMm)
       },
       totals: {
         visible: sections.totals.visible,
         showGrossTotal: sections.totals.showGrossTotal,
         showDiscountTotal: sections.totals.showDiscountTotal,
-        showGrandTotal: sections.totals.showGrandTotal
+        showGrandTotal: sections.totals.showGrandTotal,
+        fontSizePt: Number(sections.totals.fontSizePt),
+        textAlign: sections.totals.textAlign,
+        spacingAfterMm: Number(sections.totals.spacingAfterMm)
       },
       signatures: {
         visible: sections.signatures.visible,
         sellerLabel: String(sections.signatures.sellerLabel ?? "").trim(),
         sellerHint: String(sections.signatures.sellerHint ?? "").trim(),
         customerLabel: String(sections.signatures.customerLabel ?? "").trim(),
-        customerHint: String(sections.signatures.customerHint ?? "").trim()
+        customerHint: String(sections.signatures.customerHint ?? "").trim(),
+        fontSizePt: Number(sections.signatures.fontSizePt),
+        writingSpaceMm: Number(sections.signatures.writingSpaceMm),
+        spacingAfterMm: Number(sections.signatures.spacingAfterMm)
       },
       notes: {
         visible: sections.notes.visible,
         title: String(sections.notes.title ?? "").trim(),
-        items: serializeNoticeEditorItems(sections.notes.items)
+        items: serializeNoticeEditorItems(sections.notes.items),
+        fontSizePt: Number(sections.notes.fontSizePt),
+        spacingBeforeMm: Number(sections.notes.spacingBeforeMm)
       }
     }
   };
@@ -234,6 +308,51 @@ export function updateDraftSectionField(draft, sectionName, field, value) {
       }
     }
   };
+}
+
+export function resetSectionLayoutFromSystem(draft, systemConfig, sectionName) {
+  const fields = PRINT_TEMPLATE_LAYOUT_FIELDS[sectionName];
+  const systemSection = systemConfig?.sections?.[sectionName];
+  if (!draft?.sections?.[sectionName] || !systemSection || !fields) return draft;
+  const resetValues = Object.fromEntries(fields.map((field) => [field, systemSection[field]]));
+  return {
+    ...draft,
+    sections: {
+      ...draft.sections,
+      [sectionName]: { ...draft.sections[sectionName], ...resetValues }
+    }
+  };
+}
+
+function safeFiniteNumber(value, [min, max], fallback) {
+  const numeric = value === "" || value === null || value === undefined ? NaN : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, numeric));
+}
+
+function safeAlignment(value, allowed, fallback) {
+  return allowed.includes(value) ? value : fallback;
+}
+
+export function deriveSafePreviewLayout(config) {
+  const sections = config?.sections || {};
+  const result = {};
+  Object.entries(PRINT_TEMPLATE_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
+    result[sectionName] = {};
+    Object.entries(defaults).forEach(([field, fallback]) => {
+      if (field === "textAlign") {
+        const allowed = sectionName === "totals" ? ["left", "right"] : ["left", "center", "right"];
+        result[sectionName][field] = safeAlignment(sections[sectionName]?.[field], allowed, fallback);
+      } else {
+        result[sectionName][field] = safeFiniteNumber(
+          sections[sectionName]?.[field],
+          PRINT_TEMPLATE_LAYOUT_LIMITS[sectionName][field],
+          fallback
+        );
+      }
+    });
+  });
+  return result;
 }
 
 export function selectEditorSection(currentSection, nextSection) {
@@ -320,14 +439,43 @@ export function validateTemplateEditorDraft(draft) {
     ["sections.customerInformation.showPhone", config.sections.customerInformation.showPhone],
     ["sections.customerInformation.showAddress", config.sections.customerInformation.showAddress],
     ["sections.customerInformation.showNote", config.sections.customerInformation.showNote],
-    ...Object.entries(config.sections.productTable).map(([key, value]) => [`sections.productTable.${key}`, value]),
-    ...Object.entries(config.sections.totals).map(([key, value]) => [`sections.totals.${key}`, value]),
+    ...["visible", "showIndex", "showProductName", "showSaleNote", "showQuantity", "showUnitPrice", "showDiscount", "showLineTotal"]
+      .map((key) => [`sections.productTable.${key}`, config.sections.productTable[key]]),
+    ...["visible", "showGrossTotal", "showDiscountTotal", "showGrandTotal"]
+      .map((key) => [`sections.totals.${key}`, config.sections.totals[key]]),
     ["sections.signatures.visible", config.sections.signatures.visible],
     ["sections.notes.visible", config.sections.notes.visible]
   ];
   booleanFields.forEach(([field, value]) => {
     if (typeof value !== "boolean") errors.push({ field, message: "Giá trị hiển thị không hợp lệ." });
   });
+
+  Object.entries(PRINT_TEMPLATE_LAYOUT_LIMITS).forEach(([sectionName, fields]) => {
+    Object.entries(fields).forEach(([field, [min, max]]) => {
+      const rawValue = draft?.sections?.[sectionName]?.[field];
+      const value = config.sections[sectionName][field];
+      if (
+        rawValue === ""
+        || rawValue === null
+        || rawValue === undefined
+        || !Number.isFinite(value)
+        || value < min
+        || value > max
+      ) {
+        errors.push({
+          field: `sections.${sectionName}.${field}`,
+          message: `Giá trị phải từ ${min} đến ${max}.`
+        });
+      }
+    });
+  });
+
+  if (!["left", "center", "right"].includes(config.sections.documentTitle.textAlign)) {
+    errors.push({ field: "sections.documentTitle.textAlign", message: "Căn tiêu đề không hợp lệ." });
+  }
+  if (!["left", "right"].includes(config.sections.totals.textAlign)) {
+    errors.push({ field: "sections.totals.textAlign", message: "Căn tổng tiền không hợp lệ." });
+  }
 
   const shop = config.sections.shopHeader;
   validateText(errors, "sections.shopHeader.name", shop.name, PRINT_TEMPLATE_LIMITS.shopName);

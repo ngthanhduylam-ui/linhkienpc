@@ -4,7 +4,8 @@ const {
   DOCUMENT_TYPE,
   SYSTEM_TEMPLATE_SCHEMA_VERSION,
   cloneSystemTemplateConfig,
-  validateCustomTemplateConfig
+  validateCustomTemplateConfig,
+  upgradeSaleDeliveryNoteConfigToLatest
 } = require('./saleDeliveryNoteTemplate');
 
 const SELECT_SETTINGS_SQL = `
@@ -67,7 +68,12 @@ function validateStoredCustom(row, { selectionConflict = false } = {}) {
     : Number(row.custom_template_schema_version);
 
   if (config === null && schemaVersion === null) return null;
-  if (config === null || schemaVersion === null || schemaVersion !== SYSTEM_TEMPLATE_SCHEMA_VERSION) {
+  if (
+    config === null
+    || schemaVersion === null
+    || ![1, SYSTEM_TEMPLATE_SCHEMA_VERSION].includes(schemaVersion)
+    || Number(config.schemaVersion) !== schemaVersion
+  ) {
     throw new AppError(
       selectionConflict
         ? 'A valid custom print template must be saved before it can be selected.'
@@ -78,7 +84,8 @@ function validateStoredCustom(row, { selectionConflict = false } = {}) {
   }
 
   try {
-    return validateCustomTemplateConfig(config);
+    validateCustomTemplateConfig(config, { allowLegacy: true });
+    return upgradeSaleDeliveryNoteConfigToLatest(config);
   } catch (error) {
     if (selectionConflict) {
       throw new AppError(
@@ -127,7 +134,7 @@ function mapSettings(row) {
     },
     custom_template: {
       exists: customConfig !== null,
-      schema_version: customConfig === null ? null : Number(row.custom_template_schema_version),
+      schema_version: customConfig === null ? null : SYSTEM_TEMPLATE_SCHEMA_VERSION,
       config: customConfig
     }
   };

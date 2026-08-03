@@ -1,8 +1,131 @@
 import {
+  PRINT_TEMPLATE_LAYOUT_LIMITS,
   PRINT_TEMPLATE_LIMITS,
   PRINT_TEMPLATE_SECTION_DEFINITIONS,
   getSectionNavigatorItems
 } from "../../utils/printTemplateEditor";
+
+const LAYOUT_NUMBER_FIELDS = Object.freeze({
+  shopHeader: [
+    { field: "fontSizePt", label: "Cỡ chữ", unit: "pt" },
+    { field: "spacingAfterMm", label: "Khoảng cách phía dưới", unit: "mm" }
+  ],
+  receiptMetadata: [{ field: "fontSizePt", label: "Cỡ chữ", unit: "pt" }],
+  documentTitle: [
+    { field: "fontSizePt", label: "Cỡ chữ", unit: "pt" },
+    { field: "spacingBeforeMm", label: "Khoảng cách phía trên", unit: "mm" },
+    { field: "spacingAfterMm", label: "Khoảng cách phía dưới", unit: "mm" }
+  ],
+  customerInformation: [
+    { field: "fontSizePt", label: "Cỡ chữ", unit: "pt" },
+    { field: "spacingAfterMm", label: "Khoảng cách phía dưới", unit: "mm" }
+  ],
+  productTable: [
+    { field: "fontSizePt", label: "Cỡ chữ nội dung", unit: "pt" },
+    { field: "headerFontSizePt", label: "Cỡ chữ tiêu đề bảng", unit: "pt" },
+    { field: "cellPaddingMm", label: "Khoảng đệm trong ô", unit: "mm", step: 0.5 },
+    { field: "spacingAfterMm", label: "Khoảng cách phía dưới", unit: "mm" }
+  ],
+  totals: [
+    { field: "fontSizePt", label: "Cỡ chữ", unit: "pt" },
+    { field: "spacingAfterMm", label: "Khoảng cách phía dưới", unit: "mm" }
+  ],
+  signatures: [
+    { field: "fontSizePt", label: "Cỡ chữ", unit: "pt" },
+    { field: "writingSpaceMm", label: "Khoảng trống ký tên", unit: "mm" },
+    { field: "spacingAfterMm", label: "Khoảng cách phía dưới", unit: "mm" }
+  ],
+  notes: [
+    { field: "fontSizePt", label: "Cỡ chữ", unit: "pt" },
+    { field: "spacingBeforeMm", label: "Khoảng cách phía trên", unit: "mm" }
+  ]
+});
+
+function NumberField({ label, value, min, max, step = 0.5, unit, error, onChange }) {
+  return (
+    <label className="block min-w-0 text-sm font-semibold text-slate-700">
+      {label}
+      <span className="mt-1 flex min-w-0 items-center gap-2">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={Boolean(error)}
+          className={`h-11 min-w-0 flex-1 rounded-lg border bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 ${error ? "border-red-400" : "border-slate-300"}`}
+        />
+        <span className="w-7 shrink-0 text-xs font-medium text-slate-500">{unit}</span>
+      </span>
+      {error && <span className="mt-1 block text-xs font-normal text-red-600">{error}</span>}
+    </label>
+  );
+}
+
+function AlignmentField({ label, value, options, onChange, error }) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="text-sm font-semibold text-slate-700">{label}</legend>
+      <div className={`mt-1 grid min-w-0 gap-1 ${options.length === 2 ? "grid-cols-2" : "grid-cols-3"}`} role="group">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-pressed={value === option.value}
+            className={`min-h-10 min-w-0 rounded-lg border px-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${value === option.value ? "border-brand-400 bg-brand-50 text-brand-800" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
+    </fieldset>
+  );
+}
+
+function SectionLayoutControls({ sectionName, values, fieldErrors, onChange }) {
+  const fields = LAYOUT_NUMBER_FIELDS[sectionName] || [];
+  const alignment = sectionName === "documentTitle"
+    ? { label: "Căn tiêu đề", options: [{ value: "left", label: "Trái" }, { value: "center", label: "Giữa" }, { value: "right", label: "Phải" }] }
+    : sectionName === "totals"
+      ? { label: "Căn khối tổng tiền", options: [{ value: "left", label: "Trái" }, { value: "right", label: "Phải" }] }
+      : null;
+
+  return (
+    <section className="rounded-lg border border-blue-100 bg-blue-50/50 p-3" aria-label="Bố cục phần">
+      <p className="mb-3 text-xs font-bold uppercase tracking-wide text-brand-700">Bố cục</p>
+      <div className="grid min-w-0 grid-cols-1 gap-3">
+        {alignment && (
+          <AlignmentField
+            label={alignment.label}
+            value={values.textAlign}
+            options={alignment.options}
+            onChange={(value) => onChange(sectionName, "textAlign", value)}
+            error={fieldErrors[`sections.${sectionName}.textAlign`]}
+          />
+        )}
+        {fields.map(({ field, label, unit, step }) => {
+          const [min, max] = PRINT_TEMPLATE_LAYOUT_LIMITS[sectionName][field];
+          return (
+            <NumberField
+              key={field}
+              label={label}
+              value={values[field]}
+              min={min}
+              max={max}
+              step={step}
+              unit={unit}
+              error={fieldErrors[`sections.${sectionName}.${field}`]}
+              onChange={(value) => onChange(sectionName, field, value)}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function TextField({ label, value, onChange, maxLength, error, multiline = false }) {
   const inputClass = `mt-1 min-h-11 w-full min-w-0 max-w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-100 ${
@@ -70,7 +193,8 @@ export function PrintTemplateInspector({
   onNoticeChange,
   onNoticeAdd,
   onNoticeRemove,
-  onNoticeMove
+  onNoticeMove,
+  onResetSectionLayout
 }) {
   const selectedDefinition = PRINT_TEMPLATE_SECTION_DEFINITIONS.find((section) => section.id === selectedSection)
     || PRINT_TEMPLATE_SECTION_DEFINITIONS[0];
@@ -264,7 +388,7 @@ export function PrintTemplateInspector({
             <p className="mt-0.5 text-sm font-bold text-slate-800">A4 · Dọc</p>
           </div>
           <label className="shrink-0 text-xs font-semibold text-slate-600">
-            Lề (mm)
+            Lề giấy
             <input
               type="number"
               min={PRINT_TEMPLATE_LIMITS.marginMin}
@@ -275,6 +399,7 @@ export function PrintTemplateInspector({
               aria-invalid={Boolean(fieldErrors["paper.marginMm"])}
               className={`ml-2 h-10 w-20 rounded-lg border bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 ${fieldErrors["paper.marginMm"] ? "border-red-400" : "border-slate-300"}`}
             />
+            <span className="ml-1 font-medium text-slate-500">mm</span>
           </label>
         </div>
         {fieldErrors["paper.marginMm"] && <p className="mt-1 text-xs text-red-600">{fieldErrors["paper.marginMm"]}</p>}
@@ -282,12 +407,23 @@ export function PrintTemplateInspector({
 
       <section className="mt-4 min-w-0">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Đang chỉnh sửa</p>
-        <h2 className="mt-1 break-words text-lg font-bold text-slate-900">{selectedDefinition.label}</h2>
+        <div className="mt-1 flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <h2 className="min-w-0 break-words text-lg font-bold text-slate-900">{selectedDefinition.label}</h2>
+          <button type="button" onClick={() => onResetSectionLayout(selectedDefinition.id)} className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+            Khôi phục bố cục phần này
+          </button>
+        </div>
         <div className="mt-3">
           <VisibilityToggle checked={Boolean(selectedConfig.visible)} onChange={(visible) => onVisibilityChange(selectedDefinition.id, visible)} />
         </div>
         <fieldset disabled={!selectedConfig.visible} className="mt-4 min-w-0 space-y-3 disabled:opacity-60">
           {renderControls()}
+          <SectionLayoutControls
+            sectionName={selectedDefinition.id}
+            values={selectedConfig}
+            fieldErrors={fieldErrors}
+            onChange={onSectionFieldChange}
+          />
         </fieldset>
       </section>
     </aside>

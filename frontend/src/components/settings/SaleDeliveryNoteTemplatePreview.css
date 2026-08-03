@@ -100,6 +100,7 @@
   gap: 8mm;
   border-bottom: 2px solid #0f172a;
   padding-bottom: 4mm;
+  margin-bottom: var(--template-shop-spacing-after, 0mm);
 }
 
 .template-preview-header.has-shop-and-meta {
@@ -145,7 +146,7 @@
   min-width: 0;
   text-align: center;
   color: #000;
-  font-size: 12px;
+  font-size: var(--template-shop-font-size, 9pt);
   line-height: 1.5;
 }
 
@@ -156,7 +157,7 @@
 
 .template-preview-shop-name {
   color: #0f172a;
-  font-size: 18px;
+  font-size: 1.5em;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -164,7 +165,7 @@
 .template-preview-meta {
   display: grid;
   gap: 1.6mm;
-  font-size: 12px;
+  font-size: var(--template-meta-font-size, 9pt);
 }
 
 .template-preview-info-line {
@@ -186,14 +187,26 @@
 }
 
 .template-preview-title {
-  margin-top: 4mm;
+  margin-top: var(--template-title-spacing-before, 4mm);
+  margin-bottom: var(--template-title-spacing-after, 4mm);
+}
+
+.template-preview-title.align-left {
+  text-align: left;
+}
+
+.template-preview-title.align-center {
   text-align: center;
+}
+
+.template-preview-title.align-right {
+  text-align: right;
 }
 
 .template-preview-title h1 {
   margin: 0;
   color: #0f172a;
-  font-size: 22px;
+  font-size: var(--template-title-font-size, 16.5pt);
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -203,8 +216,8 @@
   min-width: 0;
   grid-template-columns: 1fr 1fr;
   gap: 2mm 8mm;
-  margin-top: 4mm;
-  font-size: 12px;
+  margin-bottom: var(--template-customer-spacing-after, 4mm);
+  font-size: var(--template-customer-font-size, 9pt);
 }
 
 .template-preview-customer-line {
@@ -236,25 +249,26 @@
 }
 
 .template-preview-table-wrap {
-  margin-top: 4mm;
+  margin-bottom: var(--template-table-spacing-after, 1.5mm);
 }
 
 .template-preview-table {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--template-table-font-size, 9pt);
 }
 
 .template-preview-table th,
 .template-preview-table td {
   border: 1px solid #0f172a;
-  padding: 2mm;
+  padding: var(--template-table-cell-padding, 2mm);
   vertical-align: top;
 }
 
 .template-preview-table th {
   background: #e2e8f0;
+  font-size: var(--template-table-header-font-size, 9pt);
   text-align: center;
   font-weight: 700;
 }
@@ -291,7 +305,7 @@
   display: block;
   margin-top: 0.5mm;
   color: #000;
-  font-size: 9.5px;
+  font-size: 0.8em;
   font-weight: 500;
   line-height: 1.2;
 }
@@ -304,8 +318,15 @@
 
 .template-preview-summary-row {
   display: flex;
+  margin-bottom: var(--template-totals-spacing-after, 3mm);
+}
+
+.template-preview-summary-row.align-left {
+  justify-content: flex-start;
+}
+
+.template-preview-summary-row.align-right {
   justify-content: flex-end;
-  margin-top: 1.5mm;
 }
 
 .template-preview-summary-box {
@@ -319,7 +340,7 @@
   grid-template-columns: minmax(0, 1fr) 30mm;
   gap: 1.8mm 6mm;
   padding: 2.4mm 3.2mm;
-  font-size: 12px;
+  font-size: var(--template-totals-font-size, 9pt);
 }
 
 .template-preview-summary-grid span {
@@ -337,7 +358,7 @@
   border-top: 1px dashed #94a3b8;
   padding-top: 1.4mm;
   color: #0f172a;
-  font-size: 12.5px;
+  font-size: 1.04em;
   font-weight: 700;
 }
 
@@ -345,12 +366,13 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18mm;
-  margin-top: 3mm;
+  margin-bottom: var(--template-signatures-spacing-after, 0mm);
   text-align: center;
+  font-size: var(--template-signatures-font-size, 9pt);
 }
 
 .template-preview-signatures div {
-  min-height: 14mm;
+  min-height: var(--template-signatures-writing-space, 14mm);
 }
 
 .template-preview-signatures p {
@@ -360,16 +382,16 @@
 
 .template-preview-signatures span {
   color: #000;
-  font-size: 10px;
+  font-size: 0.83em;
   font-style: italic;
 }
 
 .template-preview-notice {
-  margin-top: 2mm;
+  margin-top: var(--template-notes-spacing-before, 2mm);
   border: 1px solid #cbd5e1;
   padding: 2mm 3mm;
   color: #000;
-  font-size: 11px;
+  font-size: var(--template-notes-font-size, 8.25pt);
   line-height: 1.35;
 }
 

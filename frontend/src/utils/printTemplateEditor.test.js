@@ -1,19 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  PRINT_TEMPLATE_LAYOUT_DEFAULTS,
   PRINT_TEMPLATE_SECTION_DEFINITIONS,
   cloneEditableTemplateConfig,
   compareTemplateConfigs,
   createNoticeEditorItems,
+  deriveSafePreviewLayout,
   getSectionForFieldPath,
   getSectionNavigatorItems,
   getVisibleProductColumns,
   moveNoticeItem,
   normalizeEditableTemplateConfig,
+  resetSectionLayoutFromSystem,
   selectEditorSection,
   serializeNoticeEditorItems,
   updateDraftSectionField,
   updateSectionVisibility,
+  upgradePrintTemplateConfigToLatest,
   validateTemplateEditorDraft
 } from "./printTemplateEditor.js";
 import { SALE_DELIVERY_NOTE_PREVIEW_SAMPLE } from "../components/settings/saleDeliveryNotePreviewSample.js";
@@ -132,7 +136,41 @@ test("notice stable keys never enter persisted JSON", () => {
 });
 
 test("rejects an unsupported schema version", () => {
-  assert.throws(() => keyedDraft(config({ schemaVersion: 2 })), /chưa được hỗ trợ/);
+  assert.throws(() => keyedDraft(config({ schemaVersion: 3 })), /chưa được hỗ trợ/);
+});
+
+test("version 1 upgrade preserves content and visibility without mutating its source", () => {
+  const source = config();
+  source.sections.shopHeader.name = "Tên Custom v1";
+  source.sections.totals.visible = false;
+  const snapshot = structuredClone(source);
+  const upgraded = upgradePrintTemplateConfigToLatest(source);
+  assert.deepEqual(source, snapshot);
+  assert.equal(upgraded.schemaVersion, 2);
+  assert.equal(upgraded.sections.shopHeader.name, "Tên Custom v1");
+  assert.equal(upgraded.sections.totals.visible, false);
+  assert.deepEqual(
+    {
+      fontSizePt: upgraded.sections.documentTitle.fontSizePt,
+      textAlign: upgraded.sections.documentTitle.textAlign
+    },
+    {
+      fontSizePt: PRINT_TEMPLATE_LAYOUT_DEFAULTS.documentTitle.fontSizePt,
+      textAlign: PRINT_TEMPLATE_LAYOUT_DEFAULTS.documentTitle.textAlign
+    }
+  );
+});
+
+test("version 2 draft clone and serialization retain layout without editor-only fields", () => {
+  const draft = keyedDraft();
+  draft.sections.documentTitle.fontSizePt = "20";
+  draft.sections.documentTitle.textAlign = "right";
+  const persisted = normalizeEditableTemplateConfig(draft);
+  assert.equal(persisted.schemaVersion, 2);
+  assert.equal(persisted.sections.documentTitle.fontSizePt, 20);
+  assert.equal(persisted.sections.documentTitle.textAlign, "right");
+  assert.equal(typeof persisted.sections.documentTitle.fontSizePt, "number");
+  assert.equal(typeof persisted.sections.notes.items[0], "string");
 });
 
 test("rejects a missing Custom config", () => {
@@ -149,6 +187,50 @@ test("validates the exact supported margin range", () => {
   assert.equal(validateTemplateEditorDraft(draft).valid, true);
   draft.paper.marginMm = "";
   assert.equal(validateTemplateEditorDraft(draft).valid, false);
+});
+
+test("validates layout ranges, numeric strings as draft inputs, and alignments", () => {
+  const draft = keyedDraft();
+  draft.sections.productTable.cellPaddingMm = "4";
+  draft.sections.signatures.writingSpaceMm = "60";
+  assert.equal(validateTemplateEditorDraft(draft).valid, true);
+  draft.sections.productTable.cellPaddingMm = "4.1";
+  draft.sections.documentTitle.textAlign = "justify";
+  assert.equal(validateTemplateEditorDraft(draft).valid, false);
+  assert.equal(validateTemplateEditorDraft(draft).errors.some((error) => error.field.endsWith("cellPaddingMm")), true);
+  assert.equal(validateTemplateEditorDraft(draft).errors.some((error) => error.field.endsWith("textAlign")), true);
+});
+
+test("safe preview layout clamps invalid numeric drafts and maps alignment allowlists", () => {
+  const draft = keyedDraft();
+  draft.sections.documentTitle.fontSizePt = "999";
+  draft.sections.documentTitle.textAlign = "right";
+  draft.sections.productTable.cellPaddingMm = "invalid";
+  draft.sections.totals.textAlign = "center";
+  const layout = deriveSafePreviewLayout(draft);
+  assert.equal(layout.documentTitle.fontSizePt, 28);
+  assert.equal(layout.documentTitle.textAlign, "right");
+  assert.equal(layout.productTable.cellPaddingMm, PRINT_TEMPLATE_LAYOUT_DEFAULTS.productTable.cellPaddingMm);
+  assert.equal(layout.totals.textAlign, "right");
+  Object.values(layout).forEach((section) => {
+    Object.entries(section).forEach(([field, value]) => {
+      if (field !== "textAlign") assert.equal(Number.isFinite(value), true);
+    });
+  });
+});
+
+test("selected-section layout reset preserves Custom text and visibility", () => {
+  const system = upgradePrintTemplateConfigToLatest(config());
+  const draft = keyedDraft();
+  draft.sections.documentTitle.text = "CUSTOM";
+  draft.sections.documentTitle.visible = false;
+  draft.sections.documentTitle.fontSizePt = 27;
+  draft.sections.documentTitle.textAlign = "right";
+  const reset = resetSectionLayoutFromSystem(draft, system, "documentTitle");
+  assert.equal(reset.sections.documentTitle.text, "CUSTOM");
+  assert.equal(reset.sections.documentTitle.visible, false);
+  assert.equal(reset.sections.documentTitle.fontSizePt, system.sections.documentTitle.fontSizePt);
+  assert.equal(reset.sections.documentTitle.textAlign, system.sections.documentTitle.textAlign);
 });
 
 test("validates text limits and plain-text input", () => {
@@ -187,8 +269,10 @@ test("cancel can restore the last saved Custom config", () => {
   const saved = config();
   const draft = keyedDraft(saved);
   draft.sections.shopHeader.phone = "000";
+  draft.sections.shopHeader.fontSizePt = 14;
   const restored = keyedDraft(saved);
   assert.equal(compareTemplateConfigs(restored, saved), false);
+  assert.equal(restored.sections.shopHeader.fontSizePt, PRINT_TEMPLATE_LAYOUT_DEFAULTS.shopHeader.fontSizePt);
   assert.equal(serializeNoticeEditorItems(restored.sections.notes.items)[0], "Dòng một");
 });
 

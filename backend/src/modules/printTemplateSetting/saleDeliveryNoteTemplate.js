@@ -5,8 +5,29 @@ const AppError = require('../../utils/AppError');
 // manages/duplicates settings, Phase 3 edits Custom, Phase 4 integrates rendering,
 // and Phase 5 adds per-print fallback behavior.
 const DOCUMENT_TYPE = 'sale_delivery_note';
-const SYSTEM_TEMPLATE_SCHEMA_VERSION = 1;
+const SYSTEM_TEMPLATE_SCHEMA_VERSION = 2;
 const MAX_CONFIG_BYTES = 32 * 1024;
+
+const VERSION_2_LAYOUT_DEFAULTS = deepFreeze({
+  shopHeader: { fontSizePt: 9, spacingAfterMm: 0 },
+  receiptMetadata: { fontSizePt: 9 },
+  documentTitle: {
+    textAlign: 'center',
+    fontSizePt: 16.5,
+    spacingBeforeMm: 4,
+    spacingAfterMm: 4
+  },
+  customerInformation: { fontSizePt: 9, spacingAfterMm: 4 },
+  productTable: {
+    fontSizePt: 9,
+    headerFontSizePt: 9,
+    cellPaddingMm: 2,
+    spacingAfterMm: 1.5
+  },
+  totals: { fontSizePt: 9, textAlign: 'right', spacingAfterMm: 3 },
+  signatures: { fontSizePt: 9, writingSpaceMm: 14, spacingAfterMm: 0 },
+  notes: { fontSizePt: 8.25, spacingBeforeMm: 2 }
+});
 
 const SYSTEM_TEMPLATE_CONFIG = deepFreeze({
   schemaVersion: SYSTEM_TEMPLATE_SCHEMA_VERSION,
@@ -22,24 +43,28 @@ const SYSTEM_TEMPLATE_CONFIG = deepFreeze({
       name: 'Vi Tính Phước Tài',
       address: '98/14 đường số 5, P.17, Q. Gò Vấp',
       phone: '0933712571',
-      email: 'vitinhphuoctai@gmail.com'
+      email: 'vitinhphuoctai@gmail.com',
+      ...VERSION_2_LAYOUT_DEFAULTS.shopHeader
     },
     documentTitle: {
       visible: true,
-      text: 'PHIẾU BÁN & GIAO HÀNG'
+      text: 'PHIẾU BÁN & GIAO HÀNG',
+      ...VERSION_2_LAYOUT_DEFAULTS.documentTitle
     },
     receiptMetadata: {
       visible: true,
       showVoucherCode: true,
       showDate: true,
-      showTime: true
+      showTime: true,
+      ...VERSION_2_LAYOUT_DEFAULTS.receiptMetadata
     },
     customerInformation: {
       visible: true,
       showName: true,
       showPhone: true,
       showAddress: true,
-      showNote: true
+      showNote: true,
+      ...VERSION_2_LAYOUT_DEFAULTS.customerInformation
     },
     productTable: {
       visible: true,
@@ -49,20 +74,23 @@ const SYSTEM_TEMPLATE_CONFIG = deepFreeze({
       showQuantity: true,
       showUnitPrice: true,
       showDiscount: true,
-      showLineTotal: true
+      showLineTotal: true,
+      ...VERSION_2_LAYOUT_DEFAULTS.productTable
     },
     totals: {
       visible: true,
       showGrossTotal: true,
       showDiscountTotal: true,
-      showGrandTotal: true
+      showGrandTotal: true,
+      ...VERSION_2_LAYOUT_DEFAULTS.totals
     },
     signatures: {
       visible: true,
       sellerLabel: 'Người bán',
       sellerHint: '(Ký và ghi rõ họ tên)',
       customerLabel: 'Khách hàng',
-      customerHint: '(Kiểm tra và ký nhận)'
+      customerHint: '(Kiểm tra và ký nhận)',
+      ...VERSION_2_LAYOUT_DEFAULTS.signatures
     },
     notes: {
       visible: true,
@@ -73,7 +101,8 @@ const SYSTEM_TEMPLATE_CONFIG = deepFreeze({
         'Sản phẩm bảo hành theo điều kiện của nhà sản xuất hoặc nhà phân phối.',
         'Không bảo hành các trường hợp rách tem, cháy nổ, vào nước, móp méo, lỗi vật lý hoặc sử dụng sai quy định.',
         'Sản phẩm bán ra có thể kèm tem và số serial để phục vụ đối chiếu.'
-      ]
+      ],
+      ...VERSION_2_LAYOUT_DEFAULTS.notes
     }
   }
 });
@@ -161,7 +190,7 @@ function validatePlainText(value, field, { min = 1, max }, errors) {
   }
 }
 
-function validateCustomTemplateConfig(config) {
+function validateCustomTemplateConfig(config, { allowLegacy = false } = {}) {
   let serialized;
   try {
     serialized = JSON.stringify(config);
@@ -188,12 +217,16 @@ function validateCustomTemplateConfig(config) {
     throw new AppError('Invalid custom print template configuration.', 400, 'PRINT_TEMPLATE_VALIDATION_ERROR', errors);
   }
 
-  if (!Number.isInteger(config.schemaVersion) || config.schemaVersion !== SYSTEM_TEMPLATE_SCHEMA_VERSION) {
+  const acceptedVersions = allowLegacy ? [1, SYSTEM_TEMPLATE_SCHEMA_VERSION] : [SYSTEM_TEMPLATE_SCHEMA_VERSION];
+  if (!Number.isInteger(config.schemaVersion) || !acceptedVersions.includes(config.schemaVersion)) {
     errors.push({
       field: 'body.custom_template_config.schemaVersion',
-      issue: `must equal ${SYSTEM_TEMPLATE_SCHEMA_VERSION}`
+      issue: allowLegacy
+        ? `must be one of: ${acceptedVersions.join(', ')}`
+        : `must equal ${SYSTEM_TEMPLATE_SCHEMA_VERSION}`
     });
   }
+  const isVersion2 = config.schemaVersion === SYSTEM_TEMPLATE_SCHEMA_VERSION;
 
   const paperField = 'body.custom_template_config.paper';
   if (validateObject(config.paper, paperField, ['size', 'orientation', 'marginMm'], errors)) {
@@ -217,39 +250,62 @@ function validateCustomTemplateConfig(config) {
   if (validateObject(config.sections, sectionsField, sectionKeys, errors)) {
     const shop = config.sections.shopHeader;
     const shopField = `${sectionsField}.shopHeader`;
-    if (validateObject(shop, shopField, ['visible', 'showLogo', 'name', 'address', 'phone', 'email'], errors)) {
+    const shopKeys = ['visible', 'showLogo', 'name', 'address', 'phone', 'email'];
+    if (isVersion2) shopKeys.push('fontSizePt', 'spacingAfterMm');
+    if (validateObject(shop, shopField, shopKeys, errors)) {
       validateBoolean(shop.visible, `${shopField}.visible`, errors);
       validateBoolean(shop.showLogo, `${shopField}.showLogo`, errors);
       validatePlainText(shop.name, `${shopField}.name`, { max: 120 }, errors);
       validatePlainText(shop.address, `${shopField}.address`, { max: 240 }, errors);
       validatePlainText(shop.phone, `${shopField}.phone`, { max: 50 }, errors);
       validatePlainText(shop.email, `${shopField}.email`, { max: 120 }, errors);
+      if (isVersion2) {
+        validateNumber(shop.fontSizePt, `${shopField}.fontSizePt`, { min: 7, max: 14 }, errors);
+        validateNumber(shop.spacingAfterMm, `${shopField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
+      }
     }
 
     const title = config.sections.documentTitle;
     const titleField = `${sectionsField}.documentTitle`;
-    if (validateObject(title, titleField, ['visible', 'text'], errors)) {
+    const titleKeys = ['visible', 'text'];
+    if (isVersion2) titleKeys.push('textAlign', 'fontSizePt', 'spacingBeforeMm', 'spacingAfterMm');
+    if (validateObject(title, titleField, titleKeys, errors)) {
       validateBoolean(title.visible, `${titleField}.visible`, errors);
       validatePlainText(title.text, `${titleField}.text`, { max: 120 }, errors);
+      if (isVersion2) {
+        validateEnum(title.textAlign, `${titleField}.textAlign`, ['left', 'center', 'right'], errors);
+        validateNumber(title.fontSizePt, `${titleField}.fontSizePt`, { min: 12, max: 28 }, errors);
+        validateNumber(title.spacingBeforeMm, `${titleField}.spacingBeforeMm`, { min: 0, max: 15 }, errors);
+        validateNumber(title.spacingAfterMm, `${titleField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
+      }
     }
 
     const metadata = config.sections.receiptMetadata;
     const metadataField = `${sectionsField}.receiptMetadata`;
-    if (validateObject(metadata, metadataField, ['visible', 'showVoucherCode', 'showDate', 'showTime'], errors)) {
+    const metadataKeys = ['visible', 'showVoucherCode', 'showDate', 'showTime'];
+    if (isVersion2) metadataKeys.push('fontSizePt');
+    if (validateObject(metadata, metadataField, metadataKeys, errors)) {
       validateBoolean(metadata.visible, `${metadataField}.visible`, errors);
       validateBoolean(metadata.showVoucherCode, `${metadataField}.showVoucherCode`, errors);
       validateBoolean(metadata.showDate, `${metadataField}.showDate`, errors);
       validateBoolean(metadata.showTime, `${metadataField}.showTime`, errors);
+      if (isVersion2) validateNumber(metadata.fontSizePt, `${metadataField}.fontSizePt`, { min: 7, max: 14 }, errors);
     }
 
     const customer = config.sections.customerInformation;
     const customerField = `${sectionsField}.customerInformation`;
-    if (validateObject(customer, customerField, ['visible', 'showName', 'showPhone', 'showAddress', 'showNote'], errors)) {
+    const customerKeys = ['visible', 'showName', 'showPhone', 'showAddress', 'showNote'];
+    if (isVersion2) customerKeys.push('fontSizePt', 'spacingAfterMm');
+    if (validateObject(customer, customerField, customerKeys, errors)) {
       validateBoolean(customer.visible, `${customerField}.visible`, errors);
       validateBoolean(customer.showName, `${customerField}.showName`, errors);
       validateBoolean(customer.showPhone, `${customerField}.showPhone`, errors);
       validateBoolean(customer.showAddress, `${customerField}.showAddress`, errors);
       validateBoolean(customer.showNote, `${customerField}.showNote`, errors);
+      if (isVersion2) {
+        validateNumber(customer.fontSizePt, `${customerField}.fontSizePt`, { min: 7, max: 14 }, errors);
+        validateNumber(customer.spacingAfterMm, `${customerField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
+      }
     }
 
     const productTable = config.sections.productTable;
@@ -264,30 +320,51 @@ function validateCustomTemplateConfig(config) {
       'showDiscount',
       'showLineTotal'
     ];
+    if (isVersion2) productTableKeys.push('fontSizePt', 'headerFontSizePt', 'cellPaddingMm', 'spacingAfterMm');
     if (validateObject(productTable, productTableField, productTableKeys, errors)) {
-      productTableKeys.forEach((key) => validateBoolean(productTable[key], `${productTableField}.${key}`, errors));
+      productTableKeys.slice(0, 8).forEach((key) => validateBoolean(productTable[key], `${productTableField}.${key}`, errors));
+      if (isVersion2) {
+        validateNumber(productTable.fontSizePt, `${productTableField}.fontSizePt`, { min: 7, max: 13 }, errors);
+        validateNumber(productTable.headerFontSizePt, `${productTableField}.headerFontSizePt`, { min: 7, max: 13 }, errors);
+        validateNumber(productTable.cellPaddingMm, `${productTableField}.cellPaddingMm`, { min: 0.5, max: 4 }, errors);
+        validateNumber(productTable.spacingAfterMm, `${productTableField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
+      }
     }
 
     const totals = config.sections.totals;
     const totalsField = `${sectionsField}.totals`;
     const totalsKeys = ['visible', 'showGrossTotal', 'showDiscountTotal', 'showGrandTotal'];
+    if (isVersion2) totalsKeys.push('fontSizePt', 'textAlign', 'spacingAfterMm');
     if (validateObject(totals, totalsField, totalsKeys, errors)) {
-      totalsKeys.forEach((key) => validateBoolean(totals[key], `${totalsField}.${key}`, errors));
+      totalsKeys.slice(0, 4).forEach((key) => validateBoolean(totals[key], `${totalsField}.${key}`, errors));
+      if (isVersion2) {
+        validateNumber(totals.fontSizePt, `${totalsField}.fontSizePt`, { min: 7, max: 14 }, errors);
+        validateEnum(totals.textAlign, `${totalsField}.textAlign`, ['left', 'right'], errors);
+        validateNumber(totals.spacingAfterMm, `${totalsField}.spacingAfterMm`, { min: 0, max: 15 }, errors);
+      }
     }
 
     const signatures = config.sections.signatures;
     const signaturesField = `${sectionsField}.signatures`;
     const signatureKeys = ['visible', 'sellerLabel', 'sellerHint', 'customerLabel', 'customerHint'];
+    if (isVersion2) signatureKeys.push('fontSizePt', 'writingSpaceMm', 'spacingAfterMm');
     if (validateObject(signatures, signaturesField, signatureKeys, errors)) {
       validateBoolean(signatures.visible, `${signaturesField}.visible`, errors);
-      signatureKeys.slice(1).forEach((key) => {
+      signatureKeys.slice(1, 5).forEach((key) => {
         validatePlainText(signatures[key], `${signaturesField}.${key}`, { max: 100 }, errors);
       });
+      if (isVersion2) {
+        validateNumber(signatures.fontSizePt, `${signaturesField}.fontSizePt`, { min: 7, max: 14 }, errors);
+        validateNumber(signatures.writingSpaceMm, `${signaturesField}.writingSpaceMm`, { min: 10, max: 60 }, errors);
+        validateNumber(signatures.spacingAfterMm, `${signaturesField}.spacingAfterMm`, { min: 0, max: 20 }, errors);
+      }
     }
 
     const notes = config.sections.notes;
     const notesField = `${sectionsField}.notes`;
-    if (validateObject(notes, notesField, ['visible', 'title', 'items'], errors)) {
+    const notesKeys = ['visible', 'title', 'items'];
+    if (isVersion2) notesKeys.push('fontSizePt', 'spacingBeforeMm');
+    if (validateObject(notes, notesField, notesKeys, errors)) {
       validateBoolean(notes.visible, `${notesField}.visible`, errors);
       validatePlainText(notes.title, `${notesField}.title`, { max: 60 }, errors);
       if (!Array.isArray(notes.items)) {
@@ -300,6 +377,10 @@ function validateCustomTemplateConfig(config) {
           validatePlainText(item, `${notesField}.items[${index}]`, { max: 500 }, errors);
         });
       }
+      if (isVersion2) {
+        validateNumber(notes.fontSizePt, `${notesField}.fontSizePt`, { min: 6, max: 12 }, errors);
+        validateNumber(notes.spacingBeforeMm, `${notesField}.spacingBeforeMm`, { min: 0, max: 20 }, errors);
+      }
     }
   }
 
@@ -310,12 +391,26 @@ function validateCustomTemplateConfig(config) {
   return JSON.parse(serialized);
 }
 
+function upgradeSaleDeliveryNoteConfigToLatest(config) {
+  const validated = validateCustomTemplateConfig(config, { allowLegacy: true });
+  if (validated.schemaVersion === SYSTEM_TEMPLATE_SCHEMA_VERSION) return validated;
+
+  const upgraded = JSON.parse(JSON.stringify(validated));
+  upgraded.schemaVersion = SYSTEM_TEMPLATE_SCHEMA_VERSION;
+  Object.entries(VERSION_2_LAYOUT_DEFAULTS).forEach(([sectionName, defaults]) => {
+    upgraded.sections[sectionName] = { ...upgraded.sections[sectionName], ...defaults };
+  });
+  return validateCustomTemplateConfig(upgraded);
+}
+
 module.exports = {
   DOCUMENT_TYPE,
   SYSTEM_TEMPLATE_SCHEMA_VERSION,
   MAX_CONFIG_BYTES,
+  VERSION_2_LAYOUT_DEFAULTS,
   SYSTEM_TEMPLATE_CONFIG,
   cloneSystemTemplateConfig,
   validateCustomTemplateConfig,
+  upgradeSaleDeliveryNoteConfigToLatest,
   deepFreeze
 };
