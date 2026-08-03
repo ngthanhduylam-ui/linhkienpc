@@ -22,6 +22,10 @@ const PrintTemplateEditorPage = lazyNamed(
   () => import("./pages/PrintTemplateEditorPage"),
   "PrintTemplateEditorPage"
 );
+const PrintTemplateBuilderLabPage = lazyNamed(
+  () => import("./pages/PrintTemplateBuilderLabPage"),
+  "PrintTemplateBuilderLabPage"
+);
 const PublicSearchPage = lazyNamed(() => import("./pages/PublicSearchPage"), "PublicSearchPage");
 const StockInBulkPage = lazyNamed(() => import("./pages/StockInBulkPage"), "StockInBulkPage");
 const StockInPage = lazyNamed(() => import("./pages/StockInPage"), "StockInPage");
@@ -85,6 +89,7 @@ export const appRouter = createBrowserRouter([
           { path: "settings/sku-rules", element: withSuspense(<SkuCategoryRulesPage />) },
           { path: "settings/print-template", element: withSuspense(<PrintTemplateSettingsPage />) },
           { path: "settings/print-template/edit", element: withSuspense(<PrintTemplateEditorPage />) },
+          { path: "settings/print-template/builder-lab", element: withSuspense(<PrintTemplateBuilderLabPage />) },
           { path: "online-listing", element: withSuspense(<OnlineListingPage />) },
           { path: "transaction-history", element: withSuspense(<TransactionHistoryPage />) },
           { path: "transaction-history/:voucherId", element: withSuspense(<TransactionVoucherDetailPage />) }

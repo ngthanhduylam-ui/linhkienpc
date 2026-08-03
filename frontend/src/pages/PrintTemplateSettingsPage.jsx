@@ -252,6 +252,19 @@ export function PrintTemplateSettingsPage() {
         Lựa chọn mẫu được lưu trong hệ thống. Phiếu in hiện tại vẫn sử dụng Mẫu gốc cho đến khi phần tích hợp in được hoàn tất.
       </div>
 
+      <section className="flex min-w-0 flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 sm:flex-row sm:items-center sm:justify-between" aria-label="Trình thiết kế thử nghiệm">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-violet-900">Thử nghiệm bố cục tự do trên A4</p>
+          <p className="mt-1 text-xs leading-5 text-violet-700">Bản thử chỉ lưu trong trình duyệt, không thay đổi mẫu in đang dùng.</p>
+        </div>
+        <Link
+          to="/admin/settings/print-template/builder-lab"
+          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-violet-300 bg-white px-4 text-sm font-semibold text-violet-800 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+        >
+          Thử trình thiết kế kéo thả
+        </Link>
+      </section>
+
       {initialLoading ? (
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm" role="status">
           Đang tải cấu hình mẫu in...

@@ -1,0 +1,389 @@
+.print-template-builder-lab {
+  container-name: print-builder-lab;
+  container-type: inline-size;
+}
+
+.print-builder-toolbar {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+  gap: 0.625rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.75rem;
+  background: white;
+  padding: 0.75rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+}
+
+.print-builder-layout {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.print-builder-panel {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+  gap: 0.875rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.75rem;
+  background: white;
+  padding: 0.875rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+}
+
+.print-builder-palette {
+  order: 2;
+}
+
+.print-builder-inspector {
+  order: 3;
+}
+
+.print-builder-palette-list {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+
+.print-builder-palette-item,
+.print-builder-inspector-button {
+  display: flex;
+  min-height: 2.5rem;
+  min-width: 0;
+  align-items: center;
+  gap: 0.625rem;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 0.5rem;
+  background: white;
+  padding: 0.5rem 0.625rem;
+  color: rgb(51 65 85);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  text-align: left;
+}
+
+.print-builder-palette-item:hover,
+.print-builder-inspector-button:hover:not(:disabled) {
+  border-color: rgb(96 165 250);
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+.print-builder-palette-item:focus-visible,
+.print-builder-inspector-button:focus-visible {
+  outline: 2px solid rgb(59 130 246);
+  outline-offset: 2px;
+}
+
+.print-builder-palette-grip {
+  flex: 0 0 auto;
+  color: rgb(148 163 184);
+  letter-spacing: -0.2rem;
+}
+
+.print-builder-workspace {
+  order: 1;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 0.75rem;
+  background: rgb(226 232 240);
+  padding: 0.75rem;
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06);
+}
+
+.print-builder-workspace-note {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0 0.25rem 0.625rem;
+  color: rgb(71 85 105);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.print-builder-scroll-area {
+  min-width: 0;
+  max-width: 100%;
+  max-height: min(74vh, 980px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: 0.5rem;
+  background: rgb(203 213 225 / 0.7);
+  padding: 1rem;
+}
+
+.print-builder-page-holder {
+  position: relative;
+  margin-inline: auto;
+  flex: none;
+}
+
+.print-builder-paper {
+  position: absolute;
+  inset: 0 auto auto 0;
+  overflow: hidden;
+  transform-origin: top left;
+  background: white;
+  box-shadow: 0 12px 28px rgb(15 23 42 / 0.2);
+  color: rgb(15 23 42);
+}
+
+.print-builder-paper.show-grid {
+  background-image:
+    linear-gradient(to right, rgb(148 163 184 / 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(148 163 184 / 0.14) 1px, transparent 1px);
+  background-size: 7.56px 7.56px;
+}
+
+.print-builder-block {
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 0;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.print-builder-block:active {
+  cursor: grabbing;
+}
+
+.print-builder-block.is-selected {
+  outline: 2px solid rgb(37 99 235);
+  outline-offset: 1px;
+}
+
+.print-builder-block.is-colliding {
+  outline-color: rgb(220 38 38);
+  background-color: rgb(254 226 226 / 0.25);
+}
+
+.print-builder-block.is-locked {
+  cursor: default;
+}
+
+.print-builder-block-label {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% + 2px);
+  left: -2px;
+  display: none;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgb(37 99 235);
+  padding: 1px 4px;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.print-builder-block.is-selected > .print-builder-block-label {
+  display: block;
+}
+
+.print-builder-block.is-colliding > .print-builder-block-label {
+  background: rgb(220 38 38);
+}
+
+.print-builder-block-content {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.print-builder-text-content {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.print-builder-direct-editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: 0;
+  background: white;
+  padding: 2px;
+  color: rgb(15 23 42);
+  font: inherit;
+  outline: 2px solid rgb(37 99 235);
+  user-select: text;
+}
+
+.print-builder-resize-handle {
+  position: absolute;
+  z-index: 3;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgb(37 99 235);
+  border-radius: 2px;
+  background: white;
+}
+
+.print-builder-resize-handle.is-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.print-builder-resize-handle.is-n { top: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+.print-builder-resize-handle.is-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.print-builder-resize-handle.is-e { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+.print-builder-resize-handle.is-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.print-builder-resize-handle.is-s { bottom: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+.print-builder-resize-handle.is-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.print-builder-resize-handle.is-w { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+
+.print-builder-guide-layer {
+  position: absolute;
+  z-index: 101;
+  inset: 0;
+  pointer-events: none;
+}
+
+.print-builder-guide {
+  position: absolute;
+  background: rgb(14 165 233 / 0.9);
+}
+
+.print-builder-guide.is-vertical { top: 0; bottom: 0; width: 1px; }
+.print-builder-guide.is-horizontal { right: 0; left: 0; height: 1px; }
+
+.print-builder-collision-warning {
+  margin-top: 0.625rem;
+  border: 1px solid rgb(254 202 202);
+  border-radius: 0.5rem;
+  background: rgb(254 242 242);
+  padding: 0.5rem 0.75rem;
+  color: rgb(185 28 28);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.print-builder-dynamic-copy,
+.print-builder-customer {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.print-builder-key-value,
+.print-builder-totals {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  line-height: 1.3;
+}
+
+.print-builder-product-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.print-builder-product-table th,
+.print-builder-product-table td {
+  overflow: hidden;
+  border: 1px solid rgb(100 116 139);
+  padding: var(--builder-cell-padding);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.print-builder-product-table th {
+  background: rgb(241 245 249);
+  font-weight: 700;
+}
+
+.print-builder-product-table small {
+  display: block;
+  color: rgb(71 85 105);
+  font-size: 0.82em;
+}
+
+.print-builder-signatures {
+  display: grid;
+  height: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.print-builder-signatures > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.print-builder-signatures span {
+  font-size: 0.85em;
+}
+
+.print-builder-divider {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  border-top-style: solid;
+  border-top-color: rgb(15 23 42);
+}
+
+@container print-builder-lab (min-width: 720px) {
+  .print-builder-toolbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+@container print-builder-lab (min-width: 1100px) {
+  .print-builder-layout {
+    grid-template-columns: minmax(210px, 240px) minmax(0, 1fr) minmax(300px, 340px);
+  }
+
+  .print-builder-palette,
+  .print-builder-workspace,
+  .print-builder-inspector {
+    order: initial;
+  }
+
+  .print-builder-palette-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .print-builder-palette,
+  .print-builder-inspector {
+    position: sticky;
+    top: 0.75rem;
+    max-height: calc(100vh - 1.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .print-builder-palette-item,
+  .print-builder-inspector-button {
+    transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+  }
+}
