@@ -55,4 +55,38 @@ exports.changeActiveTemplate = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getBuilderDraft = asyncHandler(async (req, res) => {
+  const draft = await printTemplateSettingService.getBuilderDraft();
+  res.json({
+    success: true,
+    data: draft,
+    meta: { server_time: new Date().toISOString() }
+  });
+});
+
+exports.saveBuilderDraft = asyncHandler(async (req, res) => {
+  requireExactBody(req.body, ['draft', 'expected_revision']);
+  const draft = await printTemplateSettingService.saveBuilderDraft(
+    req.body.draft,
+    req.body.expected_revision
+  );
+  res.json({
+    success: true,
+    data: draft,
+    message: 'Đã lưu bản nháp Builder.',
+    meta: { server_time: new Date().toISOString() }
+  });
+});
+
+exports.deleteBuilderDraft = asyncHandler(async (req, res) => {
+  requireExactBody(req.body, ['expected_revision']);
+  const draft = await printTemplateSettingService.deleteBuilderDraft(req.body.expected_revision);
+  res.json({
+    success: true,
+    data: draft,
+    message: 'Đã xóa bản nháp Builder.',
+    meta: { server_time: new Date().toISOString() }
+  });
+});
+
 exports.requireExactBody = requireExactBody;

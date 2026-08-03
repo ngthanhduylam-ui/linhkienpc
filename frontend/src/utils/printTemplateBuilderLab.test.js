@@ -21,6 +21,7 @@ import {
   mmToRenderedPixels,
   moveBlockByRenderedDelta,
   nudgeBuilderBlock,
+  normalizeBuilderLabDocumentToCanonical,
   normalizeZOrder,
   redoBuilderHistory,
   renderedPixelsToMm,
@@ -188,8 +189,8 @@ test("sample values are not stored as editable production data", () => {
 test("product table columns remain allowlisted", () => {
   const source = defaultDocument();
   const table = source.blocks.find((block) => block.type === "productTable");
-  assert.deepEqual(table.props.visibleColumns, PRODUCT_TABLE_COLUMNS.map((column) => column.id));
-  table.props.visibleColumns.push("sku");
+  assert.deepEqual(Object.keys(table.props.columnVisibility), PRODUCT_TABLE_COLUMNS.map((column) => column.id));
+  table.props.columnVisibility.sku = true;
   assert.equal(validateBuilderDocument(source).valid, false);
 });
 
@@ -247,8 +248,41 @@ test("new edits clear redo and history remains bounded", () => {
 test("local serialization excludes selection, zoom, and active template", () => {
   const source = { ...defaultDocument(), selectedBlockId: "x", zoom: 0.5, active_template: "custom" };
   const serialized = serializeBuilderDocument(source);
-  assert.deepEqual(Object.keys(serialized), ["version", "paper", "blocks"]);
+  assert.deepEqual(Object.keys(serialized), ["builderSchemaVersion", "paper", "blocks"]);
   assert.equal(JSON.stringify(serialized).includes("active_template"), false);
+});
+
+test("local v1 prototype normalizes to the canonical schema without mutating its source", () => {
+  const canonical = defaultDocument();
+  const legacy = {
+    version: 1,
+    paper: { ...canonical.paper, widthMm: 210, heightMm: 297 },
+    blocks: canonical.blocks.map((block) => ({ ...structuredClone(block) })),
+    selectedBlockId: canonical.blocks[0].id,
+    zoom: 0.5,
+    guides: { vertical: [7], horizontal: [] },
+    history: { past: [] },
+    active_template: "custom"
+  };
+  const shop = legacy.blocks.find((block) => block.type === "shopInfo");
+  shop.props.name = "Dữ liệu cửa hàng cũ không được lưu";
+  const snapshot = structuredClone(legacy);
+  const normalized = normalizeBuilderLabDocumentToCanonical(legacy);
+  assert.equal(normalized.ok, true);
+  assert.equal(validateBuilderDocument(normalized.document).valid, true);
+  assert.deepEqual(legacy, snapshot);
+  assert.deepEqual(Object.keys(normalized.document), ["builderSchemaVersion", "paper", "blocks"]);
+  assert.equal("name" in normalized.document.blocks.find((block) => block.type === "shopInfo").props, false);
+  assert.equal(JSON.stringify(normalized.document).includes("active_template"), false);
+  assert.equal(JSON.stringify(normalized.document).includes("selectedBlockId"), false);
+});
+
+test("malformed local prototype normalization is rejected instead of silently reset", () => {
+  const malformed = { version: 1, paper: {}, blocks: [{ type: "unknown" }] };
+  const normalized = normalizeBuilderLabDocumentToCanonical(malformed);
+  assert.equal(normalized.ok, false);
+  assert.equal(normalized.document, null);
+  assert.ok(normalized.errors.length > 0);
 });
 
 test("malformed and out-of-page blocks are rejected", () => {

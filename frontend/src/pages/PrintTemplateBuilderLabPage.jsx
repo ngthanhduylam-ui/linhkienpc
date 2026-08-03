@@ -14,8 +14,9 @@ import {
   createDefaultBuilderDocument,
   deleteBuilderBlock,
   duplicateBuilderBlock,
+  inspectBuilderDocumentStorage,
   nudgeBuilderBlock,
-  readBuilderDocumentFromStorage,
+  normalizeBuilderLabDocumentToCanonical,
   redoBuilderHistory,
   removeBuilderDocumentFromStorage,
   saveBuilderDocumentToStorage,
@@ -23,9 +24,21 @@ import {
   undoBuilderHistory,
   updateBuilderBlock
 } from "../utils/printTemplateBuilderLab";
+import {
+  deleteBuilderDraft,
+  getBuilderDraft,
+  saveBuilderDraft
+} from "../services/printTemplateBuilderDraft.service";
+import {
+  applyBuilderDraftSaveResponse,
+  builderDraftFingerprint,
+  isBuilderDraftConflictError,
+  isBuilderDraftDirty,
+  resolveInitialBuilderSources
+} from "../utils/printTemplateBuilderDraftState";
 import "../components/settings/builder/PrintBuilderCanvas.css";
 
-const UNSAVED_MESSAGE = "Bản thử nghiệm có thay đổi chưa lưu trên trình duyệt. Rời trang và bỏ các thay đổi này?";
+const UNSAVED_MESSAGE = "Bản thử nghiệm có thay đổi chưa lưu vào bản nháp hệ thống. Rời trang và bỏ các thay đổi này?";
 
 function isTypingTarget(target) {
   return target instanceof HTMLElement && (
@@ -38,14 +51,20 @@ export function PrintTemplateBuilderLabPage() {
   const defaultDocumentRef = useRef(null);
   if (!defaultDocumentRef.current) defaultDocumentRef.current = createDefaultBuilderDocument();
   const addOffsetRef = useRef(0);
-  const initialSavedRef = useRef(undefined);
-  if (initialSavedRef.current === undefined) initialSavedRef.current = readBuilderDocumentFromStorage();
+  const localInspectionRef = useRef(null);
+  if (!localInspectionRef.current) localInspectionRef.current = inspectBuilderDocumentStorage();
   const [history, setHistory] = useState(() => createBuilderHistory(defaultDocumentRef.current));
   const [previewDocument, setPreviewDocument] = useState(null);
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [baseline, setBaseline] = useState(() => JSON.stringify(serializeBuilderDocument(defaultDocumentRef.current)));
-  const [savedChoiceVisible, setSavedChoiceVisible] = useState(Boolean(initialSavedRef.current));
+  const [serverBaseline, setServerBaseline] = useState(() => JSON.stringify(serializeBuilderDocument(defaultDocumentRef.current)));
+  const [serverRevision, setServerRevision] = useState(0);
+  const [serverUpdatedAt, setServerUpdatedAt] = useState(null);
+  const [serverDraftExists, setServerDraftExists] = useState(false);
+  const [sourceChoice, setSourceChoice] = useState(null);
+  const [serverLoading, setServerLoading] = useState(true);
+  const [savingServer, setSavingServer] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const [gridVisible, setGridVisible] = useState(true);
   const [zoom, setZoom] = useState(null);
   const [fitScale, setFitScale] = useState(0.72);
@@ -55,7 +74,7 @@ export function PrintTemplateBuilderLabPage() {
   const activeDocument = previewDocument || history.present;
   const displayZoom = zoom ?? fitScale;
   const selectedBlock = activeDocument.blocks.find((block) => block.id === selectedBlockId) || null;
-  const dirty = JSON.stringify(serializeBuilderDocument(history.present)) !== baseline;
+  const dirty = isBuilderDraftDirty(history.present, serverBaseline);
 
   const commitDocument = useCallback((nextDocument) => {
     setPreviewDocument(null);
@@ -65,6 +84,36 @@ export function PrintTemplateBuilderLabPage() {
   }, []);
 
   const handleFitScale = useCallback((scale) => setFitScale(scale), []);
+
+  const replaceWorkingDocument = useCallback((document) => {
+    setHistory(createBuilderHistory(document));
+    setPreviewDocument(null);
+    setSelectedBlockId(null);
+    setEditing(null);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const response = await getBuilderDraft();
+        if (!mounted) return;
+        const source = resolveInitialBuilderSources(response, localInspectionRef.current);
+        replaceWorkingDocument(source.document);
+        setServerBaseline(source.serverBaseline);
+        setServerRevision(source.serverRevision);
+        setServerUpdatedAt(source.serverUpdatedAt);
+        setServerDraftExists(source.serverDraftExists);
+        setSourceChoice(source.sourceChoice);
+        if (source.localInvalid) setError("Bản thử lưu trên trình duyệt không hợp lệ và chưa được mở.");
+      } catch (loadError) {
+        if (mounted) setError(loadError.message || "Không thể tải bản nháp hệ thống.");
+      } finally {
+        if (mounted) setServerLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [replaceWorkingDocument]);
 
   useEffect(() => {
     if (!dirty) return undefined;
@@ -179,31 +228,100 @@ export function PrintTemplateBuilderLabPage() {
   function saveLocalPrototype() {
     const result = saveBuilderDocumentToStorage(history.present);
     if (!result.ok) { setError(result.errors.join(" ")); setMessage(""); return; }
-    setBaseline(JSON.stringify(serializeBuilderDocument(history.present)));
-    setMessage("Đã lưu bản thử trên trình duyệt này.");
+    setMessage("Đã lưu trên trình duyệt.");
     setError("");
-    setSavedChoiceVisible(false);
-    initialSavedRef.current = serializeBuilderDocument(history.present);
+    setSourceChoice(null);
+    localInspectionRef.current = { status: "valid", document: serializeBuilderDocument(history.present), errors: [] };
   }
 
   function openSavedPrototype() {
-    if (!initialSavedRef.current) return;
-    const saved = initialSavedRef.current;
-    setHistory(createBuilderHistory(saved));
-    setPreviewDocument(null);
-    setBaseline(JSON.stringify(serializeBuilderDocument(saved)));
-    setSelectedBlockId(null);
-    setSavedChoiceVisible(false);
-    setMessage("Đã mở bản thử lưu trên trình duyệt.");
+    if (localInspectionRef.current.status !== "valid") return;
+    replaceWorkingDocument(localInspectionRef.current.document);
+    setSourceChoice(null);
+    setMessage("Đã mở bản lưu trên trình duyệt. Bản nháp hệ thống chưa bị thay đổi.");
+    setConflict(false);
   }
 
   function startFromDefault() {
     const fresh = createDefaultBuilderDocument();
-    setHistory(createBuilderHistory(fresh));
-    setPreviewDocument(null);
-    setBaseline(JSON.stringify(serializeBuilderDocument(fresh)));
-    setSelectedBlockId(null);
-    setSavedChoiceVisible(false);
+    replaceWorkingDocument(fresh);
+    if (!serverDraftExists) setServerBaseline(builderDraftFingerprint(fresh));
+    setSourceChoice(null);
+  }
+
+  async function saveServerDraft() {
+    setSavingServer(true);
+    setError("");
+    try {
+      const response = await saveBuilderDraft(history.present, serverRevision);
+      const saved = applyBuilderDraftSaveResponse(response);
+      setServerRevision(saved.serverRevision);
+      setServerUpdatedAt(saved.serverUpdatedAt);
+      setServerDraftExists(saved.serverDraftExists);
+      setServerBaseline(saved.serverBaseline);
+      setConflict(false);
+      setMessage("Đã lưu bản nháp.");
+    } catch (saveError) {
+      if (isBuilderDraftConflictError(saveError)) {
+        setConflict(true);
+        setError("Bản nháp hệ thống đã được thay đổi ở nơi khác.");
+      } else {
+        setError(saveError.message || "Không thể lưu bản nháp hệ thống.");
+      }
+    } finally {
+      setSavingServer(false);
+    }
+  }
+
+  async function loadLatestServerDraft() {
+    if (dirty && !window.confirm("Tải bản mới nhất và bỏ các thay đổi chưa lưu trong vùng làm việc?")) return;
+    setServerLoading(true);
+    setError("");
+    try {
+      const response = await getBuilderDraft();
+      setServerRevision(response?.revision ?? 0);
+      setServerUpdatedAt(response?.updated_at ?? null);
+      if (response?.draft) {
+        const normalized = normalizeBuilderLabDocumentToCanonical(response.draft);
+        if (!normalized.ok) throw new Error("Bản nháp hệ thống không hợp lệ.");
+        replaceWorkingDocument(normalized.document);
+        setServerBaseline(builderDraftFingerprint(normalized.document));
+        setServerDraftExists(true);
+      } else {
+        const fresh = createDefaultBuilderDocument();
+        replaceWorkingDocument(fresh);
+        setServerBaseline(builderDraftFingerprint(fresh));
+        setServerDraftExists(false);
+      }
+      setConflict(false);
+      setMessage("Đã tải bản mới nhất từ hệ thống.");
+    } catch (loadError) {
+      setError(loadError.message || "Không thể tải bản nháp hệ thống.");
+    } finally {
+      setServerLoading(false);
+    }
+  }
+
+  async function deleteServerPrototype() {
+    if (!window.confirm("Xóa bản nháp hệ thống? Bản lưu trên trình duyệt sẽ được giữ nguyên.")) return;
+    setSavingServer(true);
+    setError("");
+    try {
+      const response = await deleteBuilderDraft(serverRevision);
+      setServerRevision(response.revision);
+      setServerUpdatedAt(null);
+      setServerDraftExists(false);
+      setServerBaseline(builderDraftFingerprint(createDefaultBuilderDocument()));
+      setConflict(false);
+      setMessage("Đã xóa bản nháp hệ thống.");
+    } catch (deleteError) {
+      if (isBuilderDraftConflictError(deleteError)) {
+        setConflict(true);
+        setError("Bản nháp hệ thống đã được thay đổi ở nơi khác.");
+      } else setError(deleteError.message || "Không thể xóa bản nháp hệ thống.");
+    } finally {
+      setSavingServer(false);
+    }
   }
 
   function resetPrototype() {
@@ -214,13 +332,13 @@ export function PrintTemplateBuilderLabPage() {
   }
 
   function deleteSavedPrototype() {
-    if (!window.confirm("Xóa bản thử đã lưu trên trình duyệt này?")) return;
+    if (!window.confirm("Xóa bản lưu trên trình duyệt này?")) return;
     if (removeBuilderDocumentFromStorage()) {
-      initialSavedRef.current = null;
-      setSavedChoiceVisible(false);
-      setMessage("Đã xóa bản thử lưu trên trình duyệt.");
+      localInspectionRef.current = { status: "absent", document: null, errors: [] };
+      setSourceChoice(null);
+      setMessage("Đã xóa bản lưu trình duyệt.");
       setError("");
-    } else setError("Không thể xóa bản thử trên trình duyệt này.");
+    } else setError("Không thể xóa bản lưu trên trình duyệt này.");
   }
 
   return (
@@ -237,16 +355,33 @@ export function PrintTemplateBuilderLabPage() {
       </header>
 
       <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm leading-6 text-violet-800" role="note">
-        <strong>Đây là bản thử nghiệm lưu trên trình duyệt.</strong> Mọi thay đổi chưa ảnh hưởng đến mẫu in và phiếu in thực tế.
+        <strong>Đây là Builder Draft thử nghiệm.</strong> Bản nháp hệ thống và bản lưu trình duyệt không thay đổi mẫu Custom, lựa chọn mẫu đang dùng hoặc phiếu in thực tế.
       </div>
 
-      {savedChoiceVisible && (
-        <section className="rounded-xl border border-blue-200 bg-blue-50 p-4" aria-label="Chọn bản thử khởi đầu">
-          <p className="text-sm font-semibold text-blue-900">Trình duyệt này có một bản thử đã lưu.</p>
+      {sourceChoice && (
+        <section className="rounded-xl border border-blue-200 bg-blue-50 p-4" aria-label="Chọn nguồn Builder Draft">
+          <p className="text-sm font-semibold text-blue-900">
+            {sourceChoice === "different"
+              ? "Có một bản thử khác được lưu trên trình duyệt này."
+              : "Có bản thử được lưu trên trình duyệt này."}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={openSavedPrototype} className="min-h-10 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white">Mở bản thử đã lưu</button>
-            <button type="button" onClick={startFromDefault} className="min-h-10 rounded-lg border border-blue-300 bg-white px-4 text-sm font-semibold text-blue-800">Bắt đầu từ mẫu mặc định</button>
-            <button type="button" onClick={deleteSavedPrototype} className="min-h-10 rounded-lg border border-red-200 bg-white px-4 text-sm font-semibold text-red-700">Xóa bản thử đã lưu</button>
+            <button type="button" onClick={openSavedPrototype} className="min-h-10 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white">Mở bản trên trình duyệt</button>
+            {sourceChoice === "different" ? (
+              <button type="button" onClick={() => setSourceChoice(null)} className="min-h-10 rounded-lg border border-blue-300 bg-white px-4 text-sm font-semibold text-blue-800">Giữ bản hệ thống</button>
+            ) : (
+              <button type="button" onClick={startFromDefault} className="min-h-10 rounded-lg border border-blue-300 bg-white px-4 text-sm font-semibold text-blue-800">Bắt đầu từ mẫu mặc định</button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {conflict && (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4" aria-label="Xung đột bản nháp">
+          <p className="text-sm font-semibold text-amber-900">Bản nháp hệ thống đã được thay đổi ở nơi khác.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={loadLatestServerDraft} className="min-h-10 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white">Tải bản mới nhất</button>
+            <button type="button" onClick={saveLocalPrototype} className="min-h-10 rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900">Lưu bản hiện tại trên trình duyệt</button>
           </div>
         </section>
       )}
@@ -261,7 +396,12 @@ export function PrintTemplateBuilderLabPage() {
         zoom={displayZoom}
         onUndo={() => { setPreviewDocument(null); setHistory((current) => undoBuilderHistory(current)); }}
         onRedo={() => { setPreviewDocument(null); setHistory((current) => redoBuilderHistory(current)); }}
-        onSave={saveLocalPrototype}
+        onSaveServer={saveServerDraft}
+        onSaveLocal={saveLocalPrototype}
+        onDeleteServer={deleteServerPrototype}
+        onDeleteLocal={deleteSavedPrototype}
+        savingServer={savingServer || serverLoading}
+        serverDraftExists={serverDraftExists}
         onReset={resetPrototype}
         onToggleGrid={() => setGridVisible((current) => !current)}
         onZoomChange={setZoom}
@@ -295,8 +435,18 @@ export function PrintTemplateBuilderLabPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
-        <span>{dirty ? "Có thay đổi chưa lưu trên trình duyệt" : "Bản thử khớp với mốc lưu hiện tại"}</span>
-        <button type="button" onClick={deleteSavedPrototype} className="min-h-9 rounded-lg border border-red-200 px-3 font-semibold text-red-700 hover:bg-red-50">Xóa bản thử đã lưu</button>
+        <span className="font-semibold">
+          {serverLoading
+            ? "Đang tải bản nháp hệ thống..."
+            : conflict
+              ? "Xung đột phiên bản"
+              : dirty
+                ? "Có thay đổi chưa lưu"
+                : serverDraftExists
+                  ? "Đã lưu bản nháp"
+                  : "Bản nháp hệ thống chưa được tạo"}
+        </span>
+        <span>{serverUpdatedAt ? `Cập nhật hệ thống: ${new Date(serverUpdatedAt).toLocaleString("vi-VN")}` : "Chưa có thời gian lưu hệ thống"}</span>
       </div>
     </div>
   );

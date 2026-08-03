@@ -1,5 +1,6 @@
 export const BUILDER_STORAGE_KEY = "print_template_builder_lab_v1";
 export const BUILDER_DOCUMENT_VERSION = 1;
+export const BUILDER_MAX_CONFIG_BYTES = 128 * 1024;
 export const A4_WIDTH_MM = 210;
 export const A4_HEIGHT_MM = 297;
 export const LOGICAL_PAGE_WIDTH_PX = 794;
@@ -27,7 +28,7 @@ export const BUILDER_BLOCK_TYPES = Object.freeze([
   "totals",
   "signatures",
   "notes",
-  "divider"
+  "horizontalRule"
 ]);
 
 export const BUILDER_PALETTE_ITEMS = Object.freeze([
@@ -41,38 +42,38 @@ export const BUILDER_PALETTE_ITEMS = Object.freeze([
   { type: "totals", label: "Tổng tiền" },
   { type: "signatures", label: "Chữ ký" },
   { type: "notes", label: "Lưu ý" },
-  { type: "divider", label: "Đường kẻ ngang" }
+  { type: "horizontalRule", label: "Đường kẻ ngang" }
 ]);
 
 const BLOCK_DEFAULTS = Object.freeze({
   text: { widthMm: 80, heightMm: 14, props: { text: "Văn bản mới", fontSizePt: 10, bold: false, italic: false, underline: false, textAlign: "left", lineHeight: 1.35 } },
   title: { widthMm: 150, heightMm: 16, props: { text: "TIÊU ĐỀ MỚI", fontSizePt: 17, bold: true, italic: false, underline: false, textAlign: "center", lineHeight: 1.2 } },
   logo: { widthMm: 28, heightMm: 22, props: { preserveAspectRatio: true } },
-  shopInfo: { widthMm: 105, heightMm: 24, props: { fontSizePt: 9, textAlign: "center", showName: true, showAddress: true, showPhone: true, showEmail: true } },
-  voucherMetadata: { widthMm: 47, heightMm: 24, props: { fontSizePt: 9, textAlign: "left", showVoucherCode: true, showDate: true, showTime: true } },
-  customerInfo: { widthMm: 196, heightMm: 26, props: { fontSizePt: 9, textAlign: "left", showName: true, showPhone: true, showAddress: true, showNote: true } },
+  shopInfo: { widthMm: 105, heightMm: 24, props: { showLogo: false, showName: true, showAddress: true, showPhone: true, showEmail: true, fontSizePt: 9, textAlign: "center" } },
+  voucherMetadata: { widthMm: 47, heightMm: 24, props: { showVoucherCode: true, showDate: true, showTime: true, fontSizePt: 9, textAlign: "left" } },
+  customerInfo: { widthMm: 196, heightMm: 26, props: { showName: true, showPhone: true, showAddress: true, showNote: true, fontSizePt: 9 } },
   productTable: {
     widthMm: 196,
     heightMm: 72,
     props: {
-      fontSizePt: 9,
+      bodyFontSizePt: 9,
       headerFontSizePt: 9,
       cellPaddingMm: 2,
       showSaleNote: true,
-      visibleColumns: PRODUCT_TABLE_COLUMNS.map((column) => column.id),
+      columnVisibility: Object.fromEntries(PRODUCT_TABLE_COLUMNS.map((column) => [column.id, true])),
       columnWidthWeights: { index: 11, productName: 91, quantity: 13, unitPrice: 27, discount: 27, lineTotal: 27 }
     }
   },
-  totals: { widthMm: 82, heightMm: 25, props: { fontSizePt: 9, textAlign: "right", showGrossTotal: true, showDiscountTotal: true, showGrandTotal: true } },
-  signatures: { widthMm: 196, heightMm: 36, props: { fontSizePt: 9, textAlign: "center", showSeller: true, showCustomer: true } },
+  totals: { widthMm: 82, heightMm: 25, props: { showSubtotal: true, showDiscount: true, showGrandTotal: true, fontSizePt: 9, textAlign: "right" } },
+  signatures: { widthMm: 196, heightMm: 36, props: { sellerLabel: "Người bán", sellerHint: "(Ký và ghi rõ họ tên)", customerLabel: "Khách hàng", customerHint: "(Kiểm tra và ký nhận)", fontSizePt: 9, writingSpaceMm: 14 } },
   notes: { widthMm: 196, heightMm: 48, props: { text: "Lưu ý:\n- Vui lòng kiểm tra hàng trước khi nhận.\n- Giữ phiếu để được hỗ trợ bảo hành.", fontSizePt: 8.25, bold: false, italic: false, underline: false, textAlign: "left", lineHeight: 1.35 } },
-  divider: { widthMm: 100, heightMm: 2, props: { thicknessPt: 1 } }
+  horizontalRule: { widthMm: 100, heightMm: 2, props: { thicknessMm: 0.3, lineStyle: "solid" } }
 });
 
 const MIN_SIZES = Object.freeze({
   text: [20, 8], title: [35, 10], logo: [12, 10], shopInfo: [45, 18],
   voucherMetadata: [38, 18], customerInfo: [70, 20], productTable: [110, 45],
-  totals: [45, 18], signatures: [70, 24], notes: [45, 20], divider: [20, 1]
+  totals: [45, 18], signatures: [70, 24], notes: [45, 20], horizontalRule: [20, 1]
 });
 
 const TEXT_BLOCK_TYPES = new Set(["text", "title", "notes"]);
@@ -84,17 +85,17 @@ const PROP_KEYS_BY_TYPE = Object.freeze({
   title: COMMON_TEXT_PROP_KEYS,
   notes: COMMON_TEXT_PROP_KEYS,
   logo: ["preserveAspectRatio"],
-  shopInfo: ["fontSizePt", "textAlign", "showName", "showAddress", "showPhone", "showEmail", "name", "address", "phone", "email"],
-  voucherMetadata: ["fontSizePt", "textAlign", "showVoucherCode", "showDate", "showTime"],
-  customerInfo: ["fontSizePt", "textAlign", "showName", "showPhone", "showAddress", "showNote"],
-  productTable: ["fontSizePt", "headerFontSizePt", "cellPaddingMm", "showSaleNote", "visibleColumns", "columnWidthWeights"],
-  totals: ["fontSizePt", "textAlign", "showGrossTotal", "showDiscountTotal", "showGrandTotal"],
-  signatures: ["fontSizePt", "textAlign", "showSeller", "showCustomer"],
-  divider: ["thicknessPt"]
+  shopInfo: ["showLogo", "showName", "showAddress", "showPhone", "showEmail", "fontSizePt", "textAlign"],
+  voucherMetadata: ["showVoucherCode", "showDate", "showTime", "fontSizePt", "textAlign"],
+  customerInfo: ["showName", "showPhone", "showAddress", "showNote", "fontSizePt"],
+  productTable: ["columnVisibility", "columnWidthWeights", "bodyFontSizePt", "headerFontSizePt", "cellPaddingMm", "showSaleNote"],
+  totals: ["showSubtotal", "showDiscount", "showGrandTotal", "fontSizePt", "textAlign"],
+  signatures: ["sellerLabel", "sellerHint", "customerLabel", "customerHint", "fontSizePt", "writingSpaceMm"],
+  horizontalRule: ["thicknessMm", "lineStyle"]
 });
 const BLOCK_KEYS = new Set(["id", "type", "xMm", "yMm", "widthMm", "heightMm", "zIndex", "locked", "props"]);
-const PAPER_KEYS = new Set(["size", "orientation", "widthMm", "heightMm", "marginMm", "gridMm"]);
-const DOCUMENT_KEYS = new Set(["version", "paper", "blocks"]);
+const PAPER_KEYS = new Set(["size", "orientation", "marginMm", "gridMm"]);
+const DOCUMENT_KEYS = new Set(["builderSchemaVersion", "paper", "blocks"]);
 
 function clone(value) {
   return typeof structuredClone === "function"
@@ -191,22 +192,7 @@ export function createBlock(type, geometry = {}, idFactory = createBuilderId) {
   });
 }
 
-function systemShopProps(systemConfig) {
-  const shop = systemConfig?.sections?.shopHeader;
-  return shop ? {
-    name: String(shop.name || "VI TÍNH PHƯỚC TÀI"),
-    address: String(shop.address || "98/14 đường số 5, P.17, Q. Gò Vấp"),
-    phone: String(shop.phone || "0933712571"),
-    email: String(shop.email || "vitinhphuoctai@gmail.com")
-  } : {
-    name: "VI TÍNH PHƯỚC TÀI",
-    address: "98/14 đường số 5, P.17, Q. Gò Vấp",
-    phone: "0933712571",
-    email: "vitinhphuoctai@gmail.com"
-  };
-}
-
-export function createDefaultBuilderDocument(systemConfig = null, idFactory = createBuilderId) {
+export function createDefaultBuilderDocument(_systemConfig = null, idFactory = createBuilderId) {
   const placements = [
     ["logo", 7, 7, 28, 22], ["shopInfo", 36, 7, 110, 22], ["voucherMetadata", 155, 7, 48, 22],
     ["title", 20, 35, 170, 14], ["customerInfo", 7, 53, 196, 24], ["productTable", 7, 82, 196, 72],
@@ -216,13 +202,10 @@ export function createDefaultBuilderDocument(systemConfig = null, idFactory = cr
     ...createBlock(type, { xMm, yMm, widthMm, heightMm, zIndex: index + 1 }, idFactory),
     zIndex: index + 1
   }));
-  const shopBlock = blocks.find((block) => block.type === "shopInfo");
-  shopBlock.props = { ...shopBlock.props, ...systemShopProps(systemConfig) };
-  const titleBlock = blocks.find((block) => block.type === "title");
-  titleBlock.props.text = String(systemConfig?.sections?.documentTitle?.text || "PHIẾU BÁN & GIAO HÀNG");
+  blocks.find((block) => block.type === "title").props.text = "PHIẾU BÁN & GIAO HÀNG";
   return {
-    version: BUILDER_DOCUMENT_VERSION,
-    paper: { size: "A4", orientation: "portrait", widthMm: A4_WIDTH_MM, heightMm: A4_HEIGHT_MM, marginMm: 7, gridMm: 2 },
+    builderSchemaVersion: BUILDER_DOCUMENT_VERSION,
+    paper: { size: "A4", orientation: "portrait", marginMm: 7, gridMm: 2 },
     blocks
   };
 }
@@ -385,51 +368,96 @@ export function redoBuilderHistory(history) {
 }
 
 export function serializeBuilderDocument(document) {
-  return clone({ version: document.version, paper: document.paper, blocks: document.blocks });
+  return clone({
+    builderSchemaVersion: document.builderSchemaVersion,
+    paper: document.paper,
+    blocks: document.blocks
+  });
 }
 
-function validateProps(block, errors) {
+function isPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function hasExactKeys(value, keys) {
+  return isPlainObject(value)
+    && Object.keys(value).length === keys.length
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function validateCanonicalProps(block, errors) {
   const props = block.props;
-  if (!props || typeof props !== "object" || Array.isArray(props)) { errors.push(`${block.id}.props không hợp lệ`); return; }
-  const allowedKeys = PROP_KEYS_BY_TYPE[block.type] || [];
-  const unknownKeys = Object.keys(props).filter((key) => !allowedKeys.includes(key));
-  if (unknownKeys.length) errors.push(`${block.id}.props chứa thuộc tính không được phép: ${unknownKeys.join(", ")}`);
-  if (TEXT_BLOCK_TYPES.has(block.type)) {
-    if (typeof props.text !== "string" || props.text.length > 4000 || PLAIN_TEXT_PATTERN.test(props.text)) errors.push(`${block.id}.props.text phải là văn bản thuần`);
+  if (!isPlainObject(props)) {
+    errors.push(`${block.id}.props không hợp lệ`);
+    return;
   }
-  ["name", "address", "phone", "email"].forEach((key) => {
-    if (key in props && (typeof props[key] !== "string" || props[key].length > 500 || PLAIN_TEXT_PATTERN.test(props[key]))) errors.push(`${block.id}.props.${key} phải là văn bản thuần`);
+  const allowedKeys = PROP_KEYS_BY_TYPE[block.type] || [];
+  if (!hasExactKeys(props, allowedKeys)) errors.push(`${block.id}.props không đúng cấu trúc cho loại khối`);
+  if (TEXT_BLOCK_TYPES.has(block.type) && (typeof props.text !== "string" || props.text.length > 4000 || PLAIN_TEXT_PATTERN.test(props.text))) {
+    errors.push(`${block.id}.props.text phải là văn bản thuần`);
+  }
+  ["sellerLabel", "sellerHint", "customerLabel", "customerHint"].forEach((key) => {
+    const maxLength = key.endsWith("Hint") ? 240 : 120;
+    if (key in props && (typeof props[key] !== "string" || props[key].length > maxLength || PLAIN_TEXT_PATTERN.test(props[key]))) {
+      errors.push(`${block.id}.props.${key} phải là văn bản thuần`);
+    }
   });
-  if ("fontSizePt" in props && (!Number.isFinite(props.fontSizePt) || props.fontSizePt < 6 || props.fontSizePt > 48)) errors.push(`${block.id}.props.fontSizePt không hợp lệ`);
-  if ("headerFontSizePt" in props && (!Number.isFinite(props.headerFontSizePt) || props.headerFontSizePt < 6 || props.headerFontSizePt > 18)) errors.push(`${block.id}.props.headerFontSizePt không hợp lệ`);
-  if ("lineHeight" in props && (!Number.isFinite(props.lineHeight) || props.lineHeight < 1 || props.lineHeight > 2.5)) errors.push(`${block.id}.props.lineHeight không hợp lệ`);
-  if ("cellPaddingMm" in props && (!Number.isFinite(props.cellPaddingMm) || props.cellPaddingMm < 0.5 || props.cellPaddingMm > 4)) errors.push(`${block.id}.props.cellPaddingMm không hợp lệ`);
-  if ("thicknessPt" in props && (!Number.isFinite(props.thicknessPt) || props.thicknessPt < 0.5 || props.thicknessPt > 8)) errors.push(`${block.id}.props.thicknessPt không hợp lệ`);
+  const numericRanges = {
+    fontSizePt: [6, 48],
+    bodyFontSizePt: [6, 18],
+    headerFontSizePt: [6, 18],
+    lineHeight: [1, 2.5],
+    cellPaddingMm: [0.5, 4],
+    thicknessMm: [0.1, 5],
+    writingSpaceMm: [5, 80]
+  };
+  Object.entries(numericRanges).forEach(([key, [min, max]]) => {
+    if (key in props && (!Number.isFinite(props[key]) || props[key] < min || props[key] > max)) {
+      errors.push(`${block.id}.props.${key} không hợp lệ`);
+    }
+  });
   if ("textAlign" in props && !ALIGNMENTS.has(props.textAlign)) errors.push(`${block.id}.props.textAlign không hợp lệ`);
+  if ("lineStyle" in props && !["solid", "dashed"].includes(props.lineStyle)) errors.push(`${block.id}.props.lineStyle không hợp lệ`);
   Object.entries(props).forEach(([key, value]) => {
-    if ((key.startsWith("show") || ["bold", "italic", "underline", "preserveAspectRatio"].includes(key)) && typeof value !== "boolean") errors.push(`${block.id}.props.${key} phải là boolean`);
+    if ((key.startsWith("show") || ["bold", "italic", "underline", "preserveAspectRatio"].includes(key)) && typeof value !== "boolean") {
+      errors.push(`${block.id}.props.${key} phải là boolean`);
+    }
   });
   if (block.type === "productTable") {
-    const columns = props.visibleColumns;
-    if (!Array.isArray(columns) || columns.some((id) => !PRODUCT_TABLE_COLUMNS.some((column) => column.id === id)) || new Set(columns).size !== columns.length) errors.push(`${block.id}.props.visibleColumns không hợp lệ`);
-    const weights = props.columnWidthWeights;
-    if (!weights || typeof weights !== "object" || Array.isArray(weights) || Object.keys(weights).sort().join("|") !== PRODUCT_TABLE_COLUMNS.map((column) => column.id).sort().join("|") || Object.values(weights).some((value) => !Number.isFinite(value) || value < 1 || value > 100)) errors.push(`${block.id}.props.columnWidthWeights không hợp lệ`);
+    const columnKeys = PRODUCT_TABLE_COLUMNS.map((column) => column.id);
+    if (!hasExactKeys(props.columnVisibility, columnKeys) || Object.values(props.columnVisibility || {}).some((value) => typeof value !== "boolean")) {
+      errors.push(`${block.id}.props.columnVisibility không hợp lệ`);
+    }
+    if (!hasExactKeys(props.columnWidthWeights, columnKeys) || Object.values(props.columnWidthWeights || {}).some((value) => !Number.isFinite(value) || value < 1 || value > 100)) {
+      errors.push(`${block.id}.props.columnWidthWeights không hợp lệ`);
+    }
   }
 }
 
 export function validateBuilderDocument(document) {
   const errors = [];
-  if (!document || typeof document !== "object" || Array.isArray(document)) return { valid: false, errors: ["Tài liệu không hợp lệ."] };
-  if (Object.keys(document).some((key) => !DOCUMENT_KEYS.has(key))) errors.push("Tài liệu chứa thuộc tính không được phép.");
-  if (document.version !== BUILDER_DOCUMENT_VERSION) errors.push("Phiên bản tài liệu không hợp lệ.");
+  if (!isPlainObject(document)) return { valid: false, errors: ["Tài liệu không hợp lệ."] };
+  if (!hasExactKeys(document, [...DOCUMENT_KEYS])) errors.push("Tài liệu chứa thuộc tính không được phép hoặc thiếu thuộc tính bắt buộc.");
+  if (document.builderSchemaVersion !== BUILDER_DOCUMENT_VERSION) errors.push("Phiên bản tài liệu không hợp lệ.");
   const paper = document.paper;
-  if (!paper || typeof paper !== "object" || Array.isArray(paper) || Object.keys(paper).some((key) => !PAPER_KEYS.has(key)) || paper.size !== "A4" || paper.orientation !== "portrait" || paper.widthMm !== A4_WIDTH_MM || paper.heightMm !== A4_HEIGHT_MM || !Number.isFinite(paper.marginMm) || paper.marginMm < 0 || paper.marginMm > 30 || !Number.isFinite(paper.gridMm) || paper.gridMm < 0.5 || paper.gridMm > 20) errors.push("Khổ giấy không hợp lệ.");
-  if (!Array.isArray(document.blocks) || document.blocks.length > MAX_BUILDER_BLOCKS) return { valid: false, errors: [...errors, "Danh sách khối không hợp lệ."] };
+  if (!hasExactKeys(paper, [...PAPER_KEYS]) || paper.size !== "A4" || paper.orientation !== "portrait" || !Number.isFinite(paper.marginMm) || paper.marginMm < 0 || paper.marginMm > 30 || !Number.isFinite(paper.gridMm) || paper.gridMm < 1 || paper.gridMm > 10) {
+    errors.push("Khổ giấy không hợp lệ.");
+  }
+  if (!Array.isArray(document.blocks) || document.blocks.length > MAX_BUILDER_BLOCKS) {
+    return { valid: false, errors: [...errors, "Danh sách khối không hợp lệ."] };
+  }
+  try {
+    if (new TextEncoder().encode(JSON.stringify(document)).length > BUILDER_MAX_CONFIG_BYTES) errors.push("Tài liệu vượt quá giới hạn dung lượng.");
+  } catch {
+    errors.push("Tài liệu không thể tuần tự hóa.");
+  }
   const ids = new Set();
   const zIndexes = new Set();
   document.blocks.forEach((block) => {
-    if (block && typeof block === "object" && !Array.isArray(block) && Object.keys(block).some((key) => !BLOCK_KEYS.has(key))) errors.push(`${block.id || "block"} chứa thuộc tính không được phép`);
-    if (!block || typeof block !== "object" || typeof block.id !== "string" || !block.id || ids.has(block.id)) errors.push("ID khối phải duy nhất.");
+    if (!hasExactKeys(block, [...BLOCK_KEYS])) errors.push(`${block?.id || "block"} chứa thuộc tính không được phép hoặc thiếu thuộc tính bắt buộc`);
+    if (!isPlainObject(block) || typeof block.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(block.id) || ids.has(block.id)) errors.push("ID khối phải hợp lệ và duy nhất.");
     else ids.add(block.id);
     if (!BUILDER_BLOCK_TYPES.includes(block?.type)) errors.push(`${block?.id || "block"}.type không hợp lệ`);
     const min = getBlockMinimumSize(block?.type);
@@ -438,9 +466,109 @@ export function validateBuilderDocument(document) {
     if (!Number.isInteger(block?.zIndex) || block.zIndex < 1 || block.zIndex > MAX_BUILDER_BLOCKS || zIndexes.has(block.zIndex)) errors.push(`${block?.id || "block"}.zIndex không hợp lệ`);
     else zIndexes.add(block.zIndex);
     if (typeof block?.locked !== "boolean") errors.push(`${block?.id || "block"}.locked không hợp lệ`);
-    validateProps(block || {}, errors);
+    validateCanonicalProps(block || {}, errors);
   });
   return { valid: errors.length === 0, errors };
+}
+
+function normalizeLegacyProps(type, props = {}) {
+  const defaults = BLOCK_DEFAULTS[type]?.props;
+  if (!defaults) return props;
+  if (["text", "title", "notes"].includes(type)) {
+    return Object.fromEntries(COMMON_TEXT_PROP_KEYS.map((key) => [key, props[key] ?? defaults[key]]));
+  }
+  if (type === "logo") return { preserveAspectRatio: props.preserveAspectRatio ?? true };
+  if (type === "shopInfo") return {
+    showLogo: props.showLogo ?? false,
+    showName: props.showName ?? true,
+    showAddress: props.showAddress ?? true,
+    showPhone: props.showPhone ?? true,
+    showEmail: props.showEmail ?? true,
+    fontSizePt: props.fontSizePt ?? 9,
+    textAlign: props.textAlign ?? "center"
+  };
+  if (type === "voucherMetadata") return {
+    showVoucherCode: props.showVoucherCode ?? true,
+    showDate: props.showDate ?? true,
+    showTime: props.showTime ?? true,
+    fontSizePt: props.fontSizePt ?? 9,
+    textAlign: props.textAlign ?? "left"
+  };
+  if (type === "customerInfo") return {
+    showName: props.showName ?? true,
+    showPhone: props.showPhone ?? true,
+    showAddress: props.showAddress ?? true,
+    showNote: props.showNote ?? true,
+    fontSizePt: props.fontSizePt ?? 9
+  };
+  if (type === "productTable") {
+    const legacyVisible = Array.isArray(props.visibleColumns) ? new Set(props.visibleColumns) : null;
+    return {
+      columnVisibility: Object.fromEntries(PRODUCT_TABLE_COLUMNS.map(({ id }) => [id, legacyVisible ? legacyVisible.has(id) : (props.columnVisibility?.[id] ?? true)])),
+      columnWidthWeights: Object.fromEntries(PRODUCT_TABLE_COLUMNS.map(({ id }) => [id, props.columnWidthWeights?.[id] ?? defaults.columnWidthWeights[id]])),
+      bodyFontSizePt: props.bodyFontSizePt ?? props.fontSizePt ?? 9,
+      headerFontSizePt: props.headerFontSizePt ?? 9,
+      cellPaddingMm: props.cellPaddingMm ?? 2,
+      showSaleNote: props.showSaleNote ?? true
+    };
+  }
+  if (type === "totals") return {
+    showSubtotal: props.showSubtotal ?? props.showGrossTotal ?? true,
+    showDiscount: props.showDiscount ?? props.showDiscountTotal ?? true,
+    showGrandTotal: props.showGrandTotal ?? true,
+    fontSizePt: props.fontSizePt ?? 9,
+    textAlign: props.textAlign ?? "right"
+  };
+  if (type === "signatures") return {
+    sellerLabel: props.showSeller === false ? "" : (props.sellerLabel ?? "Người bán"),
+    sellerHint: props.showSeller === false ? "" : (props.sellerHint ?? "(Ký và ghi rõ họ tên)"),
+    customerLabel: props.showCustomer === false ? "" : (props.customerLabel ?? "Khách hàng"),
+    customerHint: props.showCustomer === false ? "" : (props.customerHint ?? "(Kiểm tra và ký nhận)"),
+    fontSizePt: props.fontSizePt ?? 9,
+    writingSpaceMm: props.writingSpaceMm ?? 14
+  };
+  if (type === "horizontalRule") return {
+    thicknessMm: props.thicknessMm ?? (Number.isFinite(props.thicknessPt) ? props.thicknessPt * 0.352778 : 0.3),
+    lineStyle: props.lineStyle ?? "solid"
+  };
+  return clone(defaults);
+}
+
+export function normalizeBuilderLabDocumentToCanonical(source) {
+  if (!isPlainObject(source)) return { ok: false, document: null, errors: ["Tài liệu không hợp lệ."] };
+  if (source.builderSchemaVersion === BUILDER_DOCUMENT_VERSION) {
+    const document = clone(source);
+    const validation = validateBuilderDocument(document);
+    return { ok: validation.valid, document: validation.valid ? document : null, errors: validation.errors };
+  }
+  if (source.version !== 1 || !isPlainObject(source.paper) || !Array.isArray(source.blocks)) {
+    return { ok: false, document: null, errors: ["Phiên bản bản thử trên trình duyệt không được hỗ trợ."] };
+  }
+  const document = {
+    builderSchemaVersion: BUILDER_DOCUMENT_VERSION,
+    paper: {
+      size: source.paper.size,
+      orientation: source.paper.orientation,
+      marginMm: source.paper.marginMm,
+      gridMm: source.paper.gridMm
+    },
+    blocks: source.blocks.map((sourceBlock) => {
+      const type = sourceBlock.type === "divider" ? "horizontalRule" : sourceBlock.type;
+      return {
+        id: sourceBlock.id,
+        type,
+        xMm: sourceBlock.xMm,
+        yMm: sourceBlock.yMm,
+        widthMm: sourceBlock.widthMm,
+        heightMm: sourceBlock.heightMm,
+        zIndex: sourceBlock.zIndex,
+        locked: sourceBlock.locked,
+        props: normalizeLegacyProps(type, sourceBlock.props)
+      };
+    })
+  };
+  const validation = validateBuilderDocument(document);
+  return { ok: validation.valid, document: validation.valid ? document : null, errors: validation.errors };
 }
 
 export function saveBuilderDocumentToStorage(document, storage) {
@@ -456,14 +584,21 @@ export function saveBuilderDocumentToStorage(document, storage) {
 }
 
 export function readBuilderDocumentFromStorage(storage) {
+  const result = inspectBuilderDocumentStorage(storage);
+  return result.status === "valid" ? result.document : null;
+}
+
+export function inspectBuilderDocumentStorage(storage) {
   try {
     const resolvedStorage = storage ?? window.localStorage;
     const raw = resolvedStorage.getItem(BUILDER_STORAGE_KEY);
-    if (!raw) return null;
-    const document = JSON.parse(raw);
-    return validateBuilderDocument(document).valid ? document : null;
+    if (!raw) return { status: "absent", document: null, errors: [] };
+    const normalized = normalizeBuilderLabDocumentToCanonical(JSON.parse(raw));
+    return normalized.ok
+      ? { status: "valid", document: normalized.document, errors: [] }
+      : { status: "invalid", document: null, errors: normalized.errors };
   } catch {
-    return null;
+    return { status: "invalid", document: null, errors: ["Bản thử trên trình duyệt không hợp lệ."] };
   }
 }
 

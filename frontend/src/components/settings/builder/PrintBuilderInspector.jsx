@@ -4,7 +4,7 @@ const TYPE_LABELS = {
   text: "Văn bản", title: "Tiêu đề", logo: "Logo cửa hàng", shopInfo: "Thông tin cửa hàng",
   voucherMetadata: "Thông tin phiếu", customerInfo: "Thông tin khách hàng",
   productTable: "Bảng sản phẩm", totals: "Tổng tiền", signatures: "Chữ ký",
-  notes: "Lưu ý", divider: "Đường kẻ ngang"
+  notes: "Lưu ý", horizontalRule: "Đường kẻ ngang"
 };
 
 function NumberField({ label, value, min, max, step = 1, disabled, onChange }) {
@@ -52,11 +52,10 @@ export function PrintBuilderInspector({ block, onUpdate, onDuplicate, onDelete, 
     ["X", "xMm", 0, 210], ["Y", "yMm", 0, 297], ["Rộng", "widthMm", 1, 210], ["Cao", "heightMm", 1, 297]
   ];
   const visibilityControls = {
-    shopInfo: [["Tên cửa hàng", "showName"], ["Địa chỉ", "showAddress"], ["Điện thoại", "showPhone"], ["Email", "showEmail"]],
+    shopInfo: [["Logo", "showLogo"], ["Tên cửa hàng", "showName"], ["Địa chỉ", "showAddress"], ["Điện thoại", "showPhone"], ["Email", "showEmail"]],
     voucherMetadata: [["Số phiếu", "showVoucherCode"], ["Ngày", "showDate"], ["Giờ", "showTime"]],
     customerInfo: [["Tên khách hàng", "showName"], ["Điện thoại", "showPhone"], ["Địa chỉ", "showAddress"], ["Ghi chú", "showNote"]],
-    totals: [["Tổng tiền hàng", "showGrossTotal"], ["Tổng chiết khấu", "showDiscountTotal"], ["Tổng cộng", "showGrandTotal"]],
-    signatures: [["Người bán", "showSeller"], ["Khách hàng", "showCustomer"]]
+    totals: [["Tổng tiền hàng", "showSubtotal"], ["Tổng chiết khấu", "showDiscount"], ["Tổng cộng", "showGrandTotal"]]
   }[block.type] || [];
 
   return (
@@ -111,7 +110,7 @@ export function PrintBuilderInspector({ block, onUpdate, onDuplicate, onDelete, 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Chiều cao bảng thực tế sẽ thay đổi theo số lượng sản phẩm. Nhiều bảng sản phẩm trên cùng trang chỉ dành cho thử nghiệm.</p>
           <div className="grid grid-cols-2 gap-1.5">
             {PRODUCT_TABLE_COLUMNS.map((column) => (
-              <Toggle key={column.id} label={column.label} checked={block.props.visibleColumns.includes(column.id)} onChange={(visible) => updateProps({ visibleColumns: visible ? [...block.props.visibleColumns, column.id] : block.props.visibleColumns.filter((id) => id !== column.id) })} />
+              <Toggle key={column.id} label={column.label} checked={block.props.columnVisibility[column.id]} onChange={(visible) => updateProps({ columnVisibility: { ...block.props.columnVisibility, [column.id]: visible } })} />
             ))}
           </div>
           <Toggle label="Hiện ghi chú bán hàng" checked={block.props.showSaleNote} onChange={(value) => updateProps({ showSaleNote: value })} />
@@ -121,13 +120,36 @@ export function PrintBuilderInspector({ block, onUpdate, onDuplicate, onDelete, 
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
+            <NumberField label="Cỡ nội dung" value={block.props.bodyFontSizePt} min={6} max={18} step={0.5} onChange={(value) => updateProps({ bodyFontSizePt: Number(value) })} />
             <NumberField label="Cỡ tiêu đề" value={block.props.headerFontSizePt} min={6} max={18} step={0.5} onChange={(value) => updateProps({ headerFontSizePt: Number(value) })} />
             <NumberField label="Đệm ô (mm)" value={block.props.cellPaddingMm} min={0.5} max={4} step={0.5} onChange={(value) => updateProps({ cellPaddingMm: Number(value) })} />
           </div>
         </section>
       )}
 
-      {block.type === "divider" && <NumberField label="Độ dày (pt)" value={block.props.thicknessPt} min={0.5} max={8} step={0.5} onChange={(value) => updateProps({ thicknessPt: Number(value) })} />}
+      {block.type === "signatures" && (
+        <section className="space-y-2">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Chữ ký</h3>
+          {[["Nhãn người bán", "sellerLabel"], ["Gợi ý người bán", "sellerHint"], ["Nhãn khách hàng", "customerLabel"], ["Gợi ý khách hàng", "customerHint"]].map(([label, key]) => (
+            <label key={key} className="block text-xs font-semibold text-slate-600">{label}
+              <input value={block.props[key]} onChange={(event) => updateProps({ [key]: event.target.value })} className="mt-1 h-10 w-full min-w-0 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+            </label>
+          ))}
+          <NumberField label="Khoảng ký (mm)" value={block.props.writingSpaceMm} min={5} max={80} onChange={(value) => updateProps({ writingSpaceMm: Number(value) })} />
+        </section>
+      )}
+
+      {block.type === "horizontalRule" && (
+        <section className="space-y-2">
+          <NumberField label="Độ dày (mm)" value={block.props.thicknessMm} min={0.1} max={5} step={0.1} onChange={(value) => updateProps({ thicknessMm: Number(value) })} />
+          <label className="block text-xs font-semibold text-slate-600">Kiểu đường
+            <select value={block.props.lineStyle} onChange={(event) => updateProps({ lineStyle: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm">
+              <option value="solid">Liền</option>
+              <option value="dashed">Nét đứt</option>
+            </select>
+          </label>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Lớp và thao tác</h3>

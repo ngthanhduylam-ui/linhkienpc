@@ -6,7 +6,7 @@ const TYPE_LABELS = {
   text: "Văn bản", title: "Tiêu đề", logo: "Logo", shopInfo: "Thông tin cửa hàng",
   voucherMetadata: "Thông tin phiếu", customerInfo: "Thông tin khách hàng",
   productTable: "Bảng sản phẩm", totals: "Tổng tiền", signatures: "Chữ ký",
-  notes: "Lưu ý", divider: "Đường kẻ"
+  notes: "Lưu ý", horizontalRule: "Đường kẻ"
 };
 
 const RESIZE_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -39,10 +39,11 @@ function DynamicContent({ block }) {
   if (block.type === "logo") return <img src={ptcLogoUrl} alt="Logo VI TÍNH PHƯỚC TÀI" className="h-full w-full object-contain" draggable={false} />;
   if (block.type === "shopInfo") return (
     <div className="print-builder-dynamic-copy" style={textStyle}>
-      {props.showName && <strong>{props.name || "VI TÍNH PHƯỚC TÀI"}</strong>}
-      {props.showAddress && <span>{props.address || "98/14 đường số 5, P.17, Q. Gò Vấp"}</span>}
-      {props.showPhone && <span>{props.phone || "0933712571"}</span>}
-      {props.showEmail && <span>{props.email || "vitinhphuoctai@gmail.com"}</span>}
+      {props.showLogo && <img src={ptcLogoUrl} alt="" className="mx-auto h-6 w-auto object-contain" draggable={false} />}
+      {props.showName && <strong>VI TÍNH PHƯỚC TÀI</strong>}
+      {props.showAddress && <span>98/14 đường số 5, P.17, Q. Gò Vấp</span>}
+      {props.showPhone && <span>0933712571</span>}
+      {props.showEmail && <span>vitinhphuoctai@gmail.com</span>}
     </div>
   );
   if (block.type === "voucherMetadata") return (
@@ -61,11 +62,11 @@ function DynamicContent({ block }) {
     </div>
   );
   if (block.type === "productTable") {
-    const columns = PRODUCT_TABLE_COLUMNS.filter((column) => props.visibleColumns.includes(column.id));
+    const columns = PRODUCT_TABLE_COLUMNS.filter((column) => props.columnVisibility[column.id]);
     const totalWeight = columns.reduce((sum, column) => sum + Number(props.columnWidthWeights[column.id] || 1), 0);
     return (
       <div className="h-full overflow-hidden">
-        <table className="print-builder-product-table" style={{ fontSize: `${props.fontSizePt}pt`, "--builder-cell-padding": `${props.cellPaddingMm}mm` }}>
+        <table className="print-builder-product-table" style={{ fontSize: `${props.bodyFontSizePt}pt`, "--builder-cell-padding": `${props.cellPaddingMm}mm` }}>
           <colgroup>{columns.map((column) => <col key={column.id} style={{ width: `${Number(props.columnWidthWeights[column.id] || 1) / totalWeight * 100}%` }} />)}</colgroup>
           <thead style={{ fontSize: `${props.headerFontSizePt}pt` }}><tr>{columns.map((column) => <th key={column.id}>{column.label}</th>)}</tr></thead>
           <tbody>{SALE_DELIVERY_NOTE_PREVIEW_SAMPLE.items.map((item, index) => (
@@ -84,18 +85,18 @@ function DynamicContent({ block }) {
   }
   if (block.type === "totals") return (
     <div className="print-builder-totals" style={textStyle}>
-      {props.showGrossTotal && <><span>Tổng tiền hàng</span><b>{formatMoney(SALE_DELIVERY_NOTE_PREVIEW_SAMPLE.grossTotal)}</b></>}
-      {props.showDiscountTotal && <><span>Tổng chiết khấu</span><b>{formatMoney(SALE_DELIVERY_NOTE_PREVIEW_SAMPLE.discountTotal)}</b></>}
+      {props.showSubtotal && <><span>Tổng tiền hàng</span><b>{formatMoney(SALE_DELIVERY_NOTE_PREVIEW_SAMPLE.grossTotal)}</b></>}
+      {props.showDiscount && <><span>Tổng chiết khấu</span><b>{formatMoney(SALE_DELIVERY_NOTE_PREVIEW_SAMPLE.discountTotal)}</b></>}
       {props.showGrandTotal && <><strong>Tổng cộng</strong><strong>{formatMoney(SALE_DELIVERY_NOTE_PREVIEW_SAMPLE.grandTotal)}</strong></>}
     </div>
   );
   if (block.type === "signatures") return (
-    <div className="print-builder-signatures" style={textStyle}>
-      {props.showSeller && <div><b>Người bán</b><span>(Ký và ghi rõ họ tên)</span></div>}
-      {props.showCustomer && <div><b>Khách hàng</b><span>(Kiểm tra và ký nhận)</span></div>}
+    <div className="print-builder-signatures" style={{ ...textStyle, paddingBottom: `${props.writingSpaceMm}mm` }}>
+      <div><b>{props.sellerLabel}</b><span>{props.sellerHint}</span></div>
+      <div><b>{props.customerLabel}</b><span>{props.customerHint}</span></div>
     </div>
   );
-  if (block.type === "divider") return <div className="print-builder-divider" style={{ borderTopWidth: `${props.thicknessPt}pt` }} />;
+  if (block.type === "horizontalRule") return <div className="print-builder-divider" style={{ borderTopWidth: `${props.thicknessMm}mm`, borderTopStyle: props.lineStyle }} />;
   return null;
 }
 

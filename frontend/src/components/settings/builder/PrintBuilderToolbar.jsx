@@ -5,7 +5,12 @@ export function PrintBuilderToolbar({
   zoom,
   onUndo,
   onRedo,
-  onSave,
+  onSaveServer,
+  onSaveLocal,
+  onDeleteServer,
+  onDeleteLocal,
+  savingServer,
+  serverDraftExists,
   onReset,
   onToggleGrid,
   onZoomChange,
@@ -18,7 +23,10 @@ export function PrintBuilderToolbar({
         <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700">Bản thử nghiệm</span>
         <button type="button" className={buttonClass} disabled={!canUndo} onClick={onUndo}>Hoàn tác</button>
         <button type="button" className={buttonClass} disabled={!canRedo} onClick={onRedo}>Làm lại</button>
-        <button type="button" className={buttonClass} onClick={onSave}>Lưu bản thử</button>
+        <button type="button" className="min-h-10 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50" disabled={savingServer} onClick={onSaveServer}>{savingServer ? "Đang lưu..." : "Lưu bản nháp"}</button>
+        <button type="button" className={buttonClass} onClick={onSaveLocal}>Lưu trên trình duyệt</button>
+        <button type="button" className={buttonClass} disabled={!serverDraftExists || savingServer} onClick={onDeleteServer}>Xóa bản nháp hệ thống</button>
+        <button type="button" className={buttonClass} onClick={onDeleteLocal}>Xóa bản lưu trình duyệt</button>
         <button type="button" className={buttonClass} onClick={onReset}>Đặt lại mẫu thử</button>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">

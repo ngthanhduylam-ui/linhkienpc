@@ -7,6 +7,11 @@ const {
   validateCustomTemplateConfig,
   upgradeSaleDeliveryNoteConfigToLatest
 } = require('./saleDeliveryNoteTemplate');
+const {
+  BUILDER_SCHEMA_VERSION,
+  validateBuilderDocument,
+  cloneBuilderDocument
+} = require('./builderDraftTemplate');
 
 const SELECT_SETTINGS_SQL = `
   SELECT
@@ -15,6 +20,10 @@ const SELECT_SETTINGS_SQL = `
     active_template,
     custom_template_config,
     custom_template_schema_version,
+    builder_draft_config,
+    builder_draft_schema_version,
+    builder_draft_revision,
+    builder_draft_updated_at,
     created_at,
     updated_at
   FROM print_template_settings
@@ -58,6 +67,79 @@ function parseStoredConfig(value) {
     500,
     'PRINT_TEMPLATE_SETTINGS_INVALID'
   );
+}
+
+function validateExpectedRevision(value) {
+  if (!Number.isInteger(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+    throw new AppError('Invalid Builder Draft revision.', 400, 'PRINT_TEMPLATE_VALIDATION_ERROR', [
+      { field: 'body.expected_revision', issue: 'must be a non-negative integer' }
+    ]);
+  }
+  return value;
+}
+
+function builderDraftConflict() {
+  return new AppError(
+    'The Builder Draft was changed elsewhere.',
+    409,
+    'PRINT_TEMPLATE_BUILDER_DRAFT_CONFLICT'
+  );
+}
+
+function parseStoredBuilderDraft(row) {
+  let config;
+  try {
+    config = row.builder_draft_config === undefined ? null : parseStoredConfig(row.builder_draft_config);
+  } catch {
+    throw new AppError(
+      'Stored Builder Draft is invalid.',
+      500,
+      'PRINT_TEMPLATE_BUILDER_DRAFT_INVALID'
+    );
+  }
+  const schemaVersion = row.builder_draft_schema_version === undefined || row.builder_draft_schema_version === null
+    ? null
+    : Number(row.builder_draft_schema_version);
+  const updatedAt = row.builder_draft_updated_at ?? null;
+
+  if (config === null && schemaVersion === null && updatedAt === null) return null;
+  if (config === null || schemaVersion !== BUILDER_SCHEMA_VERSION || updatedAt === null) {
+    throw new AppError(
+      'Stored Builder Draft settings are inconsistent.',
+      500,
+      'PRINT_TEMPLATE_BUILDER_DRAFT_INVALID'
+    );
+  }
+  try {
+    return validateBuilderDocument(config);
+  } catch (error) {
+    throw new AppError(
+      'Stored Builder Draft is invalid.',
+      500,
+      'PRINT_TEMPLATE_BUILDER_DRAFT_INVALID',
+      error.details || null
+    );
+  }
+}
+
+function mapBuilderDraft(row) {
+  if (!row) throw missingSettingsError();
+  const revision = Number(row.builder_draft_revision ?? 0);
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new AppError(
+      'Stored Builder Draft revision is invalid.',
+      500,
+      'PRINT_TEMPLATE_BUILDER_DRAFT_INVALID'
+    );
+  }
+  const draft = parseStoredBuilderDraft(row);
+  return {
+    document_type: DOCUMENT_TYPE,
+    draft: draft === null ? null : cloneBuilderDocument(draft),
+    builder_schema_version: draft === null ? null : BUILDER_SCHEMA_VERSION,
+    revision,
+    updated_at: draft === null ? null : row.builder_draft_updated_at
+  };
 }
 
 function validateStoredCustom(row, { selectionConflict = false } = {}) {
@@ -178,6 +260,59 @@ async function getSettings() {
   }
 }
 
+async function getBuilderDraft() {
+  try {
+    return mapBuilderDraft(await selectSettings(pool));
+  } catch (error) {
+    throw normalizeDatabaseError(error);
+  }
+}
+
+async function saveBuilderDraft(document, expectedRevision) {
+  const draft = validateBuilderDocument(document);
+  const revision = validateExpectedRevision(expectedRevision);
+
+  return withTransaction(async (connection) => {
+    const currentRow = await selectSettings(connection, { forUpdate: true });
+    if (Number(currentRow.builder_draft_revision ?? 0) !== revision) throw builderDraftConflict();
+    const [result] = await connection.query(
+      `
+        UPDATE print_template_settings
+        SET builder_draft_config = ?,
+            builder_draft_schema_version = ?,
+            builder_draft_revision = builder_draft_revision + 1,
+            builder_draft_updated_at = CURRENT_TIMESTAMP
+        WHERE document_type = ?
+      `,
+      [JSON.stringify(draft), BUILDER_SCHEMA_VERSION, DOCUMENT_TYPE]
+    );
+    if (result.affectedRows !== 1) throw missingSettingsError();
+    return mapBuilderDraft(await selectSettings(connection));
+  });
+}
+
+async function deleteBuilderDraft(expectedRevision) {
+  const revision = validateExpectedRevision(expectedRevision);
+
+  return withTransaction(async (connection) => {
+    const currentRow = await selectSettings(connection, { forUpdate: true });
+    if (Number(currentRow.builder_draft_revision ?? 0) !== revision) throw builderDraftConflict();
+    const [result] = await connection.query(
+      `
+        UPDATE print_template_settings
+        SET builder_draft_config = NULL,
+            builder_draft_schema_version = NULL,
+            builder_draft_revision = builder_draft_revision + 1,
+            builder_draft_updated_at = NULL
+        WHERE document_type = ?
+      `,
+      [DOCUMENT_TYPE]
+    );
+    if (result.affectedRows !== 1) throw missingSettingsError();
+    return mapBuilderDraft(await selectSettings(connection));
+  });
+}
+
 async function saveCustomTemplate(config) {
   const validatedConfig = validateCustomTemplateConfig(config);
 
@@ -238,9 +373,15 @@ module.exports = {
   getSettings,
   saveCustomTemplate,
   changeActiveTemplate,
+  getBuilderDraft,
+  saveBuilderDraft,
+  deleteBuilderDraft,
   validateActiveTemplate,
+  validateExpectedRevision,
   mapSettings,
+  mapBuilderDraft,
   parseStoredConfig,
+  parseStoredBuilderDraft,
   normalizeDatabaseError,
   SELECT_SETTINGS_SQL
 };
