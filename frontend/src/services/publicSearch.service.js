@@ -37,6 +37,7 @@ function mapPublicProducts(products) {
           ? null
           : Number(product.sale_price),
       categoryName: product.category?.name || product.category_name || "",
+      specSummary: product.spec_summary,
       imageCount: Number(product.image_count || 0),
       primaryImage: product.primary_image || images[0] || null,
       images,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { resolveApiAssetUrl } from "../api/apiClient";
 import { listPublicProductImages } from "../services/publicSearch.service";
 import {
@@ -7,6 +7,12 @@ import {
   sharePublicProductImages,
   supportsPublicImageFileSharing
 } from "../utils/publicImageShare";
+import {
+  copyPublicImageToClipboard,
+  IMAGE_COPY_ERROR_MESSAGE,
+  IMAGE_COPY_UNSUPPORTED_MESSAGE
+} from "../utils/publicImageClipboard";
+import { normalizeOptionalProductDescription } from "../utils/publicProductPresentation";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const PUBLIC_IMAGE_LIST_TIMEOUT_MS = 20000;
@@ -27,6 +33,10 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
   const [shareFeedback, setShareFeedback] = useState("");
   const [isSharingImages, setIsSharingImages] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
+  const [copyingImageKeys, setCopyingImageKeys] = useState(() => new Set());
+  const [imageCopyFeedback, setImageCopyFeedback] = useState({});
+  const copyingImageKeysRef = useRef(new Set());
+  const copyGenerationRef = useRef(0);
   const sortedNoteGroups = useMemo(
     () => [...(product.noteGroups || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0)),
     [product.noteGroups]
@@ -35,6 +45,7 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
   const totalQuantity = Number(product.totalQuantity || 0);
   const isInStock = totalQuantity > 0;
   const condition = product.condition === "2nd" || product.condition === "new" ? product.condition : null;
+  const specSummary = normalizeOptionalProductDescription(product.specSummary);
 
   useEffect(() => {
     setExpanded(autoExpand);
@@ -43,7 +54,15 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
     setSelectedImageIndex(null);
     setShareFeedback("");
     setIsSharingImages(false);
+    copyGenerationRef.current += 1;
+    copyingImageKeysRef.current.clear();
+    setCopyingImageKeys(new Set());
+    setImageCopyFeedback({});
   }, [autoExpand, product.productId]);
+
+  useEffect(() => () => {
+    copyGenerationRef.current += 1;
+  }, []);
 
   useEffect(() => {
     if (selectedImageIndex === null) return undefined;
@@ -129,6 +148,38 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
     }
   }
 
+  async function handleCopyImage(event, image, index) {
+    event.stopPropagation();
+    const imageKey = String(image?.id ?? index);
+    if (copyingImageKeysRef.current.has(imageKey)) return;
+
+    const generation = copyGenerationRef.current;
+    copyingImageKeysRef.current.add(imageKey);
+    setCopyingImageKeys((current) => new Set(current).add(imageKey));
+    setImageCopyFeedback((current) => ({ ...current, [imageKey]: "" }));
+
+    try {
+      const result = await copyPublicImageToClipboard(resolveApiAssetUrl(image.download_url));
+      if (generation !== copyGenerationRef.current) return;
+      setImageCopyFeedback((current) => ({
+        ...current,
+        [imageKey]: result === "copied" ? "Đã copy ảnh" : IMAGE_COPY_UNSUPPORTED_MESSAGE
+      }));
+    } catch {
+      if (generation !== copyGenerationRef.current) return;
+      setImageCopyFeedback((current) => ({ ...current, [imageKey]: IMAGE_COPY_ERROR_MESSAGE }));
+    } finally {
+      copyingImageKeysRef.current.delete(imageKey);
+      if (generation === copyGenerationRef.current) {
+        setCopyingImageKeys((current) => {
+          const next = new Set(current);
+          next.delete(imageKey);
+          return next;
+        });
+      }
+    }
+  }
+
   const selectedImage = selectedImageIndex === null ? null : images[selectedImageIndex];
 
   return (
@@ -168,8 +219,19 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
                 </span>
               )}
             </div>
-            {product.categoryName && (
-              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{product.categoryName}</p>
+            {(product.categoryName || specSummary) && (
+              <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+                {product.categoryName && (
+                  <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    {product.categoryName}
+                  </span>
+                )}
+                {specSummary && (
+                  <span className="min-w-0 basis-full break-words text-sm font-medium leading-5 text-slate-600 sm:basis-auto sm:flex-1 sm:text-center">
+                    {specSummary}
+                  </span>
+                )}
+              </div>
             )}
             <p className="mt-2 text-base font-extrabold text-blue-700">{formatPublicPrice(product.salePrice)}</p>
           </button>
@@ -221,8 +283,14 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
                     )}
                   </div>
                 )}
-                <div className="grid grid-cols-3 gap-2">
-                  {images.map((image, index) => (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {images.map((image, index) => {
+                    const imageKey = String(image?.id ?? index);
+                    const isCopyingImage = copyingImageKeys.has(imageKey);
+                    const copyStatus = imageCopyFeedback[imageKey] || "";
+                    const didCopyImage = copyStatus === "Đã copy ảnh";
+
+                    return (
                     <div key={image.id} className="min-w-0">
                       <button
                         type="button"
@@ -240,14 +308,33 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
                           className="aspect-square w-full rounded-lg border border-slate-200 bg-slate-50 object-contain group-hover:border-sky-400"
                         />
                       </button>
-                      <a
-                        href={resolveApiAssetUrl(image.download_url)}
-                        className="mt-1 block truncate text-center text-xs font-medium text-sky-700 hover:underline"
-                      >
-                        Tải ảnh
-                      </a>
+                      <div className="mt-1 grid min-w-0 grid-cols-2 gap-1">
+                        <a
+                          href={resolveApiAssetUrl(image.download_url)}
+                          className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-md border border-sky-200 px-1 text-center text-[10px] font-semibold leading-tight text-sky-700 hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:text-xs"
+                        >
+                          Tải ảnh
+                        </a>
+                        <button
+                          type="button"
+                          onClick={(event) => handleCopyImage(event, image, index)}
+                          disabled={isCopyingImage}
+                          aria-label={`Copy ảnh ${index + 1}`}
+                          aria-busy={isCopyingImage}
+                          className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-md border border-slate-200 px-1 text-center text-[10px] font-semibold leading-tight text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-wait disabled:opacity-70 sm:text-xs"
+                        >
+                          {isCopyingImage ? "Đang copy..." : didCopyImage ? "Đã copy ảnh" : "Copy ảnh"}
+                        </button>
+                      </div>
+                      {copyStatus && !didCopyImage && (
+                        <p className="mt-1 break-words text-[10px] leading-4 text-slate-600" role="status">
+                          {copyStatus}
+                        </p>
+                      )}
+                      {didCopyImage && <span className="sr-only" role="status">Đã copy ảnh</span>}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
