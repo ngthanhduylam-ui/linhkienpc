@@ -6,6 +6,7 @@ import { saveAdminReturnLocation } from "../utils/adminPublicNavigation";
 const SIDEBAR_COLLAPSE_DELAY_MS = 150;
 
 const inventoryItems = [
+  { label: "Sổ nhanh", to: "/admin/quick-notes", icon: "message-square" },
   { label: "Nhập hàng", to: "/admin/stock-in", icon: "package-plus" },
   { label: "Bán tại quầy", to: "/admin/stock-out", icon: "shopping-cart" },
   { label: "Kiểm hàng", to: "/admin/inventory-check", icon: "clipboard-check" },
@@ -54,6 +55,13 @@ function SidebarIcon({ name, className = "" }) {
         <svg {...commonProps}>
           <circle cx="11" cy="11" r="7" />
           <path d="m20 20-4-4" />
+        </svg>
+      );
+    case "message-square":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 18.5 3.5 21l.7-4A8.5 8.5 0 1 1 12 20.5H7" />
+          <path d="M8 10h8M8 14h5" />
         </svg>
       );
     case "package-plus":

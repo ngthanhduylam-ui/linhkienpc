@@ -1,8 +1,9 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AdminSidebar } from "../components/AdminSidebar";
 import { AdminHeader } from "../components/AdminHeader";
 import { useAuth } from "../contexts/AuthContext";
+import { QuickNoteWidget } from "../components/quickNotes/QuickNoteWidget";
 
 const DESKTOP_AUTO_COLLAPSE_QUERY = "(min-width: 768px) and (hover: hover) and (pointer: fine)";
 
@@ -39,10 +40,14 @@ function useDesktopAutoCollapse() {
 }
 
 export function AdminLayout() {
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const desktopAutoCollapse = useDesktopAutoCollapse();
   const { admin, logout } = useAuth();
+  const showQuickNoteWidget =
+    location.pathname !== "/admin/quick-notes" &&
+    location.pathname !== "/admin/settings/print-template/builder-lab";
 
   return (
     <div className="min-h-screen min-w-0 bg-slate-50">
@@ -70,6 +75,7 @@ export function AdminLayout() {
         <main className="admin-page-container mx-auto w-full min-w-0 max-w-7xl p-4 sm:p-6">
           <Outlet />
         </main>
+        {showQuickNoteWidget && <QuickNoteWidget />}
       </div>
     </div>
   );

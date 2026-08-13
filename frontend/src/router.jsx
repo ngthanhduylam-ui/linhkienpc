@@ -14,6 +14,7 @@ const InventoryCheckPage = lazyNamed(() => import("./pages/InventoryCheckPage"),
 const OnlineListingPage = lazyNamed(() => import("./pages/OnlineListingPage"), "OnlineListingPage");
 const ProductFormPage = lazyNamed(() => import("./pages/ProductFormPage"), "ProductFormPage");
 const ProductManagementPage = lazyNamed(() => import("./pages/ProductManagementPage"), "ProductManagementPage");
+const QuickNotesPage = lazyNamed(() => import("./pages/QuickNotesPage"), "QuickNotesPage");
 const PrintTemplateSettingsPage = lazyNamed(
   () => import("./pages/PrintTemplateSettingsPage"),
   "PrintTemplateSettingsPage"
@@ -86,6 +87,7 @@ export const appRouter = createBrowserRouter([
           { path: "stock-out-single", element: withSuspense(<StockOutPage />) },
           { path: "stock-out-bulk", element: <Navigate to="/admin/stock-out" replace /> },
           { path: "inventory-check", element: withSuspense(<InventoryCheckPage />) },
+          { path: "quick-notes", element: withSuspense(<QuickNotesPage />) },
           { path: "settings/sku-rules", element: withSuspense(<SkuCategoryRulesPage />) },
           { path: "settings/print-template", element: withSuspense(<PrintTemplateSettingsPage />) },
           { path: "settings/print-template/edit", element: withSuspense(<PrintTemplateEditorPage />) },

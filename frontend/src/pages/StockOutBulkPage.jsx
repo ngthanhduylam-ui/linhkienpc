@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { CustomerSelector } from "../components/CustomerSelector";
+import { QuickNoteWidget } from "../components/quickNotes/QuickNoteWidget";
 import {
   bulkStockOutRequest,
   getProductInventoryRequest,
@@ -1586,6 +1587,7 @@ export function StockOutBulkPage() {
           </aside>
         </div>
       </form>
+      <QuickNoteWidget defaultBottomOffset={112} context="pos" />
     </div>
   );
 }
