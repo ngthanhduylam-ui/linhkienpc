@@ -1,4 +1,6 @@
 import { PublicProductGrid, PublicProductGridSkeleton } from "./PublicProductGrid";
+import { PublicResultViewSwitcher } from "./PublicResultViewSwitcher";
+import { PublicSearchResultsTable } from "./PublicSearchResultsTable";
 
 export function PublicCategoryResultsSection({
   category,
@@ -7,28 +9,33 @@ export function PublicCategoryResultsSection({
   isLoading,
   isLoadingMore,
   onLoadMore,
+  onResultViewModeChange,
   onRetry,
   onViewDetails,
   products,
+  resultViewMode,
   total
 }) {
   const categoryName = category?.name || "Danh mục";
   const safeProducts = Array.isArray(products) ? products : [];
 
   return (
-    <section className="mt-[clamp(1.25rem,1.5vw,1.75rem)]" aria-labelledby="public-category-results-heading">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 sm:mb-5">
+    <section className="mx-auto mt-[clamp(1.25rem,1.5vw,1.75rem)] w-full max-w-[100rem]" aria-labelledby="public-category-results-heading">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-5">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#0b63f6]">Danh mục</p>
           <h1 id="public-category-results-heading" className="mt-1 text-[clamp(1.4rem,1.5vw,2rem)] font-extrabold text-[#0f2f5f]">
             {categoryName} đang có sẵn
           </h1>
         </div>
-        {!isLoading && !error && (
-          <p className="text-sm font-semibold text-slate-600">
-            {total} sản phẩm đang có sẵn
-          </p>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {!isLoading && !error && (
+            <p className="text-sm font-semibold text-slate-600">
+              {total} sản phẩm đang có sẵn
+            </p>
+          )}
+          <PublicResultViewSwitcher value={resultViewMode} onChange={onResultViewModeChange} />
+        </div>
       </div>
 
       {isLoading && safeProducts.length === 0 && <PublicProductGridSkeleton />}
@@ -52,8 +59,12 @@ export function PublicCategoryResultsSection({
         </div>
       )}
 
-      {safeProducts.length > 0 && (
+      {safeProducts.length > 0 && resultViewMode === "card" && (
         <PublicProductGrid onViewDetails={onViewDetails} products={safeProducts} />
+      )}
+
+      {safeProducts.length > 0 && resultViewMode === "table" && (
+        <PublicSearchResultsTable products={safeProducts} />
       )}
 
       {safeProducts.length > 0 && error && (

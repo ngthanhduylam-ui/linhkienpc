@@ -7,6 +7,8 @@ import { PublicCatalogueFooter } from "../components/public/PublicCatalogueFoote
 import { PublicCategoryNav } from "../components/public/PublicCategoryNav";
 import { PublicCategoryResultsSection } from "../components/public/PublicCategoryResultsSection";
 import { PublicProductGrid, PublicProductGridSkeleton } from "../components/public/PublicProductGrid";
+import { PublicResultViewSwitcher } from "../components/public/PublicResultViewSwitcher";
+import { PublicSearchResultsTable } from "../components/public/PublicSearchResultsTable";
 import {
   getPublicProductById,
   listPublicCatalogueSuggestions,
@@ -14,6 +16,10 @@ import {
   listPublicCategories,
   searchPublicProducts
 } from "../services/publicSearch.service";
+import {
+  changePublicResultViewMode,
+  loadPublicResultViewMode
+} from "../utils/publicSearchResultsView";
 
 const SEARCH_HISTORY_KEY = "public_search_history";
 const IOS_INSTALL_DISMISSED_KEY = "public_ios_install_dismissed_at";
@@ -237,6 +243,7 @@ export function PublicSearchPage() {
   const [isCategoryLoadingMore, setIsCategoryLoadingMore] = useState(false);
   const [categoryRetryCount, setCategoryRetryCount] = useState(0);
   const [results, setResults] = useState([]);
+  const [resultViewMode, setResultViewMode] = useState(() => loadPublicResultViewMode());
   const [categories, setCategories] = useState([]);
   const [suggestedProducts, setSuggestedProducts] = useState([]);
   const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(true);
@@ -286,6 +293,16 @@ export function PublicSearchPage() {
   const hasSelectedCategory = viewMode === "category" && Boolean(selectedCategory?.id);
   const recentSearches = history.slice(0, MAX_VISIBLE_HISTORY_ITEMS);
   const dropdownMode = searchInput.trim() === "" ? "recent" : "products";
+
+  function handleResultViewModeChange(nextMode) {
+    const currentResults = viewMode === "category" ? categoryProducts : results;
+    const nextPresentation = changePublicResultViewMode({
+      query: submittedKeywordRef.current,
+      results: currentResults,
+      viewMode: resultViewMode
+    }, nextMode);
+    setResultViewMode(nextPresentation.viewMode);
+  }
 
   useEffect(() => {
     submittedKeywordRef.current = submittedKeyword;
@@ -1116,19 +1133,24 @@ export function PublicSearchPage() {
             isLoading={isCategoryLoading}
             isLoadingMore={isCategoryLoadingMore}
             onLoadMore={handleLoadMoreCategoryProducts}
+            onResultViewModeChange={handleResultViewModeChange}
             onRetry={handleRetryCategoryProducts}
             onViewDetails={handleCatalogueProductDetails}
             products={categoryProducts}
+            resultViewMode={resultViewMode}
             total={categoryTotal}
           />
         )}
 
         {hasSearched && (
-          <section className="mt-6 sm:mt-8">
-            <div className="mx-auto mb-4 flex max-w-5xl items-center justify-between gap-3">
+          <section className="mx-auto mt-6 w-full max-w-[100rem] sm:mt-8">
+            <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
                 Kết quả tra cứu {results.length > 0 ? `(${results.length})` : ""}
               </h2>
+              {viewMode === "search" && (
+                <PublicResultViewSwitcher value={resultViewMode} onChange={handleResultViewModeChange} />
+              )}
             </div>
 
             {isLoading && results.length === 0 && viewMode === "search" && (
@@ -1180,8 +1202,12 @@ export function PublicSearchPage() {
               </div>
             )}
 
-            {!error && results.length > 0 && viewMode === "search" && (
+            {!error && results.length > 0 && viewMode === "search" && resultViewMode === "card" && (
               <PublicProductGrid onViewDetails={handleCatalogueProductDetails} products={results} />
+            )}
+
+            {!error && results.length > 0 && viewMode === "search" && resultViewMode === "table" && (
+              <PublicSearchResultsTable products={results} />
             )}
 
             {!error && results.length > 0 && viewMode === "detail" && (

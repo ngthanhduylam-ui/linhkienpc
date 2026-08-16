@@ -12,16 +12,10 @@ import {
   IMAGE_COPY_ERROR_MESSAGE,
   IMAGE_COPY_UNSUPPORTED_MESSAGE
 } from "../utils/publicImageClipboard";
-import { normalizeOptionalProductDescription } from "../utils/publicProductPresentation";
+import { formatPublicSellingPrice, normalizeOptionalProductDescription } from "../utils/publicProductPresentation";
 import { formatWarrantyNote } from "../utils/warrantyNote";
 
 const PUBLIC_IMAGE_LIST_TIMEOUT_MS = 20000;
-
-function formatPublicPrice(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return "Liên hệ giá";
-  return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
-}
 
 export function SearchResultCard({ product, autoExpand = false, eagerImage = false }) {
   const [expanded, setExpanded] = useState(autoExpand);
@@ -233,7 +227,7 @@ export function SearchResultCard({ product, autoExpand = false, eagerImage = fal
                 )}
               </div>
             )}
-            <p className="mt-2 text-base font-extrabold text-blue-700">{formatPublicPrice(product.salePrice)}</p>
+            <p className="mt-2 text-base font-extrabold text-blue-700">{formatPublicSellingPrice(product.salePrice)}</p>
           </button>
 
           <div className="flex w-full shrink-0 items-center justify-between rounded-xl bg-sky-50 px-3 py-2 text-left sm:block sm:w-auto sm:rounded-2xl sm:px-4 sm:py-3 sm:text-center">

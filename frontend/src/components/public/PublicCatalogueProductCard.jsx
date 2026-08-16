@@ -7,6 +7,7 @@ import {
   sharePublicProductImages,
   supportsPublicImageFileSharing
 } from "../../utils/publicImageShare";
+import { formatPublicSellingPrice } from "../../utils/publicProductPresentation";
 
 const PUBLIC_IMAGE_LIST_TIMEOUT_MS = 20000;
 function getProductCondition(condition) {
@@ -21,12 +22,6 @@ function getThumbnailUrl(image) {
 
 function getResponseThumbnailUrl(product) {
   return getThumbnailUrl(product?.primaryImage) || getThumbnailUrl(product?.images?.[0]);
-}
-
-function formatPublicPrice(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return "Liên hệ giá";
-  return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
 }
 
 function getPlaceholderCategory(product) {
@@ -185,7 +180,7 @@ export function PublicCatalogueProductCard({ product, onViewDetails }) {
           {product.name}
         </h3>
         <p className="mt-0.5 text-xs font-black leading-4 text-[#0755c7] sm:text-[13px]">
-          {formatPublicPrice(product.salePrice)}
+          {formatPublicSellingPrice(product.salePrice)}
         </p>
 
         <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] sm:text-xs">
