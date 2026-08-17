@@ -1,6 +1,12 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
-const ACCESS_TOKEN_KEY = "access_token";
-const REFRESH_TOKEN_KEY = "refresh_token";
+import { runWithRefreshLock } from "../auth/authRefreshCoordinator.js";
+import {
+  getAccessToken,
+  notifyAuthFailure,
+  setAccessToken
+} from "../auth/authTokenStore.js";
+
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
+const REFRESH_RACE_RETRY_DELAY_MS = 100;
 
 let refreshPromise = null;
 
@@ -39,34 +45,6 @@ export function resolveApiAssetUrl(path) {
   return value.startsWith("/") ? value : `/${value}`;
 }
 
-function getStoredAccessToken() {
-  return localStorage.getItem(ACCESS_TOKEN_KEY) || "";
-}
-
-function getStoredRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY) || "";
-}
-
-function saveTokens(accessToken, refreshToken) {
-  if (accessToken) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  }
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  }
-}
-
-function clearTokens() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-}
-
-function redirectToAdminLogin() {
-  if (window.location.pathname !== "/admin/login") {
-    window.location.href = "/admin/login";
-  }
-}
-
 async function parsePayload(response) {
   try {
     return await response.json();
@@ -75,43 +53,47 @@ async function parsePayload(response) {
   }
 }
 
-async function refreshAccessToken() {
-  const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) {
-    clearTokens();
-    redirectToAdminLogin();
-    return false;
+function delay(ms) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+async function performRefreshRequest(allowRaceRetry = true) {
+  const response = await fetch(buildUrl("/admin/auth/refresh"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: "{}"
+  });
+  const payload = await parsePayload(response);
+
+  if (
+    response.status === 409
+    && payload?.error?.code === "AUTH_REFRESH_RACE_RETRY"
+    && allowRaceRetry
+  ) {
+    await delay(REFRESH_RACE_RETRY_DELAY_MS);
+    return performRefreshRequest(false);
   }
 
+  if (!response.ok) {
+    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
+    throw new ApiError(message, response.status, payload);
+  }
+
+  const tokenData = payload?.data;
+  if (!tokenData?.access_token || tokenData?.refresh_token) {
+    throw new ApiError("Phản hồi làm mới phiên không hợp lệ.", 500, payload);
+  }
+  setAccessToken(tokenData.access_token);
+  return tokenData;
+}
+
+export async function refreshAuthSession() {
   if (!refreshPromise) {
-    refreshPromise = (async () => {
-      const response = await fetch(buildUrl("/admin/auth/refresh"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken })
-      });
-
-      const payload = await parsePayload(response);
-      if (!response.ok) {
-        clearTokens();
-        redirectToAdminLogin();
-        return false;
-      }
-
-      const tokenData = payload?.data;
-      if (!tokenData?.access_token || !tokenData?.refresh_token) {
-        clearTokens();
-        redirectToAdminLogin();
-        return false;
-      }
-
-      saveTokens(tokenData.access_token, tokenData.refresh_token);
-      return true;
-    })().finally(() => {
+    refreshPromise = runWithRefreshLock(() => performRefreshRequest()).finally(() => {
       refreshPromise = null;
     });
   }
-
   return refreshPromise;
 }
 
@@ -133,7 +115,7 @@ async function request(path, options = {}) {
     requestHeaders["Content-Type"] = "application/json";
   }
 
-  const accessToken = getStoredAccessToken();
+  const accessToken = getAccessToken();
   if (accessToken) {
     requestHeaders.Authorization = `Bearer ${accessToken}`;
   }
@@ -155,7 +137,7 @@ async function request(path, options = {}) {
     }
 
     if (timeoutMs) {
-      timeoutId = window.setTimeout(() => abortController.abort(), timeoutMs);
+      timeoutId = globalThis.setTimeout(() => abortController.abort(), timeoutMs);
     }
   }
 
@@ -163,21 +145,25 @@ async function request(path, options = {}) {
     method,
     headers: requestHeaders,
     body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body)),
+    credentials: "include",
     signal: fetchSignal
   }).finally(() => {
-    if (timeoutId) window.clearTimeout(timeoutId);
+    if (timeoutId) globalThis.clearTimeout(timeoutId);
   });
 
   const canTryRefresh =
     response.status === 401 &&
     retryOn401 &&
     path !== "/admin/auth/login" &&
-    path !== "/admin/auth/refresh";
+    path !== "/admin/auth/refresh" &&
+    path !== "/admin/auth/logout";
 
   if (canTryRefresh) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
+    try {
+      await refreshAuthSession();
       return request(path, { ...options, retryOn401: false });
+    } catch (error) {
+      notifyAuthFailure();
     }
   }
 

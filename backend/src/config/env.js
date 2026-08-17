@@ -10,6 +10,11 @@ function numberFromEnv(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function listFromEnv(value, fallback = []) {
+  const source = value ? String(value).split(',') : fallback;
+  return [...new Set(source.map((item) => String(item).trim()).filter(Boolean))];
+}
+
 const required = [
   'PORT',
   'DB_HOST',
@@ -49,6 +54,16 @@ module.exports = {
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
     refreshSecret: process.env.JWT_REFRESH_SECRET,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
+  },
+  auth: {
+    refreshCookieName: 'pt_admin_refresh',
+    refreshReuseGraceMs: Math.max(0, numberFromEnv(process.env.AUTH_REFRESH_REUSE_GRACE_MS, 5000)),
+    allowedOrigins: listFromEnv(
+      process.env.AUTH_ALLOWED_ORIGINS,
+      (process.env.NODE_ENV || 'development') === 'production'
+        ? ['https://vitinhphuoctai.com']
+        : ['http://localhost:5173', 'http://127.0.0.1:5173']
+    )
   },
   seed: {
     adminUsername: process.env.DEFAULT_ADMIN_USERNAME || 'admin',

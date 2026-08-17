@@ -1,27 +1,12 @@
-import { apiGet, apiPost } from "../api/apiClient";
+import { apiGet, apiPost, refreshAuthSession } from "../api/apiClient.js";
+import {
+  clearAccessToken,
+  clearLegacyAuthStorage,
+  setAccessToken
+} from "../auth/authTokenStore.js";
 
-const ACCESS_TOKEN_KEY = "access_token";
-const REFRESH_TOKEN_KEY = "refresh_token";
-
-export function getStoredTokens() {
-  return {
-    accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || "",
-    refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) || ""
-  };
-}
-
-export function saveTokens(accessToken, refreshToken) {
-  if (accessToken) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  }
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  }
-}
-
-export function clearTokens() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+export function clearLegacyTokens(storage) {
+  return clearLegacyAuthStorage(storage);
 }
 
 export async function loginRequest(username, password) {
@@ -30,33 +15,27 @@ export async function loginRequest(username, password) {
     { username, password },
     { retryOn401: false }
   );
-  return response?.data;
+  const data = response?.data;
+  if (data?.access_token) setAccessToken(data.access_token);
+  return data;
 }
 
-export async function refreshRequest(refreshToken) {
-  if (!refreshToken) {
-    return null;
-  }
-
-  const response = await apiPost(
-    "/admin/auth/refresh",
-    { refresh_token: refreshToken },
-    { retryOn401: false }
-  );
-  return response?.data;
+export async function refreshRequest() {
+  return refreshAuthSession();
 }
 
-export async function logoutRequest(refreshToken) {
-  if (!refreshToken) {
-    return { logged_out: true, revoked: false };
+export async function logoutRequest() {
+  try {
+    const response = await apiPost(
+      "/admin/auth/logout",
+      {},
+      { retryOn401: false }
+    );
+    return response?.data;
+  } finally {
+    clearAccessToken();
+    clearLegacyAuthStorage();
   }
-
-  const response = await apiPost(
-    "/admin/auth/logout",
-    { refresh_token: refreshToken },
-    { retryOn401: false }
-  );
-  return response?.data;
 }
 
 export async function getMeRequest() {

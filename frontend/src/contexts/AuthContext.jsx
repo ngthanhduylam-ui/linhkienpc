@@ -1,12 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { clearAccessToken, setAuthFailureHandler } from "../auth/authTokenStore";
 import {
-  clearTokens,
+  clearLegacyTokens,
   getMeRequest,
-  getStoredTokens,
   loginRequest,
   logoutRequest,
-  refreshRequest,
-  saveTokens
+  refreshRequest
 } from "../services/auth.service";
 
 const AuthContext = createContext(null);
@@ -18,12 +17,13 @@ export function AuthProvider({ children }) {
   const isAuthenticated = Boolean(admin);
 
   const login = useCallback(async (username, password) => {
+    clearLegacyTokens();
     const data = await loginRequest(username, password);
-    if (!data?.access_token || !data?.refresh_token) {
-      throw new Error("Phan hoi dang nhap khong hop le.");
+    if (!data?.access_token || data?.refresh_token) {
+      clearAccessToken();
+      throw new Error("Phản hồi đăng nhập không hợp lệ.");
     }
 
-    saveTokens(data.access_token, data.refresh_token);
     if (data.admin) {
       setAdmin(data.admin);
       return data.admin;
@@ -36,63 +36,44 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      const { refreshToken } = getStoredTokens();
-      await logoutRequest(refreshToken);
+      await logoutRequest();
     } catch (error) {
-      // Luon clear token local ke ca khi revoke that bai.
+      // Local auth state is always cleared even if server revocation fails.
     } finally {
-      clearTokens();
+      clearAccessToken();
+      clearLegacyTokens();
       setAdmin(null);
     }
   }, []);
 
   useEffect(() => {
     let isMounted = true;
+    clearLegacyTokens();
+    const removeFailureHandler = setAuthFailureHandler(() => {
+      if (isMounted) setAdmin(null);
+    });
 
     async function bootstrapAuth() {
-      const { accessToken, refreshToken } = getStoredTokens();
-      if (!accessToken) {
-        if (isMounted) {
-          setAdmin(null);
-          setIsInitializing(false);
-        }
-        return;
-      }
-
       try {
-        const profile = await getMeRequest();
-        if (isMounted) {
-          setAdmin(profile);
+        const restored = await refreshRequest();
+        if (!isMounted) return;
+        if (restored?.admin) {
+          setAdmin(restored.admin);
+        } else {
+          setAdmin(await getMeRequest());
         }
       } catch (error) {
-        try {
-          const refreshed = await refreshRequest(refreshToken);
-          if (refreshed?.access_token && refreshed?.refresh_token) {
-            saveTokens(refreshed.access_token, refreshed.refresh_token);
-            const profile = await getMeRequest();
-            if (isMounted) {
-              setAdmin(profile);
-            }
-          } else if (isMounted) {
-            clearTokens();
-            setAdmin(null);
-          }
-        } catch (refreshError) {
-          if (isMounted) {
-            clearTokens();
-            setAdmin(null);
-          }
-        }
+        clearAccessToken();
+        if (isMounted) setAdmin(null);
       } finally {
-        if (isMounted) {
-          setIsInitializing(false);
-        }
+        if (isMounted) setIsInitializing(false);
       }
     }
 
     bootstrapAuth();
     return () => {
       isMounted = false;
+      removeFailureHandler();
     };
   }, []);
 

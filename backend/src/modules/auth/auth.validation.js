@@ -7,13 +7,6 @@ const loginValidator = validateRequest({
   }
 });
 
-const refreshValidator = validateRequest({
-  body: {
-    refresh_token: { required: true, type: 'string', minLength: 20, maxLength: 5000 }
-  }
-});
-
 module.exports = {
-  loginValidator,
-  refreshValidator
+  loginValidator
 };
