@@ -594,6 +594,7 @@ async function getPublicInventoryBySku(sku) {
         GROUP BY product_id
       ) pim ON pim.product_id = p.id
       WHERE p.sku = ? AND p.is_active = 1
+        AND COALESCE(pib.quantity, 0) > 0
       LIMIT 1
     `,
     [sku]
