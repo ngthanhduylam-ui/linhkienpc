@@ -1,6 +1,10 @@
 const express = require('express');
 const healthRoute = require('./health.route');
 const { requireAuth } = require('../middlewares/authenticate');
+const {
+  publicDataRateLimit,
+  publicSuggestionsRateLimit
+} = require('../middlewares/publicRateLimits');
 
 const categoryAdminRoutes = require('../modules/category/category.route');
 const productAdminRoutes = require('../modules/product/product.route');
@@ -24,15 +28,15 @@ const router = express.Router();
 
 router.use('/health', healthRoute);
 
-router.get('/public/catalogue/suggestions', productController.listPublicCatalogueSuggestions);
+router.get('/public/catalogue/suggestions', publicSuggestionsRateLimit, productController.listPublicCatalogueSuggestions);
 router.get('/public/catalogue/products/:id/images', productValidators.idParamValidator, productImageController.listPublicImagesByProductId);
 router.get('/public/catalogue/products/:id/images/:imageId/thumbnail', productValidators.idParamValidator, productImageController.getPublicThumbnailByProductId);
 router.get('/public/catalogue/products/:id/images/:imageId/download', productValidators.idParamValidator, productImageController.downloadPublicImageByProductId);
-router.get('/public/products', productController.searchPublicProducts);
+router.get('/public/products', publicDataRateLimit, productController.searchPublicProducts);
 router.get('/public/products/:sku/images', productValidators.skuParamValidator, productImageController.listPublicImages);
 router.get('/public/products/:sku/images/:imageId/thumbnail', productImageController.getPublicThumbnail);
 router.get('/public/products/:sku/images/:imageId/download', productImageController.downloadPublicImage);
-router.get('/public/products/:sku/inventory', productValidators.skuParamValidator, productController.getPublicInventoryBySku);
+router.get('/public/products/:sku/inventory', publicDataRateLimit, productValidators.skuParamValidator, productController.getPublicInventoryBySku);
 router.get('/public/categories', categoryController.listCategories);
 
 router.use('/admin/auth', authAdminRoutes);
