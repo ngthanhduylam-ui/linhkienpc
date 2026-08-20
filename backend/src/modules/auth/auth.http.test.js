@@ -19,6 +19,7 @@ const loginLimiter = require('../../middlewares/adminLoginRateLimit');
 const refreshLimiter = require('../../middlewares/adminRefreshRateLimit');
 const errorHandler = require('../../middlewares/errorHandler');
 const { isAllowedOrigin, requireAllowedAuthOrigin } = require('../../middlewares/authOriginPolicy');
+const AppError = require('../../utils/AppError');
 
 const originalMethods = {
   login: authService.login,
@@ -137,10 +138,7 @@ test('logout revokes the cookie family and clears the browser cookie', async () 
 
 test('invalid refresh clears the stale cookie and login validation remains enforced', async () => {
   authService.refresh = async () => {
-    const error = new Error('invalid');
-    error.statusCode = 401;
-    error.code = 'AUTH_TOKEN_INVALID';
-    throw error;
+    throw new AppError('invalid', 401, 'AUTH_TOKEN_INVALID');
   };
   await withServer(app, async (baseUrl) => {
     const refresh = await fetch(`${baseUrl}/api/v1/admin/auth/refresh`, {
