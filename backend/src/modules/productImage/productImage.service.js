@@ -1,17 +1,14 @@
 const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
-const sharp = require('sharp');
 const { pool } = require('../../config/database');
 const env = require('../../config/env');
 const AppError = require('../../utils/AppError');
 const storage = require('./productImage.storage');
-
-const ALLOWED_FORMATS = new Map([
-  ['jpeg', { extension: 'jpg', mimeType: 'image/jpeg' }],
-  ['png', { extension: 'png', mimeType: 'image/png' }],
-  ['webp', { extension: 'webp', mimeType: 'image/webp' }]
-]);
+const {
+  createThumbnailPipeline,
+  inspectImage
+} = require('./productImage.processing');
 
 function sanitizeOriginalName(value) {
   const baseName = path.basename(String(value || 'image'));
@@ -118,11 +115,7 @@ async function prepareImage(file) {
   const createdPaths = [];
   try {
     const sourceBuffer = await fs.readFile(file.path);
-    const metadata = await sharp(sourceBuffer, { failOn: 'error' }).metadata();
-    const formatConfig = ALLOWED_FORMATS.get(metadata.format);
-    if (!formatConfig || !metadata.width || !metadata.height) {
-      throw new AppError('Chỉ hỗ trợ ảnh JPEG, PNG hoặc WebP.', 400, 'IMAGE_FORMAT_INVALID');
-    }
+    const { formatConfig } = await inspectImage(sourceBuffer);
 
     const id = crypto.randomUUID();
     const originalName = `${id}.${formatConfig.extension}`;
@@ -133,11 +126,7 @@ async function prepareImage(file) {
     await fs.copyFile(file.path, originalAbsolutePath);
     createdPaths.push(originalAbsolutePath);
 
-    await sharp(sourceBuffer, { failOn: 'error' })
-      .rotate()
-      .resize({ width: 720, height: 720, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 80 })
-      .toFile(thumbnailAbsolutePath);
+    await createThumbnailPipeline(sourceBuffer).toFile(thumbnailAbsolutePath);
     createdPaths.push(thumbnailAbsolutePath);
     await storage.removeFile(file.path);
 
