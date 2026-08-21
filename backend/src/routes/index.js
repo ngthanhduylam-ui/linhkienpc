@@ -1,6 +1,7 @@
 const express = require('express');
 const healthRoute = require('./health.route');
 const { requireAuth } = require('../middlewares/authenticate');
+const adminNoStore = require('../middlewares/adminNoStore');
 const {
   publicDataRateLimit,
   publicSuggestionsRateLimit
@@ -39,6 +40,7 @@ router.get('/public/products/:sku/images/:imageId/download', productImageControl
 router.get('/public/products/:sku/inventory', publicDataRateLimit, productValidators.skuParamValidator, productController.getPublicInventoryBySku);
 router.get('/public/categories', categoryController.listCategories);
 
+router.use('/admin', adminNoStore);
 router.use('/admin/auth', authAdminRoutes);
 router.use('/admin/categories', requireAuth, categoryAdminRoutes);
 router.use('/admin/customers', requireAuth, customerAdminRoutes);
