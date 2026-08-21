@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { validateAdminReturnLocation } from "../utils/adminPublicNavigation";
 
 export function AdminLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isAuthenticated, loading } = useAuth();
+  const returnDestination = validateAdminReturnLocation(location.state?.from);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -14,8 +16,7 @@ export function AdminLoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!loading && isAuthenticated) {
-    const to = location.state?.from || "/admin";
-    return <Navigate to={to} replace />;
+    return <Navigate to={returnDestination} replace />;
   }
 
   return (
@@ -32,8 +33,7 @@ export function AdminLoginPage() {
             setIsSubmitting(true);
             try {
               await login(username, password);
-              const to = location.state?.from || "/admin";
-              navigate(to, { replace: true });
+              navigate(returnDestination, { replace: true });
             } catch (err) {
               setError(err?.message || "Đăng nhập thất bại.");
             } finally {
