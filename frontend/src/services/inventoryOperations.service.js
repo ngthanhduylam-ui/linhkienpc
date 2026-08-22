@@ -134,9 +134,7 @@ export async function activateSupplierRequest(id) {
 }
 
 export async function createProductRequest(payload) {
-  console.log("[InventoryWorkbench] BEFORE createProductRequest", payload);
   const response = await apiPost("/admin/products", payload);
-  console.log("[InventoryWorkbench] API response payload", response);
   return response?.data;
 }
 
