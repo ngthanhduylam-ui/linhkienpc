@@ -113,7 +113,7 @@ test("table model has exactly four public columns and never carries SKU or priva
   assert.equal(row.specSummary, "2 dây CPU");
   assert.deepEqual(row.warrantyLines, [{ label: "fullbox đủ dây bh 3.35", quantity: 1 }]);
   assert.equal(row.totalQuantity, 1);
-  assert.equal(row.price, "2.500.000đ");
+  assert.equal(row.price, "Liên hệ");
   assert.equal("sku" in row, false);
   assert.equal("purchasePrice" in row, false);
   assert.equal("cost" in row, false);

@@ -1,52 +1,52 @@
 const SERVICE_ITEMS = [
   {
-    title: "Cam kết hàng chất lượng",
-    description: "Test kỹ trước khi bán",
-    icon: "quality"
+    title: "Tra cứu sản phẩm",
+    description: "Nhanh chóng, dễ tìm",
+    icon: "search"
   },
   {
-    title: "Bảo hành rõ ràng",
-    description: "Hỗ trợ nhanh chóng",
-    icon: "shield"
+    title: "Kiểm tra tồn kho",
+    description: "Cập nhật theo hệ thống",
+    icon: "package"
   },
   {
-    title: "Giao hàng toàn quốc",
-    description: "Nhanh chóng – An toàn",
-    icon: "delivery"
+    title: "Hình ảnh sản phẩm",
+    description: "Xem trực tiếp trên web",
+    icon: "image"
   },
   {
-    title: "Hỗ trợ bán hàng",
-    description: "08:30 - 18:30 (T2 - CN)",
-    icon: "support"
+    title: "Giờ hoạt động",
+    description: "08:00 - 21:00 (T2 - CN)",
+    icon: "clock"
   }
 ];
 
 function ServiceIcon({ type }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 min-[1920px]:h-7 min-[1920px]:w-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {type === "quality" && (
+      {type === "search" && (
         <>
-          <path d="M4 5h16v14H4z" />
-          <path d="M7 15c1.1-1.7 2.2-2.5 3.4-2.5 1.4 0 1.9 1.5 3.2 1.5 1 0 1.7-.6 3.4-2M8 8h8" />
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-4-4" />
         </>
       )}
-      {type === "shield" && (
+      {type === "package" && (
         <>
-          <path d="M12 3 20 6v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-3Z" />
-          <path d="m8.5 12 2.2 2.2 4.8-5" />
+          <path d="m4 7 8-4 8 4-8 4-8-4Z" />
+          <path d="M4 7v10l8 4 8-4V7M12 11v10" />
         </>
       )}
-      {type === "delivery" && (
+      {type === "image" && (
         <>
-          <path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z" />
-          <circle cx="7" cy="18" r="2" /><circle cx="17.5" cy="18" r="2" />
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-5-5L5 20" />
         </>
       )}
-      {type === "support" && (
+      {type === "clock" && (
         <>
-          <path d="M4 13v-2a8 8 0 0 1 16 0v2" />
-          <path d="M4 13a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2v-2Zm16 0a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2v-2Z" />
-          <path d="M17 18c-1 2-2.5 3-5 3" />
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
         </>
       )}
     </svg>

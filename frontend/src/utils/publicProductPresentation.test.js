@@ -15,9 +15,9 @@ test("preserves long plain-text descriptions without generating fallback content
   assert.equal(normalizeOptionalProductDescription(description), description);
 });
 
-test("formats only a positive public selling price and otherwise requests contact", () => {
-  assert.equal(formatPublicSellingPrice(2500000), "2.500.000đ");
-  assert.equal(formatPublicSellingPrice("12500000"), "12.500.000đ");
+test("always hides public selling prices behind the contact label", () => {
+  assert.equal(formatPublicSellingPrice(2500000), "Liên hệ");
+  assert.equal(formatPublicSellingPrice("12500000"), "Liên hệ");
   assert.equal(formatPublicSellingPrice(null), "Liên hệ");
   assert.equal(formatPublicSellingPrice(undefined), "Liên hệ");
   assert.equal(formatPublicSellingPrice(""), "Liên hệ");

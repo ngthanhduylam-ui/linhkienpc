@@ -24,7 +24,7 @@ function withAdminImageSummary(product) {
 
 function withPublicImageSummary(product) {
   const primaryImageId = product.primary_image_id;
-  const { primary_image_id, ...data } = product;
+  const { primary_image_id, sale_price, ...data } = product;
   return {
     ...data,
     primary_image: primaryImageId

@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import { resolveApiAssetUrl } from "../../api/apiClient";
 import { listPublicProductImages } from "../../services/publicSearch.service";
+import { formatPublicSellingPrice } from "../../utils/publicProductPresentation";
 
 export const PUBLIC_SEARCH_LISTBOX_ID = "public-live-search-results";
-
-function formatPublicPrice(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return "Liên hệ giá";
-  return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
-}
 
 function getThumbnailUrl(image) {
   return image?.thumbnail_url || image?.thumbnailUrl || "";
@@ -209,7 +204,7 @@ export function PublicSearchDropdown({
                   </span>
                   <span className="mt-1 flex min-w-0 items-center justify-between gap-2.5 sm:gap-3">
                     <span className="truncate text-[13px] font-extrabold leading-4 text-[#0b4fb3] sm:text-sm lg:text-[15px]">
-                      {formatPublicPrice(product.salePrice)}
+                      {formatPublicSellingPrice(product.salePrice)}
                     </span>
                     <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[13px] font-bold leading-4 text-emerald-800 ring-1 ring-inset ring-emerald-300 sm:text-sm">
                       Tồn: {product.totalQuantity}

@@ -3,8 +3,6 @@ export function normalizeOptionalProductDescription(value) {
   return String(value).trim();
 }
 
-export function formatPublicSellingPrice(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return "Liên hệ";
-  return `${new Intl.NumberFormat("vi-VN").format(amount)}đ`;
+export function formatPublicSellingPrice() {
+  return "Liên hệ";
 }

@@ -465,7 +465,6 @@ async function searchPublicProducts(query) {
         p.name,
         p.spec_summary,
         c.name AS category_name,
-        p.sale_price,
         COALESCE(pib.quantity, 0) AS total_quantity,
         COALESCE(pim.image_count, 0) AS image_count,
         pim.primary_image_id
@@ -496,7 +495,6 @@ async function searchPublicProducts(query) {
       condition: mapPublicCondition(product.sku),
       category_name: product.category_name,
       spec_summary: product.spec_summary,
-      sale_price: mapSalePrice(product.sale_price),
       total_quantity: Number(product.total_quantity || 0),
       note_groups: noteGroupMap.get(product.id) || [],
       ...mapImageSummary(product)
@@ -522,7 +520,6 @@ async function queryRandomAvailableProducts(limit, excludedIds) {
         p.sku,
         p.name,
         c.name AS category_name,
-        p.sale_price,
         COALESCE(pib.quantity, 0) AS total_quantity,
         COALESCE(pim.image_count, 0) AS image_count,
         pim.primary_image_id
@@ -566,7 +563,6 @@ async function listPublicCatalogueSuggestions(query) {
       name: product.name,
       condition: mapPublicCondition(product.sku),
       category_name: product.category_name,
-      sale_price: mapSalePrice(product.sale_price),
       total_quantity: Number(product.total_quantity || 0),
       ...mapImageSummary(product)
     })),

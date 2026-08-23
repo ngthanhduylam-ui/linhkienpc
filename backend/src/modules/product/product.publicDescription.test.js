@@ -21,7 +21,7 @@ async function searchWithDescription(specSummary) {
         name: 'Nguồn ASUS ROG STRIX 1000W 2nd',
         spec_summary: specSummary,
         category_name: 'Nguồn',
-        sale_price: null,
+        sale_price: 2500000,
         total_quantity: 2,
         image_count: 1,
         primary_image_id: 7
@@ -48,6 +48,7 @@ test('public search returns the canonical spec_summary without changing availabi
   assert.equal(result.items[0].spec_summary, '2 dây CPU');
   assert.equal(result.items[0].name, 'Nguồn ASUS ROG STRIX 1000W 2nd');
   assert.equal(result.items[0].total_quantity, 2);
+  assert.equal('sale_price' in result.items[0], false);
   assert.equal('sku' in result.items[0], false);
   assert.equal('purchase_price' in result.items[0], false);
   assert.equal('cost' in result.items[0], false);
