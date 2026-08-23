@@ -1,7 +1,12 @@
 const { pool } = require('../../config/database');
 const AppError = require('../../utils/AppError');
 const { escapeLike, parsePagination, parseNullableInt } = require('../../utils/parsers');
-const { NO_NOTE_WARRANTY_KEY, getAdjustedNoteGroups, normalizeNoteKey } = require('../../utils/inventoryNoteGroups');
+const {
+  NO_NOTE_WARRANTY_KEY,
+  cleanNote,
+  getAdjustedNoteGroups,
+  normalizeNoteKey
+} = require('../../utils/inventoryNoteGroups');
 
 const MAX_MONEY_AMOUNT = 999999999999999n;
 
@@ -417,7 +422,7 @@ async function adjustStock({
         warrantyNote !== undefined &&
         warrantyNote !== null &&
         (warrantyNote === NO_NOTE_WARRANTY_KEY || String(warrantyNote).trim() !== '');
-      const selectedWarrantyNote = normalizeWarrantyNote(hasWarrantySelection ? warrantyNote : note);
+      const selectedWarrantyNoteKey = normalizeWarrantyNote(hasWarrantySelection ? warrantyNote : note);
 
       if (remainingNoteGroups.length && !hasWarrantySelection) {
         throw new AppError('Warranty note selection is required.', 400, 'WARRANTY_NOTE_REQUIRED', [
@@ -426,7 +431,7 @@ async function adjustStock({
       }
 
       if (remainingNoteGroups.length && hasWarrantySelection) {
-        const selectedGroup = remainingNoteGroups.find((group) => group.note_key === selectedWarrantyNote);
+        const selectedGroup = remainingNoteGroups.find((group) => group.note_key === selectedWarrantyNoteKey);
         if (!selectedGroup) {
           throw new AppError('Warranty note group not found.', 404, 'WARRANTY_NOTE_NOT_FOUND', [
             { field: 'warranty_note', issue: 'not_found' }
@@ -437,12 +442,12 @@ async function adjustStock({
             {
               field: 'quantity',
               issue: 'exceeds_selected_warranty_note_stock',
-              warranty_note: selectedWarrantyNote,
+              warranty_note: selectedWarrantyNoteKey,
               available: selectedGroup.quantity
             }
           ]);
         }
-        transactionNote = selectedWarrantyNote ? selectedWarrantyNote : null;
+        transactionNote = cleanNote(selectedGroup.note);
       }
 
       nextQuantity = currentQuantity - quantity;
@@ -676,7 +681,7 @@ async function bulkStockOut({ adminId, customerId = null, note = null, items = [
         sale_note: normalizeSaleNote(item.sale_note),
         warranty_note_key: warrantyNoteKey,
         has_warranty_selection: warrantySelected,
-        transaction_note: warrantySelected && warrantyNoteKey ? warrantyNoteKey : null
+        transaction_note: null
       };
     });
     resolvedItems.forEach((item) => {
@@ -795,6 +800,16 @@ async function bulkStockOut({ adminId, customerId = null, note = null, items = [
 
     if (warrantyStockErrors.length > 0) {
       throw new AppError('Insufficient warranty note stock.', 422, 'INSUFFICIENT_WARRANTY_NOTE_STOCK', warrantyStockErrors);
+    }
+
+    for (const item of resolvedItems) {
+      if (!item.has_warranty_selection) {
+        continue;
+      }
+
+      const groups = noteGroupsByProduct.get(item.product_id) || [];
+      const selectedGroup = groups.find((group) => group.note_key === item.warranty_note_key);
+      item.transaction_note = cleanNote(selectedGroup?.note);
     }
 
     for (const productId of productIds) {

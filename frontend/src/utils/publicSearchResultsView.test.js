@@ -159,7 +159,7 @@ test("warranty lines support one or many groups and preserve canonical quantitie
     { note: "HBH", quantity: 1 },
     { note: "bh 8.27", quantity: 2 }
   ]), [
-    { label: "BH 8.27", quantity: 2 },
+    { label: "bh 8.27", quantity: 2 },
     { label: "HBH", quantity: 1 }
   ]);
 });
