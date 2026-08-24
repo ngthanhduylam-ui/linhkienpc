@@ -44,9 +44,10 @@ test('uses the approved public limiter quotas and five-minute window', () => {
   assert.equal(PUBLIC_SUGGESTIONS_RATE_LIMIT, 120);
 });
 
-test('mounts the shared data limiter only on public search and SKU inventory routes', () => {
+test('mounts the shared data limiter on public search, SKU inventory, and recent stock routes', () => {
   assert.ok(getRouteHandlers('/public/products').includes(publicDataRateLimit));
   assert.ok(getRouteHandlers('/public/products/:sku/inventory').includes(publicDataRateLimit));
+  assert.ok(getRouteHandlers('/public/recent-stock-updates').includes(publicDataRateLimit));
 
   const excludedPaths = [
     '/public/categories',

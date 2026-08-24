@@ -25,9 +25,9 @@ const VIEW_OPTIONS = [
   }
 ];
 
-export function PublicResultViewSwitcher({ value, onChange }) {
+export function PublicResultViewSwitcher({ value, onChange, ariaLabel = "Kiểu hiển thị kết quả" }) {
   return (
-    <div className="inline-flex shrink-0 rounded-lg border border-slate-300 bg-white p-0.5" role="group" aria-label="Kiểu hiển thị kết quả">
+    <div className="inline-flex shrink-0 rounded-lg border border-slate-300 bg-white p-0.5" role="group" aria-label={ariaLabel}>
       {VIEW_OPTIONS.map((option) => {
         const active = value === option.id;
         return (

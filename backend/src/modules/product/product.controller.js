@@ -110,6 +110,20 @@ exports.listPublicCatalogueSuggestions = asyncHandler(async (req, res) => {
   });
 });
 
+exports.listPublicRecentStockUpdates = asyncHandler(async (req, res) => {
+  const result = await productService.listPublicRecentStockUpdates();
+  res.json({
+    success: true,
+    data: result.items.map(withPublicImageSummary),
+    meta: {
+      limit: result.limit,
+      count: result.items.length,
+      window_hours: result.windowHours,
+      server_time: new Date().toISOString()
+    }
+  });
+});
+
 exports.getPublicInventoryBySku = asyncHandler(async (req, res) => {
   const data = await productService.getPublicInventoryBySku(req.params.sku);
   res.json({

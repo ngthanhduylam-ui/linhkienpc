@@ -38,6 +38,7 @@ function mapPublicProducts(products) {
       primaryImage: product.primary_image || images[0] || null,
       images,
       totalQuantity: Number(product.total_quantity || 0),
+      stockUpdatedAt: product.stock_updated_at || null,
       noteGroups: (product.note_groups || []).map((item) => ({
         note: item.note,
         label: item.label || item.note || "Không ghi chú",
@@ -45,6 +46,12 @@ function mapPublicProducts(products) {
       }))
     };
   });
+}
+
+export async function listPublicRecentStockUpdates(options = {}) {
+  const response = await apiGet("/public/recent-stock-updates", {}, options);
+  const products = Array.isArray(response?.data) ? response.data : [];
+  return mapPublicProducts(products).slice(0, 10);
 }
 
 export async function getPublicProductById(productId, options = {}) {

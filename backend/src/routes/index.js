@@ -30,6 +30,7 @@ const router = express.Router();
 router.use('/health', healthRoute);
 
 router.get('/public/catalogue/suggestions', publicSuggestionsRateLimit, productController.listPublicCatalogueSuggestions);
+router.get('/public/recent-stock-updates', publicDataRateLimit, productController.listPublicRecentStockUpdates);
 router.get('/public/catalogue/products/:id/images', productValidators.idParamValidator, productImageController.listPublicImagesByProductId);
 router.get('/public/catalogue/products/:id/images/:imageId/thumbnail', productValidators.idParamValidator, productImageController.getPublicThumbnailByProductId);
 router.get('/public/catalogue/products/:id/images/:imageId/download', productValidators.idParamValidator, productImageController.downloadPublicImageByProductId);

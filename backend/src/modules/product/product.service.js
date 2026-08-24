@@ -7,6 +7,8 @@ const MAX_SEARCH_TOKENS = 8;
 const DEFAULT_PUBLIC_SUGGESTION_LIMIT = 6;
 const MAX_PUBLIC_SUGGESTION_LIMIT = 12;
 const MAX_PUBLIC_SUGGESTION_EXCLUSIONS = 24;
+const PUBLIC_RECENT_STOCK_WINDOW_HOURS = 72;
+const PUBLIC_RECENT_STOCK_LIMIT = 10;
 const COMPACT_SKU_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.sku), '.', ''), '-', ''), ' ', '')";
 const COMPACT_NAME_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.name), '.', ''), '-', ''), ' ', '')";
 
@@ -571,6 +573,78 @@ async function listPublicCatalogueSuggestions(query) {
   };
 }
 
+async function listPublicRecentStockUpdates() {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        p.id,
+        p.sku,
+        p.name,
+        p.spec_summary,
+        c.name AS category_name,
+        COALESCE(pib.quantity, 0) AS total_quantity,
+        COALESCE(pim.image_count, 0) AS image_count,
+        pim.primary_image_id,
+        recent.stock_updated_at
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+      JOIN (
+        SELECT product_id, MAX(stock_updated_at) AS stock_updated_at
+        FROM (
+          SELECT id AS product_id, created_at AS stock_updated_at
+          FROM products
+          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 72 HOUR)
+
+          UNION ALL
+
+          SELECT product_id, occurred_at AS stock_updated_at
+          FROM stock_transactions
+          WHERE txn_type = 'IN'
+            AND occurred_at >= DATE_SUB(NOW(), INTERVAL 72 HOUR)
+
+          UNION ALL
+
+          SELECT product_id, occurred_at AS stock_updated_at
+          FROM inventory_quantity_adjustments
+          WHERE from_quantity <> to_quantity
+            AND occurred_at >= DATE_SUB(NOW(), INTERVAL 72 HOUR)
+        ) eligible_events
+        GROUP BY product_id
+      ) recent ON recent.product_id = p.id
+      LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id
+      LEFT JOIN (
+        SELECT
+          product_id,
+          COUNT(*) AS image_count,
+          MAX(CASE WHEN sort_order = 1 THEN id END) AS primary_image_id
+        FROM product_images
+        GROUP BY product_id
+      ) pim ON pim.product_id = p.id
+      WHERE p.is_active = 1
+        AND COALESCE(pib.quantity, 0) > 0
+      ORDER BY recent.stock_updated_at DESC, p.id DESC
+      LIMIT 10
+    `
+  );
+
+  const products = rows.slice(0, PUBLIC_RECENT_STOCK_LIMIT);
+
+  return {
+    items: products.map((product) => ({
+      id: Number(product.id),
+      name: product.name,
+      condition: mapPublicCondition(product.sku),
+      category_name: product.category_name,
+      spec_summary: product.spec_summary,
+      total_quantity: Number(product.total_quantity || 0),
+      stock_updated_at: product.stock_updated_at,
+      ...mapImageSummary(product)
+    })),
+    limit: PUBLIC_RECENT_STOCK_LIMIT,
+    windowHours: PUBLIC_RECENT_STOCK_WINDOW_HOURS
+  };
+}
+
 async function getPublicInventoryBySku(sku) {
   const [products] = await pool.query(
     `
@@ -624,5 +698,6 @@ module.exports = {
   setProductActive,
   searchPublicProducts,
   listPublicCatalogueSuggestions,
+  listPublicRecentStockUpdates,
   getPublicInventoryBySku
 };

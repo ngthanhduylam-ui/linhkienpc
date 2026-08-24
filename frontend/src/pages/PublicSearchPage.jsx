@@ -7,6 +7,7 @@ import { PublicCatalogueFooter } from "../components/public/PublicCatalogueFoote
 import { PublicCategoryNav } from "../components/public/PublicCategoryNav";
 import { PublicCategoryResultsSection } from "../components/public/PublicCategoryResultsSection";
 import { PublicProductGrid, PublicProductGridSkeleton } from "../components/public/PublicProductGrid";
+import { PublicRecentStockUpdatesSection } from "../components/public/PublicRecentStockUpdatesSection";
 import { PublicResultViewSwitcher } from "../components/public/PublicResultViewSwitcher";
 import { PublicSearchResultsTable } from "../components/public/PublicSearchResultsTable";
 import {
@@ -14,6 +15,7 @@ import {
   listPublicCatalogueSuggestions,
   listPublicCategoryProducts,
   listPublicCategories,
+  listPublicRecentStockUpdates,
   searchPublicProducts
 } from "../services/publicSearch.service";
 import {
@@ -245,6 +247,8 @@ export function PublicSearchPage() {
   const [results, setResults] = useState([]);
   const [resultViewMode, setResultViewMode] = useState(() => loadPublicResultViewMode());
   const [categories, setCategories] = useState([]);
+  const [recentStockUpdates, setRecentStockUpdates] = useState([]);
+  const [isRecentStockLoading, setIsRecentStockLoading] = useState(true);
   const [suggestedProducts, setSuggestedProducts] = useState([]);
   const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(true);
   const [suggestionError, setSuggestionError] = useState("");
@@ -377,6 +381,31 @@ export function PublicSearchPage() {
       });
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const abortController = new AbortController();
+    setIsRecentStockLoading(true);
+
+    listPublicRecentStockUpdates({
+      signal: abortController.signal,
+      timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
+    })
+      .then((products) => {
+        if (active) setRecentStockUpdates(products);
+      })
+      .catch(() => {
+        if (active && !abortController.signal.aborted) setRecentStockUpdates([]);
+      })
+      .finally(() => {
+        if (active && !abortController.signal.aborted) setIsRecentStockLoading(false);
+      });
+
+    return () => {
+      active = false;
+      abortController.abort();
     };
   }, []);
 
@@ -1116,13 +1145,20 @@ export function PublicSearchPage() {
         )}
 
         {viewMode === "home" && (
-          <PublicAvailableProductsSection
-            isSuggestionsLoading={isSuggestionsLoading}
-            onRetrySuggestions={handleRetrySuggestions}
-            onViewDetails={handleCatalogueProductDetails}
-            suggestionError={suggestionError}
-            suggestions={suggestedProducts}
-          />
+          <>
+            <PublicRecentStockUpdatesSection
+              isLoading={isRecentStockLoading}
+              onViewDetails={handleCatalogueProductDetails}
+              products={recentStockUpdates}
+            />
+            <PublicAvailableProductsSection
+              isSuggestionsLoading={isSuggestionsLoading}
+              onRetrySuggestions={handleRetrySuggestions}
+              onViewDetails={handleCatalogueProductDetails}
+              suggestionError={suggestionError}
+              suggestions={suggestedProducts}
+            />
+          </>
         )}
 
         {hasSelectedCategory && (
