@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { formatPublicSellingPrice } from "../../utils/publicProductPresentation";
 import {
   formatPublicStockUpdateCardText,
   formatPublicStockUpdatedAt,
@@ -53,7 +52,6 @@ function RecentStockTable({ onViewDetails, products }) {
                 <td className="border-b border-r border-slate-200 px-3 py-2.5 align-top">
                   <button type="button" onClick={() => onViewDetails(product)} className="block w-full text-left font-semibold text-[#0f2f5f] hover:text-[#0b63f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]">
                     <span className="block [overflow-wrap:anywhere]">{product.name}</span>
-                    <span className="mt-1 block text-xs font-bold text-[#0755c7]">Giá: {formatPublicSellingPrice()}</span>
                   </button>
                 </td>
                 <td className="border-b border-r border-slate-200 px-3 py-2.5 text-center align-top font-semibold">{conditionLabel(product.condition)}</td>
@@ -70,7 +68,6 @@ function RecentStockTable({ onViewDetails, products }) {
           <article key={product.productId} className="border-b border-slate-200 px-3 py-3 last:border-b-0" role="listitem">
             <button type="button" onClick={() => onViewDetails(product)} className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]">
               <span className="block text-sm font-bold text-[#0f2f5f] [overflow-wrap:anywhere]">{product.name}</span>
-              <span className="mt-1 block text-xs font-bold text-[#0755c7]">Giá: {formatPublicSellingPrice()}</span>
             </button>
             <div className="mt-2 grid grid-cols-3 gap-2 border-t border-slate-100 pt-2 text-xs">
               <p><span className="block font-semibold text-slate-500">Tình trạng</span>{conditionLabel(product.condition)}</p>

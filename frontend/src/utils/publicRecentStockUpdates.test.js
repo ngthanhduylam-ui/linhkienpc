@@ -37,13 +37,15 @@ test("relative update text is minute/hour stable and supports today and yesterda
 
 test("recent stock section owns a local card/table mode and leaves suggestion presentation separate", async () => {
   const sectionSource = await readFile(new URL("../components/public/PublicRecentStockUpdatesSection.jsx", import.meta.url), "utf8");
+  const cardSource = await readFile(new URL("../components/public/PublicCatalogueProductCard.jsx", import.meta.url), "utf8");
   const pageSource = await readFile(new URL("../pages/PublicSearchPage.jsx", import.meta.url), "utf8");
   const suggestionSource = await readFile(new URL("../components/public/PublicAvailableProductsSection.jsx", import.meta.url), "utf8");
 
   assert.match(sectionSource, /useState\("card"\)/);
   assert.match(sectionSource, /viewMode === "table"/);
-  assert.match(sectionSource, /formatPublicSellingPrice\(\)/);
+  assert.doesNotMatch(sectionSource, /Giá:\s*\{|formatPublicSellingPrice/);
   assert.match(sectionSource, /supplementalText=/);
+  assert.match(cardSource, /formatPublicSellingPrice\(product\.salePrice\)/);
   assert.match(pageSource, /<PublicRecentStockUpdatesSection/);
   assert.match(pageSource, /<PublicAvailableProductsSection/);
   assert.doesNotMatch(suggestionSource, /PublicResultViewSwitcher|recentStock/i);
