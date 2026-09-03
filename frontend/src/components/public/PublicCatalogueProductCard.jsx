@@ -52,7 +52,7 @@ function CategoryPlaceholder({ categoryName, status }) {
   );
 }
 
-export function PublicCatalogueProductCard({ product, onViewDetails, supplementalText = "" }) {
+export function PublicCatalogueProductCard({ product, onViewDetails }) {
   const [isSharing, setIsSharing] = useState(false);
   const [shareFeedback, setShareFeedback] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState(() => getResponseThumbnailUrl(product));
@@ -187,12 +187,6 @@ export function PublicCatalogueProductCard({ product, onViewDetails, supplementa
           <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-bold leading-[18px] text-emerald-700">Còn hàng</span>
           <span className="font-semibold text-slate-600">Tồn: {product.totalQuantity}</span>
         </div>
-
-        {supplementalText && (
-          <p className="mt-1 text-[10px] font-medium leading-4 text-slate-500 sm:text-[11px]">
-            {supplementalText}
-          </p>
-        )}
 
         <div className="mt-auto grid grid-cols-2 gap-1.5 pt-1.5">
           <button

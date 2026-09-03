@@ -1,4 +1,4 @@
-export const PUBLIC_RECENT_STOCK_LIMIT = 10;
+export const PUBLIC_RECENT_STOCK_LIMIT = 14;
 
 export function sanitizePublicRecentStockUpdates(products) {
   const usedIds = new Set();
@@ -45,10 +45,4 @@ export function formatPublicStockUpdatedAt(value, now = Date.now()) {
   if (isSameLocalDay(updatedDate, yesterday)) return "Hôm qua";
 
   return `${Math.max(2, Math.floor(elapsedHours / 24))} ngày trước`;
-}
-
-export function formatPublicStockUpdateCardText(value, now = Date.now()) {
-  const relativeText = formatPublicStockUpdatedAt(value, now);
-  if (!relativeText || relativeText === "Vừa cập nhật") return relativeText;
-  return `Cập nhật ${relativeText.toLocaleLowerCase("vi-VN")}`;
 }

@@ -7,8 +7,8 @@ const MAX_SEARCH_TOKENS = 8;
 const DEFAULT_PUBLIC_SUGGESTION_LIMIT = 6;
 const MAX_PUBLIC_SUGGESTION_LIMIT = 12;
 const MAX_PUBLIC_SUGGESTION_EXCLUSIONS = 24;
-const PUBLIC_RECENT_STOCK_WINDOW_HOURS = 72;
-const PUBLIC_RECENT_STOCK_LIMIT = 10;
+const PUBLIC_RECENT_STOCK_WINDOW_HOURS = 168;
+const PUBLIC_RECENT_STOCK_LIMIT = 14;
 const COMPACT_SKU_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.sku), '.', ''), '-', ''), ' ', '')";
 const COMPACT_NAME_SQL = "REPLACE(REPLACE(REPLACE(LOWER(p.name), '.', ''), '-', ''), ' ', '')";
 
@@ -593,21 +593,21 @@ async function listPublicRecentStockUpdates() {
         FROM (
           SELECT id AS product_id, created_at AS stock_updated_at
           FROM products
-          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 72 HOUR)
+          WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${PUBLIC_RECENT_STOCK_WINDOW_HOURS} HOUR)
 
           UNION ALL
 
           SELECT product_id, occurred_at AS stock_updated_at
           FROM stock_transactions
           WHERE txn_type = 'IN'
-            AND occurred_at >= DATE_SUB(NOW(), INTERVAL 72 HOUR)
+            AND occurred_at >= DATE_SUB(NOW(), INTERVAL ${PUBLIC_RECENT_STOCK_WINDOW_HOURS} HOUR)
 
           UNION ALL
 
           SELECT product_id, occurred_at AS stock_updated_at
           FROM inventory_quantity_adjustments
           WHERE from_quantity <> to_quantity
-            AND occurred_at >= DATE_SUB(NOW(), INTERVAL 72 HOUR)
+            AND occurred_at >= DATE_SUB(NOW(), INTERVAL ${PUBLIC_RECENT_STOCK_WINDOW_HOURS} HOUR)
         ) eligible_events
         GROUP BY product_id
       ) recent ON recent.product_id = p.id
@@ -623,7 +623,7 @@ async function listPublicRecentStockUpdates() {
       WHERE p.is_active = 1
         AND COALESCE(pib.quantity, 0) > 0
       ORDER BY recent.stock_updated_at DESC, p.id DESC
-      LIMIT 10
+      LIMIT ${PUBLIC_RECENT_STOCK_LIMIT}
     `
   );
 

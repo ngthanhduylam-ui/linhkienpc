@@ -1,13 +1,27 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { pool } = require('../../config/database');
+const productController = require('./product.controller');
 const productService = require('./product.service');
 
 const originalQuery = pool.query;
+const originalListPublicRecentStockUpdates = productService.listPublicRecentStockUpdates;
 
 test.afterEach(() => {
   pool.query = originalQuery;
+  productService.listPublicRecentStockUpdates = originalListPublicRecentStockUpdates;
 });
+
+function invoke(handler, req = {}) {
+  return new Promise((resolve, reject) => {
+    const res = {
+      json(body) {
+        resolve(body);
+      }
+    };
+    handler(req, res, reject);
+  });
+}
 
 function installRecentStockRows(rows) {
   const queries = [];
@@ -38,7 +52,7 @@ function recentRow(id, overrides = {}) {
   };
 }
 
-test('derives only eligible stock-changing events inside the rolling 72-hour window', async () => {
+test('derives only eligible stock-changing events inside the rolling 168-hour window', async () => {
   const queries = installRecentStockRows([recentRow(1)]);
   await productService.listPublicRecentStockUpdates();
   const sql = queries[0].sql;
@@ -46,7 +60,7 @@ test('derives only eligible stock-changing events inside the rolling 72-hour win
   assert.match(sql, /SELECT id AS product_id, created_at AS stock_updated_at[\s\S]*FROM products/i);
   assert.match(sql, /FROM stock_transactions[\s\S]*txn_type = 'IN'/i);
   assert.match(sql, /FROM inventory_quantity_adjustments[\s\S]*from_quantity <> to_quantity/i);
-  assert.equal((sql.match(/INTERVAL 72 HOUR/gi) || []).length, 3);
+  assert.equal((sql.match(/INTERVAL 168 HOUR/gi) || []).length, 3);
   assert.doesNotMatch(sql, /p\.updated_at|txn_type = 'OUT'/i);
 });
 
@@ -67,17 +81,17 @@ test('keeps only active positive-stock products and never fills from older event
   const sql = queries[0].sql;
 
   assert.match(sql, /WHERE p\.is_active = 1[\s\S]*COALESCE\(pib\.quantity, 0\) > 0/i);
-  assert.match(sql, /LIMIT 10/i);
+  assert.match(sql, /LIMIT 14/i);
   assert.doesNotMatch(sql, /updated_at AS stock_updated_at/i);
 });
 
-test('caps the public DTO at ten products and omits SKU, prices, actors, and internal event data', async () => {
-  installRecentStockRows(Array.from({ length: 12 }, (_, index) => recentRow(index + 1)));
+test('caps the public DTO at fourteen products and omits SKU, prices, actors, and internal event data', async () => {
+  installRecentStockRows(Array.from({ length: 16 }, (_, index) => recentRow(index + 1)));
   const result = await productService.listPublicRecentStockUpdates();
 
-  assert.equal(result.items.length, 10);
-  assert.equal(result.limit, 10);
-  assert.equal(result.windowHours, 72);
+  assert.equal(result.items.length, 14);
+  assert.equal(result.limit, 14);
+  assert.equal(result.windowHours, 168);
   assert.deepEqual(Object.keys(result.items[0]), [
     'id',
     'name',
@@ -92,4 +106,23 @@ test('caps the public DTO at ten products and omits SKU, prices, actors, and int
   for (const privateField of ['sku', 'sale_price', 'cost', 'supplier', 'admin', 'transaction_id', 'quantity_delta', 'event_type']) {
     assert.equal(privateField in result.items[0], false);
   }
+});
+
+test('keeps all products when exactly fourteen are eligible', async () => {
+  installRecentStockRows(Array.from({ length: 14 }, (_, index) => recentRow(index + 1)));
+  const result = await productService.listPublicRecentStockUpdates();
+
+  assert.equal(result.items.length, 14);
+});
+
+test('serializes the updated limit and rolling window in public response metadata', async () => {
+  productService.listPublicRecentStockUpdates = async () => ({
+    items: [],
+    limit: 14,
+    windowHours: 168
+  });
+
+  const response = await invoke(productController.listPublicRecentStockUpdates);
+  assert.equal(response.meta.limit, 14);
+  assert.equal(response.meta.window_hours, 168);
 });

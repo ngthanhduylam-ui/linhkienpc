@@ -1,4 +1,5 @@
 import { apiGet } from "../api/apiClient";
+import { PUBLIC_RECENT_STOCK_LIMIT } from "../utils/publicRecentStockUpdates";
 
 let publicCategoriesPromise = null;
 let publicCatalogueSuggestionsPromise = null;
@@ -51,7 +52,7 @@ function mapPublicProducts(products) {
 export async function listPublicRecentStockUpdates(options = {}) {
   const response = await apiGet("/public/recent-stock-updates", {}, options);
   const products = Array.isArray(response?.data) ? response.data : [];
-  return mapPublicProducts(products).slice(0, 10);
+  return mapPublicProducts(products).slice(0, PUBLIC_RECENT_STOCK_LIMIT);
 }
 
 export async function getPublicProductById(productId, options = {}) {

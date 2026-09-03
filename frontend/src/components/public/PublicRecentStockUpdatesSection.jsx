@@ -1,14 +1,9 @@
-import { useState } from "react";
 import {
-  formatPublicStockUpdateCardText,
   formatPublicStockUpdatedAt,
   sanitizePublicRecentStockUpdates
 } from "../../utils/publicRecentStockUpdates";
-import { PublicCatalogueProductCard } from "./PublicCatalogueProductCard";
-import { PublicResultViewSwitcher } from "./PublicResultViewSwitcher";
 
-const RECENT_STOCK_GRID_CLASS_NAME =
-  "mx-auto grid w-full min-w-0 grid-cols-1 gap-2.5 sm:w-fit sm:grid-cols-[repeat(2,minmax(0,13.75rem))] sm:gap-3 lg:grid-cols-[repeat(4,minmax(0,13.75rem))] min-[1366px]:grid-cols-[repeat(5,minmax(0,13.75rem))]";
+const RECENT_STOCK_LOADING_ROW_COUNT = 5;
 
 function RecentIcon() {
   return (
@@ -26,7 +21,7 @@ function conditionLabel(condition) {
   return "Sản phẩm";
 }
 
-function RecentStockTable({ onViewDetails, products }) {
+function RecentStockTable({ isLoading, onViewDetails, products }) {
   return (
     <div className="w-full overflow-hidden border border-slate-300 bg-white">
       <div className="hidden min-[900px]:block">
@@ -47,48 +42,64 @@ function RecentStockTable({ onViewDetails, products }) {
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => (
-              <tr key={product.productId} className="odd:bg-white even:bg-slate-50/70">
-                <td className="border-b border-r border-slate-200 px-3 py-2.5 align-top">
-                  <button type="button" onClick={() => onViewDetails(product)} className="block w-full text-left font-semibold text-[#0f2f5f] hover:text-[#0b63f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]">
-                    <span className="block [overflow-wrap:anywhere]">{product.name}</span>
-                  </button>
-                </td>
-                <td className="border-b border-r border-slate-200 px-3 py-2.5 text-center align-top font-semibold">{conditionLabel(product.condition)}</td>
-                <td className="border-b border-r border-slate-200 px-3 py-2.5 text-center align-top text-base font-bold">{product.totalQuantity}</td>
-                <td className="border-b border-slate-200 px-3 py-2.5 text-center align-top text-slate-600">{formatPublicStockUpdatedAt(product.stockUpdatedAt)}</td>
-              </tr>
-            ))}
+            {isLoading
+              ? Array.from({ length: RECENT_STOCK_LOADING_ROW_COUNT }, (_, index) => (
+                  <tr key={index} aria-hidden="true">
+                    {[55, 15, 12, 18].map((width) => (
+                      <td key={width} className="border-b border-r border-slate-200 px-3 py-3 last:border-r-0">
+                        <span className="block h-4 animate-pulse rounded bg-slate-100" style={{ width: `${Math.min(width + 20, 75)}%` }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : products.map((product) => (
+                  <tr key={product.productId} className="odd:bg-white even:bg-slate-50/70">
+                    <td className="border-b border-r border-slate-200 px-3 py-2.5 align-top">
+                      <button type="button" onClick={() => onViewDetails(product)} className="block w-full text-left font-semibold text-[#0f2f5f] hover:text-[#0b63f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]">
+                        <span className="block [overflow-wrap:anywhere]">{product.name}</span>
+                      </button>
+                    </td>
+                    <td className="border-b border-r border-slate-200 px-3 py-2.5 text-center align-top font-semibold">{conditionLabel(product.condition)}</td>
+                    <td className="border-b border-r border-slate-200 px-3 py-2.5 text-center align-top text-base font-bold">{product.totalQuantity}</td>
+                    <td className="border-b border-slate-200 px-3 py-2.5 text-center align-top text-slate-600">{formatPublicStockUpdatedAt(product.stockUpdatedAt)}</td>
+                  </tr>
+                ))}
           </tbody>
         </table>
       </div>
 
       <div className="min-[900px]:hidden" role="list" aria-label="Sản phẩm vừa cập nhật kho dạng bảng">
-        {products.map((product) => (
-          <article key={product.productId} className="border-b border-slate-200 px-3 py-3 last:border-b-0" role="listitem">
-            <button type="button" onClick={() => onViewDetails(product)} className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]">
-              <span className="block text-sm font-bold text-[#0f2f5f] [overflow-wrap:anywhere]">{product.name}</span>
-            </button>
-            <div className="mt-2 grid grid-cols-3 gap-2 border-t border-slate-100 pt-2 text-xs">
-              <p><span className="block font-semibold text-slate-500">Tình trạng</span>{conditionLabel(product.condition)}</p>
-              <p className="text-center"><span className="block font-semibold text-slate-500">Tồn kho</span><strong>{product.totalQuantity}</strong></p>
-              <p className="text-right"><span className="block font-semibold text-slate-500">Cập nhật</span>{formatPublicStockUpdatedAt(product.stockUpdatedAt)}</p>
-            </div>
-          </article>
-        ))}
+        {isLoading
+          ? Array.from({ length: RECENT_STOCK_LOADING_ROW_COUNT }, (_, index) => (
+              <div key={index} className="space-y-2 border-b border-slate-200 px-3 py-3 last:border-b-0" aria-hidden="true">
+                <span className="block h-4 w-3/4 animate-pulse rounded bg-slate-100" />
+                <span className="block h-8 animate-pulse rounded bg-slate-100" />
+              </div>
+            ))
+          : products.map((product) => (
+              <article key={product.productId} className="border-b border-slate-200 px-3 py-3 last:border-b-0" role="listitem">
+                <button type="button" onClick={() => onViewDetails(product)} className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6]">
+                  <span className="block text-sm font-bold text-[#0f2f5f] [overflow-wrap:anywhere]">{product.name}</span>
+                </button>
+                <div className="mt-2 grid grid-cols-3 gap-2 border-t border-slate-100 pt-2 text-xs">
+                  <p><span className="block font-semibold text-slate-500">Tình trạng</span>{conditionLabel(product.condition)}</p>
+                  <p className="text-center"><span className="block font-semibold text-slate-500">Tồn kho</span><strong>{product.totalQuantity}</strong></p>
+                  <p className="text-right"><span className="block font-semibold text-slate-500">Cập nhật</span>{formatPublicStockUpdatedAt(product.stockUpdatedAt)}</p>
+                </div>
+              </article>
+            ))}
       </div>
     </div>
   );
 }
 
 export function PublicRecentStockUpdatesSection({ isLoading, onViewDetails, products }) {
-  const [viewMode, setViewMode] = useState("card");
   const safeProducts = sanitizePublicRecentStockUpdates(products);
   if (!isLoading && safeProducts.length === 0) return null;
 
   return (
     <section className="mx-auto w-full max-w-[100rem]" aria-labelledby="public-recent-stock-heading">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex items-center gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg bg-[#0b63f6] text-white shadow-[0_4px_10px_rgba(11,99,246,0.18)]">
             <RecentIcon />
@@ -97,34 +108,9 @@ export function PublicRecentStockUpdatesSection({ isLoading, onViewDetails, prod
             Vừa cập nhật kho
           </h2>
         </div>
-        <PublicResultViewSwitcher
-          ariaLabel="Kiểu hiển thị vừa cập nhật kho"
-          value={viewMode}
-          onChange={setViewMode}
-        />
       </div>
 
-      {isLoading ? (
-        <div className={RECENT_STOCK_GRID_CLASS_NAME} aria-label="Đang tải sản phẩm vừa cập nhật kho">
-          {Array.from({ length: 5 }, (_, index) => (
-            <div key={index} className="h-64 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
-          ))}
-        </div>
-      ) : viewMode === "table" ? (
-        <RecentStockTable onViewDetails={onViewDetails} products={safeProducts} />
-      ) : (
-        <div className={RECENT_STOCK_GRID_CLASS_NAME}>
-          {safeProducts.map((product) => (
-            <div key={product.productId} className="h-full min-w-0">
-              <PublicCatalogueProductCard
-                product={product}
-                onViewDetails={onViewDetails}
-                supplementalText={formatPublicStockUpdateCardText(product.stockUpdatedAt)}
-              />
-            </div>
-          ))}
-        </div>
-      )}
+      <RecentStockTable isLoading={isLoading} onViewDetails={onViewDetails} products={safeProducts} />
     </section>
   );
 }
