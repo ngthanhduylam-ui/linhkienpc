@@ -1,4 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  canStartPublicCategoryMouseDrag,
+  createPublicCategoryDragState,
+  finishPublicCategoryDrag,
+  movePublicCategoryDrag
+} from "../../utils/publicCategoryDrag";
 
 const DISPLAY_CATEGORY_ORDER = [
   "cpu",
@@ -156,6 +162,10 @@ export function PublicCategoryNav({ categories, onSelectCategory, selectedCatego
     });
   const activeChipRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const dragStateRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const suppressClickTimerRef = useRef(null);
+  const [isMouseDragging, setIsMouseDragging] = useState(false);
   const selectedId = selectedCategoryId === null || selectedCategoryId === undefined ? null : Number(selectedCategoryId);
 
   useEffect(() => {
@@ -167,12 +177,88 @@ export function PublicCategoryNav({ categories, onSelectCategory, selectedCatego
     scrollContainer.scrollTo({ left: Math.max(0, nextScrollLeft), behavior: "smooth" });
   }, [selectedId]);
 
+  useEffect(() => () => {
+    if (suppressClickTimerRef.current !== null) {
+      globalThis.clearTimeout(suppressClickTimerRef.current);
+    }
+  }, []);
+
+  function handlePointerDown(event) {
+    if (!canStartPublicCategoryMouseDrag(event.pointerType, event.button)) return;
+
+    dragStateRef.current = createPublicCategoryDragState(
+      event.pointerId,
+      event.clientX,
+      scrollContainerRef.current?.scrollLeft || 0
+    );
+  }
+
+  function handlePointerMove(event) {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+    const nextDragState = movePublicCategoryDrag(dragState, event.clientX);
+    dragStateRef.current = nextDragState;
+    if (!nextDragState.isDragging) return;
+
+    if (!dragState.isDragging) {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      setIsMouseDragging(true);
+    }
+    event.preventDefault();
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = nextDragState.scrollLeft;
+    }
+  }
+
+  function finishMouseDrag(event) {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+    const result = finishPublicCategoryDrag(dragState);
+    dragStateRef.current = result.nextState;
+    setIsMouseDragging(false);
+
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!result.suppressClick) return;
+
+    suppressClickRef.current = true;
+    suppressClickTimerRef.current = globalThis.setTimeout(() => {
+      suppressClickRef.current = false;
+      suppressClickTimerRef.current = null;
+    }, 0);
+  }
+
+  function handleClickCapture(event) {
+    if (!suppressClickRef.current) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClickRef.current = false;
+    if (suppressClickTimerRef.current !== null) {
+      globalThis.clearTimeout(suppressClickTimerRef.current);
+      suppressClickTimerRef.current = null;
+    }
+  }
+
   if (!visibleCategories.length) return null;
 
   return (
     <nav aria-label="Danh mục sản phẩm" className="relative border-b border-[#d6e5f7] bg-white shadow-[0_3px_10px_rgba(15,47,95,0.055)]">
       <div className="mx-auto w-[min(calc(100%_-_clamp(1.5rem,2vw,3rem)),clamp(80rem,96vw,154rem))] min-w-0">
-        <div ref={scrollContainerRef} className="min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          ref={scrollContainerRef}
+          className={`min-w-0 cursor-grab overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isMouseDragging ? "cursor-grabbing select-none" : ""}`}
+          onClickCapture={handleClickCapture}
+          onDragStart={(event) => event.preventDefault()}
+          onPointerCancel={finishMouseDrag}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={finishMouseDrag}
+          onLostPointerCapture={finishMouseDrag}
+        >
           <ul className="flex min-w-max items-center gap-[clamp(0.25rem,0.7vw,1rem)] xl:w-full xl:justify-between">
             <li>
               <button
