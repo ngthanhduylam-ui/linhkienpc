@@ -1,28 +1,15 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
-import ptcLogoUrl from "../assets/ptc-logo.png";
-import { ModernA5VoucherPrint } from "../components/print/ModernA5VoucherPrint";
-import { getStockVoucherRequest } from "../services/inventoryOperations.service";
+import { Link } from "react-router-dom";
+import ptcLogoUrl from "../../assets/ptc-logo.png";
 import {
-  MODERN_A5_PREVIEW_TEMPLATE,
-  resolveVoucherPrintPreviewTemplate
-} from "../utils/voucherPrintPreview";
-import "./TransactionVoucherPrintPage.css";
+  getModernA5VoucherRows,
+  MODERN_A5_NOTICE_LINES,
+  MODERN_A5_SHOP_INFO
+} from "../../utils/voucherPrintPreview";
+import "./ModernA5VoucherPrint.css";
 
-const SHOP_INFO = {
-  name: "Vi Tính Phước Tài",
-  address: "98/14 đường số 5, P.17, Q. Gò Vấp",
-  phone: "0933712571",
-  email: "vitinhphuoctai@gmail.com"
-};
-
-const FOOTER_NOTICE = [
-  "Quý khách vui lòng kiểm tra hàng hóa và thông tin trên phiếu trước khi ký nhận.",
-  "Hàng đã mua không trả lại, trừ trường hợp được cửa hàng chấp thuận.",
-  "Sản phẩm bảo hành theo điều kiện của nhà sản xuất hoặc nhà phân phối.",
-  "Không bảo hành các trường hợp rách tem, cháy nổ, vào nước, móp méo, lỗi vật lý hoặc sử dụng sai quy định.",
-  "Sản phẩm bán ra có thể kèm tem và số serial để phục vụ đối chiếu."
-];
+const PAYMENT_QR_URL = "/print-assets/hkd-payment-qr.png";
+const WEBSITE_QR_URL = "/print-assets/website-qr.png";
+const WEBSITE_QR_PAYLOAD = "https://vitinhphuoctai.com";
 
 function parseDate(value) {
   if (!value) return null;
@@ -125,6 +112,30 @@ function calculateTotalDiscount(items) {
   }, 0);
 }
 
+function HeaderIcon({ type }) {
+  const paths = {
+    tax: <><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4a13 13 0 0 1 0 16M12 4a13 13 0 0 0 0 16" /></>,
+    address: <><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" /><circle cx="12" cy="10" r="2" /></>,
+    phone: <path d="M7 3 4.8 5.2c-.7.7-.8 1.8-.3 2.7 2.7 5 6.7 9 11.7 11.7.9.5 2 .4 2.7-.3L21 17l-4-3-2 2c-2.8-1.5-5.1-3.8-6.6-6.6l2-2L7 3Z" />,
+    email: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></>
+  };
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      {paths[type]}
+    </svg>
+  );
+}
+
+function HeaderLine({ icon, label, value }) {
+  return (
+    <p className="modern-a5-header-line">
+      <HeaderIcon type={icon} />
+      <span><strong>{label}:</strong> {value}</span>
+    </p>
+  );
+}
+
 function InfoLine({ label, value }) {
   if (!value) return null;
   return (
@@ -137,99 +148,21 @@ function InfoLine({ label, value }) {
 
 function CustomerInfoLine({ label, value }) {
   return (
-    <div className="voucher-print-customer-line">
+    <div className="voucher-print-customer-line modern-a5-customer-line">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
   );
 }
 
-function StateMessage({ children, tone = "default" }) {
-  const toneClass =
-    tone === "error"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : "border-slate-200 bg-white text-slate-700";
-
-  return (
-    <main className="min-h-screen bg-white px-6 py-8 text-slate-900">
-      <section className={`mx-auto max-w-3xl rounded-md border p-6 text-sm shadow-sm ${toneClass}`}>
-        {children}
-      </section>
-    </main>
-  );
-}
-
-export function TransactionVoucherPrintPage() {
-  const { voucherId } = useParams();
-  const location = useLocation();
-  const [voucher, setVoucher] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadVoucher() {
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const detail = await getStockVoucherRequest(voucherId);
-        if (!active) return;
-        setVoucher(detail);
-      } catch (err) {
-        if (!active) return;
-        setVoucher(null);
-        setError(err?.status === 404 ? "Không tìm thấy phiếu." : err?.message || "Không thể tải phiếu.");
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    }
-
-    loadVoucher();
-    return () => {
-      active = false;
-    };
-  }, [voucherId]);
-
-  if (isLoading) {
-    return <StateMessage>Đang tải bản xem trước phiếu...</StateMessage>;
-  }
-
-  if (error) {
-    return <StateMessage tone="error">{error}</StateMessage>;
-  }
-
-  if (!voucher) {
-    return <StateMessage tone="error">Không tìm thấy phiếu.</StateMessage>;
-  }
-
-  if (voucher.voucher_type !== "OUT") {
-    return (
-      <main className="min-h-screen bg-white px-6 py-8 text-slate-900">
-        <section className="mx-auto max-w-3xl rounded-md border border-slate-200 bg-white p-6 shadow-sm">
-          <Link to={`/admin/transaction-history/${voucherId}`} className="text-sm font-semibold text-brand-700 hover:text-brand-900">
-            ← Quay lại chi tiết phiếu
-          </Link>
-          <p className="mt-5 text-sm text-slate-700">Mẫu in phiếu nhập chưa được hỗ trợ.</p>
-        </section>
-      </main>
-    );
-  }
-
-  const previewTemplate = resolveVoucherPrintPreviewTemplate(location.search);
-  if (previewTemplate === MODERN_A5_PREVIEW_TEMPLATE) {
-    return <ModernA5VoucherPrint voucher={voucher} voucherId={voucherId} />;
-  }
-
-  const partner = voucher.partner || {};
-  const items = voucher.items || [];
-  const customerName = formatText(partner.name) || "Khách lẻ";
+export function ModernA5VoucherPrint({ voucher, voucherId }) {
+  const partner = voucher?.partner || {};
+  const items = getModernA5VoucherRows(voucher);
   const customerLines = [
-    { label: "Tên khách hàng", value: customerName },
+    { label: "Khách hàng", value: formatText(partner.name) || "Khách lẻ" },
     { label: "Số điện thoại", value: formatText(partner.phone) },
     { label: "Địa chỉ", value: formatText(partner.address) },
-    { label: "Ghi chú", value: formatText(voucher.note) }
+    { label: "Ghi chú", value: formatText(voucher?.note) }
   ];
   const grossGoodsTotal = calculateGrossGoodsTotal(items);
   const totalDiscount = calculateTotalDiscount(items);
@@ -249,29 +182,41 @@ export function TransactionVoucherPrintPage() {
         </button>
       </div>
 
-      <article className="voucher-print-page mx-auto max-w-[210mm] bg-white p-[12mm] text-[12px] shadow-sm ring-1 ring-slate-200 print:max-w-none print:p-0 print:shadow-none print:ring-0">
-        <header className="voucher-print-header">
+      <article className="voucher-print-page modern-a5-page mx-auto max-w-[210mm] bg-white p-[12mm] text-[12px] shadow-sm ring-1 ring-slate-200 print:max-w-none print:p-0 print:shadow-none print:ring-0">
+        <header className="voucher-print-header modern-a5-header">
           <div className="voucher-print-logo-box">
             <img src={ptcLogoUrl} alt="Phước Tài Computer" />
           </div>
 
-          <div className="voucher-print-shop">
-            <p className="voucher-print-shop-name">{SHOP_INFO.name}</p>
-            <p>{SHOP_INFO.address}</p>
-            <p>{SHOP_INFO.phone}</p>
-            <p>{SHOP_INFO.email}</p>
+          <div className="voucher-print-shop modern-a5-shop">
+            <p className="modern-a5-business-type">{MODERN_A5_SHOP_INFO.businessType}</p>
+            <p className="voucher-print-shop-name modern-a5-shop-name">{MODERN_A5_SHOP_INFO.name}</p>
+            <div className="modern-a5-header-lines">
+              <HeaderLine icon="tax" label="MST" value={MODERN_A5_SHOP_INFO.taxId} />
+              <HeaderLine icon="address" label="Địa chỉ" value={MODERN_A5_SHOP_INFO.address} />
+              <HeaderLine icon="phone" label="Số điện thoại" value={MODERN_A5_SHOP_INFO.phone} />
+              <HeaderLine icon="email" label="Gmail" value={MODERN_A5_SHOP_INFO.email} />
+            </div>
+          </div>
+
+          <div className="modern-a5-website-qr">
+            <img
+              src={WEBSITE_QR_URL}
+              alt="QR tra cứu sản phẩm tại vitinhphuoctai.com"
+              data-qr-payload={WEBSITE_QR_PAYLOAD}
+            />
           </div>
 
           <div className="voucher-print-meta">
-            <InfoLine label="Số phiếu" value={formatText(voucher.voucher_code || `#${voucher.id}`)} />
-            <InfoLine label="Ngày" value={formatDate(voucher.occurred_at)} />
-            <InfoLine label="Giờ" value={formatTime(voucher.occurred_at)} />
+            <InfoLine label="Số phiếu" value={formatText(voucher?.voucher_code || `#${voucher?.id}`)} />
+            <InfoLine label="Ngày" value={formatDate(voucher?.occurred_at)} />
+            <InfoLine label="Giờ" value={formatTime(voucher?.occurred_at)} />
           </div>
         </header>
 
-        <h1 className="voucher-print-title">PHIẾU BÁN &amp; GIAO HÀNG</h1>
+        <h1 className="voucher-print-title modern-a5-title">PHIẾU BÁN &amp; GIAO HÀNG</h1>
 
-        <section className="voucher-print-customer">
+        <section className="voucher-print-customer modern-a5-customer">
           {customerLines.map((line) => (
             <CustomerInfoLine key={line.label} label={line.label} value={line.value} />
           ))}
@@ -317,6 +262,7 @@ export function TransactionVoucherPrintPage() {
               )}
             </tbody>
           </table>
+
           <div className="voucher-print-summary-row">
             <div className="voucher-print-summary-box">
               <div className="voucher-print-summary-grid">
@@ -325,7 +271,7 @@ export function TransactionVoucherPrintPage() {
                 <span>Tổng chiết khấu</span>
                 <strong>{totalDiscount > 0 ? formatPrintMoney(totalDiscount) : ""}</strong>
                 <span>Tổng cộng</span>
-                <strong>{formatPrintMoney(voucher.total_amount)}</strong>
+                <strong>{formatPrintMoney(voucher?.total_amount)}</strong>
               </div>
             </div>
           </div>
@@ -333,23 +279,32 @@ export function TransactionVoucherPrintPage() {
 
         <section className="voucher-print-signatures">
           <div>
-            <p>Người bán</p>
-            <span>(Ký và ghi rõ họ tên)</span>
+            <div className="modern-a5-signature-content">
+              <p>Người bán</p>
+              <span>(Ký, ghi rõ họ tên)</span>
+            </div>
           </div>
           <div>
-            <p>Khách hàng</p>
-            <span>(Kiểm tra và ký nhận)</span>
+            <div className="modern-a5-signature-content">
+              <p>Khách hàng</p>
+              <span>(Ký, ghi rõ họ tên)</span>
+            </div>
           </div>
         </section>
 
-        <section className="voucher-print-notice">
-          <p>Lưu ý:</p>
-          <ul>
-            {FOOTER_NOTICE.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
+        <footer className="modern-a5-footer">
+          <div className="modern-a5-payment-card">
+            <img src={PAYMENT_QR_URL} alt="QR thanh toán Hộ kinh doanh VI TÍNH PHƯỚC TÀI" />
+          </div>
+          <section className="voucher-print-notice modern-a5-notice">
+            <p>Lưu ý:</p>
+            <ul>
+              {MODERN_A5_NOTICE_LINES.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </section>
+        </footer>
       </article>
     </main>
   );

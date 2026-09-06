@@ -1,0 +1,192 @@
+.voucher-print-header.modern-a5-header {
+  grid-template-columns: 26mm minmax(0, 1fr) 18mm 46mm;
+  gap: 2mm;
+}
+
+.voucher-print-shop.modern-a5-shop {
+  text-align: left;
+}
+
+.modern-a5-business-type {
+  margin: 0;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.voucher-print-shop-name.modern-a5-shop-name {
+  font-size: 18px;
+  line-height: 1.05;
+}
+
+.modern-a5-header-lines {
+  display: grid;
+  gap: 0;
+}
+
+.modern-a5-header-line {
+  display: grid;
+  grid-template-columns: 3mm minmax(0, 1fr);
+  gap: 1mm;
+  align-items: start;
+  margin: 0;
+  font-size: 10.75px;
+  font-weight: 600;
+  line-height: 1.07;
+}
+
+.modern-a5-header-line svg {
+  width: 2.8mm;
+  height: 2.8mm;
+}
+
+.modern-a5-header-line span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.modern-a5-website-qr {
+  display: flex;
+  width: 18mm;
+  height: 18mm;
+  align-items: center;
+  justify-content: center;
+}
+
+.modern-a5-website-qr img {
+  display: block;
+  width: 18mm;
+  height: 18mm;
+  object-fit: contain;
+}
+
+.voucher-print-title.modern-a5-title {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+}
+
+.voucher-print-title.modern-a5-title::before,
+.voucher-print-title.modern-a5-title::after {
+  content: "";
+  flex: 1 1 auto;
+  border-top: 1px solid #0f172a;
+}
+
+.voucher-print-customer.modern-a5-customer {
+  grid-template-columns: 1fr;
+  gap: 0.8mm;
+  padding: 2mm 3mm;
+  border: 1px solid #64748b;
+  border-radius: 2mm;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.voucher-print-customer-line.modern-a5-customer-line {
+  grid-template-columns: 27mm minmax(0, 1fr);
+}
+
+.voucher-print-customer-line.modern-a5-customer-line:nth-child(n) {
+  grid-column: auto;
+}
+
+.voucher-print-customer-line.modern-a5-customer-line strong {
+  border-bottom: 1px dotted #94a3b8;
+  font-weight: 500;
+}
+
+.modern-a5-page .voucher-print-customer-line span {
+  font-weight: 700;
+}
+
+.modern-a5-page .voucher-print-product-name {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.modern-a5-page .voucher-print-sale-note {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.modern-a5-page td.voucher-print-qty-col,
+.modern-a5-page td.voucher-print-money-col {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.modern-a5-page .voucher-print-summary-grid {
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.modern-a5-page .voucher-print-summary-grid strong {
+  font-weight: 500;
+}
+
+.modern-a5-page .voucher-print-summary-grid span:last-of-type,
+.modern-a5-page .voucher-print-summary-grid strong:last-of-type {
+  font-size: 13px;
+}
+
+.modern-a5-page .voucher-print-signatures > div {
+  min-height: 22mm;
+}
+
+.voucher-print-signatures .modern-a5-signature-content {
+  min-height: 0;
+}
+
+.modern-a5-signature-content p {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.modern-a5-signature-content span {
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.modern-a5-footer {
+  margin-top: 2mm;
+}
+
+.modern-a5-footer::after {
+  display: block;
+  clear: both;
+  content: "";
+}
+
+.modern-a5-payment-card {
+  float: right;
+  width: 26mm;
+  margin-left: 3mm;
+}
+
+.modern-a5-payment-card img {
+  display: block;
+  width: 26mm;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 2mm;
+  object-fit: contain;
+}
+
+.voucher-print-notice.modern-a5-notice {
+  margin-top: 0;
+  margin-right: 29mm;
+  font-size: 11.5px;
+  line-height: 1.32;
+}
+
+.voucher-print-notice.modern-a5-notice p {
+  font-weight: 700;
+}
