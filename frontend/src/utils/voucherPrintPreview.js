@@ -24,11 +24,11 @@ export function resolveVoucherPrintPreviewTemplate(search = "") {
       ? search
       : new URLSearchParams(typeof search === "string" ? search : "");
 
-    return params.get("template") === MODERN_A5_PREVIEW_TEMPLATE
-      ? MODERN_A5_PREVIEW_TEMPLATE
-      : LEGACY_SYSTEM_PRINT_TEMPLATE;
+    return params.get("template") === LEGACY_SYSTEM_PRINT_TEMPLATE
+      ? LEGACY_SYSTEM_PRINT_TEMPLATE
+      : MODERN_A5_PREVIEW_TEMPLATE;
   } catch {
-    return LEGACY_SYSTEM_PRINT_TEMPLATE;
+    return MODERN_A5_PREVIEW_TEMPLATE;
   }
 }
 

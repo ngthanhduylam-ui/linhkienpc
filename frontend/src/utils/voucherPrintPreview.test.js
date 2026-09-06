@@ -10,12 +10,12 @@ import {
   resolveVoucherPrintPreviewTemplate
 } from "./voucherPrintPreview.js";
 
-test("no template parameter keeps the legacy System renderer", () => {
-  assert.equal(resolveVoucherPrintPreviewTemplate(""), LEGACY_SYSTEM_PRINT_TEMPLATE);
-  assert.equal(resolveVoucherPrintPreviewTemplate("?foo=1"), LEGACY_SYSTEM_PRINT_TEMPLATE);
+test("no template parameter selects Modern A5 by default", () => {
+  assert.equal(resolveVoucherPrintPreviewTemplate(""), MODERN_A5_PREVIEW_TEMPLATE);
+  assert.equal(resolveVoucherPrintPreviewTemplate("?foo=1"), MODERN_A5_PREVIEW_TEMPLATE);
 });
 
-test("only the exact Modern A5 preview parameter selects Modern", () => {
+test("the existing Modern A5 preview parameter remains compatible", () => {
   assert.equal(
     resolveVoucherPrintPreviewTemplate("?template=modern_a5_preview"),
     MODERN_A5_PREVIEW_TEMPLATE
@@ -26,15 +26,21 @@ test("only the exact Modern A5 preview parameter selects Modern", () => {
   );
 });
 
-test("invalid or unsupported template values fall back to System", () => {
+test("only the explicit System parameter selects the legacy renderer", () => {
+  assert.equal(
+    resolveVoucherPrintPreviewTemplate("?template=system"),
+    LEGACY_SYSTEM_PRINT_TEMPLATE
+  );
+});
+
+test("invalid or unsupported template values use the Modern default", () => {
   for (const search of [
     "?template=modern_clone",
     "?template=modern_clone_preview",
-    "?template=system",
     "?template=unknown",
     null
   ]) {
-    assert.equal(resolveVoucherPrintPreviewTemplate(search), LEGACY_SYSTEM_PRINT_TEMPLATE);
+    assert.equal(resolveVoucherPrintPreviewTemplate(search), MODERN_A5_PREVIEW_TEMPLATE);
   }
 });
 
