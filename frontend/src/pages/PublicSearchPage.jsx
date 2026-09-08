@@ -22,6 +22,12 @@ import {
   changePublicResultViewMode,
   loadPublicResultViewMode
 } from "../utils/publicSearchResultsView";
+import {
+  dedupePublicProducts,
+  getPublicSearchLoadMoreCount,
+  mergePublicSearchPages,
+  PUBLIC_SEARCH_PAGE_SIZE
+} from "../utils/publicSearchPagination";
 
 const SEARCH_HISTORY_KEY = "public_search_history";
 const IOS_INSTALL_DISMISSED_KEY = "public_ios_install_dismissed_at";
@@ -91,17 +97,6 @@ function writePublicViewState(method, viewState) {
     }
   };
   window.history[method](state, "");
-}
-
-function dedupePublicProducts(products) {
-  const usedKeys = new Set();
-  return (Array.isArray(products) ? products : []).filter((product) => {
-    const productId = Number(product?.productId);
-    const key = Number.isInteger(productId) && productId > 0 ? `id:${productId}` : "";
-    if (!key || usedKeys.has(key) || Number(product?.totalQuantity || 0) <= 0) return false;
-    usedKeys.add(key);
-    return true;
-  });
 }
 
 function sanitizeSuggestionIds(values) {
@@ -245,6 +240,10 @@ export function PublicSearchPage() {
   const [isCategoryLoadingMore, setIsCategoryLoadingMore] = useState(false);
   const [categoryRetryCount, setCategoryRetryCount] = useState(0);
   const [results, setResults] = useState([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchPage, setSearchPage] = useState(1);
+  const [isSearchLoadingMore, setIsSearchLoadingMore] = useState(false);
+  const [searchLoadMoreError, setSearchLoadMoreError] = useState("");
   const [resultViewMode, setResultViewMode] = useState(() => loadPublicResultViewMode());
   const [categories, setCategories] = useState([]);
   const [recentStockUpdates, setRecentStockUpdates] = useState([]);
@@ -278,6 +277,9 @@ export function PublicSearchPage() {
   const previousCategoryRef = useRef(initialViewState.category);
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef(null);
+  const searchLoadMoreRequestIdRef = useRef(0);
+  const searchLoadMoreAbortControllerRef = useRef(null);
+  const isSearchLoadingMoreRef = useRef(false);
   const categoryRequestIdRef = useRef(0);
   const categoryAbortControllerRef = useRef(null);
   const submittedKeywordRef = useRef(submittedKeyword);
@@ -297,6 +299,12 @@ export function PublicSearchPage() {
   const hasSelectedCategory = viewMode === "category" && Boolean(selectedCategory?.id);
   const recentSearches = history.slice(0, MAX_VISIBLE_HISTORY_ITEMS);
   const dropdownMode = searchInput.trim() === "" ? "recent" : "products";
+  const searchResultCount = viewMode === "search" ? searchTotal : results.length;
+  const searchLoadMoreCount = getPublicSearchLoadMoreCount(
+    results.length,
+    searchTotal,
+    PUBLIC_SEARCH_PAGE_SIZE
+  );
 
   function handleResultViewModeChange(nextMode) {
     const currentResults = viewMode === "category" ? categoryProducts : results;
@@ -590,6 +598,11 @@ export function PublicSearchPage() {
       resumeRevalidationPendingRef.current = false;
       resultsKeywordRef.current = "";
       setResults([]);
+      setSearchTotal(0);
+      setSearchPage(1);
+      isSearchLoadingMoreRef.current = false;
+      setIsSearchLoadingMore(false);
+      setSearchLoadMoreError("");
       setHasHiddenOutOfStockMatches(false);
       setError("");
       setIsLoading(false);
@@ -611,12 +624,20 @@ export function PublicSearchPage() {
     const abortController = new AbortController();
     abortControllerRef.current?.abort();
     abortControllerRef.current = abortController;
+    searchLoadMoreRequestIdRef.current += 1;
+    searchLoadMoreAbortControllerRef.current?.abort();
+    searchLoadMoreAbortControllerRef.current = null;
+    isSearchLoadingMoreRef.current = false;
+    setIsSearchLoadingMore(false);
+    setSearchLoadMoreError("");
 
     async function runSearch() {
       setIsLoading(true);
       setError("");
       if (resultsKeywordRef.current !== searchRequestKey) {
         setResults([]);
+        setSearchTotal(0);
+        setSearchPage(1);
         setHasHiddenOutOfStockMatches(false);
       }
       try {
@@ -624,18 +645,25 @@ export function PublicSearchPage() {
           signal: abortController.signal,
           timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
         }) : searchPublicProducts(searchKeyword, {
+          page: 1,
+          limit: PUBLIC_SEARCH_PAGE_SIZE,
           signal: abortController.signal,
           timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
         }));
         if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           resultsKeywordRef.current = searchRequestKey;
-          setResults(searchResult.products);
+          const nextProducts = dedupePublicProducts(searchResult.products);
+          setResults(nextProducts);
+          setSearchTotal(Math.max(searchResult.totalMatches, nextProducts.length));
+          setSearchPage(searchResult.page);
           setHasHiddenOutOfStockMatches(searchResult.hasHiddenOutOfStockMatches);
         }
       } catch (err) {
         if (!abortController.signal.aborted && requestIdRef.current === currentRequestId) {
           if (resultsKeywordRef.current !== searchRequestKey) {
             setResults([]);
+            setSearchTotal(0);
+            setSearchPage(1);
             setHasHiddenOutOfStockMatches(false);
           }
           setError(PUBLIC_SEARCH_ERROR_MESSAGE);
@@ -656,6 +684,10 @@ export function PublicSearchPage() {
     runSearch();
     return () => {
       abortController.abort();
+      searchLoadMoreRequestIdRef.current += 1;
+      searchLoadMoreAbortControllerRef.current?.abort();
+      searchLoadMoreAbortControllerRef.current = null;
+      isSearchLoadingMoreRef.current = false;
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null;
       }
@@ -827,6 +859,16 @@ export function PublicSearchPage() {
 
   function restorePublicView(nextView) {
     closeLiveDropdown({ abort: true });
+    searchLoadMoreRequestIdRef.current += 1;
+    searchLoadMoreAbortControllerRef.current?.abort();
+    searchLoadMoreAbortControllerRef.current = null;
+    isSearchLoadingMoreRef.current = false;
+    setIsSearchLoadingMore(false);
+    setSearchLoadMoreError("");
+    resultsKeywordRef.current = "";
+    setResults([]);
+    setSearchTotal(0);
+    setSearchPage(1);
     categoryRequestIdRef.current += 1;
     categoryAbortControllerRef.current?.abort();
     categoryAbortControllerRef.current = null;
@@ -837,7 +879,9 @@ export function PublicSearchPage() {
     const nextInput = String(nextView.input || "");
     setSearchInput(nextInput);
     searchInputRef.current = nextInput;
-    setSubmittedKeyword(nextView.view === "search" || nextView.view === "detail" ? nextView.query : "");
+    const nextQuery = nextView.view === "search" || nextView.view === "detail" ? nextView.query : "";
+    submittedKeywordRef.current = nextQuery;
+    setSubmittedKeyword(nextQuery);
     setSelectedCategory(nextView.category || null);
 
     if (nextView.category) {
@@ -858,9 +902,21 @@ export function PublicSearchPage() {
     if (!isCurrentTarget) {
       writePublicViewState("replaceState", currentView);
       writePublicViewState("pushState", nextView);
+      resultsKeywordRef.current = "";
+      setResults([]);
+      setSearchTotal(0);
+      setSearchPage(1);
+      setHasHiddenOutOfStockMatches(false);
+      setError("");
     }
 
     closeLiveDropdown({ abort: true });
+    searchLoadMoreRequestIdRef.current += 1;
+    searchLoadMoreAbortControllerRef.current?.abort();
+    searchLoadMoreAbortControllerRef.current = null;
+    isSearchLoadingMoreRef.current = false;
+    setIsSearchLoadingMore(false);
+    setSearchLoadMoreError("");
     categoryRequestIdRef.current += 1;
     categoryAbortControllerRef.current?.abort();
     categoryAbortControllerRef.current = null;
@@ -870,6 +926,7 @@ export function PublicSearchPage() {
 
     const nextQuery = nextView.view === "search" || nextView.view === "detail" ? nextView.query : "";
     const nextInput = String(nextView.input || "");
+    submittedKeywordRef.current = nextQuery;
     searchInputRef.current = nextInput;
     setSearchInput(nextInput);
     setViewMode(nextView.view);
@@ -1000,6 +1057,65 @@ export function PublicSearchPage() {
   function handleLoadMoreCategoryProducts() {
     if (isCategoryLoading || isCategoryLoadingMore || categoryProducts.length >= categoryTotal) return;
     setCategoryPage((current) => current + 1);
+  }
+
+  async function handleLoadMoreSearchResults() {
+    const searchKeyword = submittedKeywordRef.current.trim();
+    const searchRequestKey = `search:${searchKeyword}`;
+    if (
+      viewModeRef.current !== "search" ||
+      !searchKeyword ||
+      selectedSearchProductId ||
+      isLoadingRef.current ||
+      isSearchLoadingMoreRef.current ||
+      results.length >= searchTotal
+    ) {
+      return;
+    }
+
+    const nextPage = searchPage + 1;
+    const currentRequestId = searchLoadMoreRequestIdRef.current + 1;
+    searchLoadMoreRequestIdRef.current = currentRequestId;
+    const abortController = new AbortController();
+    searchLoadMoreAbortControllerRef.current?.abort();
+    searchLoadMoreAbortControllerRef.current = abortController;
+    isSearchLoadingMoreRef.current = true;
+    setIsSearchLoadingMore(true);
+    setSearchLoadMoreError("");
+
+    try {
+      const searchResult = await searchPublicProducts(searchKeyword, {
+        page: nextPage,
+        limit: PUBLIC_SEARCH_PAGE_SIZE,
+        signal: abortController.signal,
+        timeoutMs: PUBLIC_SEARCH_TIMEOUT_MS
+      });
+      if (
+        abortController.signal.aborted ||
+        searchLoadMoreRequestIdRef.current !== currentRequestId ||
+        submittedKeywordRef.current.trim() !== searchKeyword ||
+        viewModeRef.current !== "search" ||
+        resultsKeywordRef.current !== searchRequestKey
+      ) {
+        return;
+      }
+
+      setResults((currentProducts) => mergePublicSearchPages(currentProducts, searchResult.products));
+      setSearchTotal((currentTotal) => Math.max(searchResult.totalMatches, currentTotal));
+      setSearchPage(searchResult.page);
+    } catch {
+      if (!abortController.signal.aborted && searchLoadMoreRequestIdRef.current === currentRequestId) {
+        setSearchLoadMoreError("Không thể tải thêm sản phẩm lúc này. Vui lòng thử lại.");
+      }
+    } finally {
+      if (searchLoadMoreAbortControllerRef.current === abortController) {
+        searchLoadMoreAbortControllerRef.current = null;
+      }
+      if (!abortController.signal.aborted && searchLoadMoreRequestIdRef.current === currentRequestId) {
+        isSearchLoadingMoreRef.current = false;
+        setIsSearchLoadingMore(false);
+      }
+    }
   }
 
   function handleRetryCategoryProducts() {
@@ -1182,7 +1298,7 @@ export function PublicSearchPage() {
           <section className="mx-auto mt-6 w-full max-w-[100rem] sm:mt-8">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
-                Kết quả tra cứu {results.length > 0 ? `(${results.length})` : ""}
+                Kết quả tra cứu {searchResultCount > 0 ? `(${searchResultCount})` : ""}
               </h2>
               {viewMode === "search" && (
                 <PublicResultViewSwitcher value={resultViewMode} onChange={handleResultViewModeChange} />
@@ -1244,6 +1360,23 @@ export function PublicSearchPage() {
 
             {!error && results.length > 0 && viewMode === "search" && resultViewMode === "table" && (
               <PublicSearchResultsTable products={results} />
+            )}
+
+            {!error && viewMode === "search" && results.length > 0 && searchLoadMoreError && (
+              <p className="mt-4 text-center text-sm font-medium text-red-700">{searchLoadMoreError}</p>
+            )}
+
+            {!error && viewMode === "search" && results.length > 0 && searchLoadMoreCount > 0 && (
+              <div className="mt-5 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleLoadMoreSearchResults}
+                  disabled={isSearchLoadingMore}
+                  className="min-h-11 rounded-xl border border-blue-200 bg-white px-5 text-sm font-extrabold text-[#0b63f6] hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b63f6] disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isSearchLoadingMore ? "Đang tải..." : <>Xem thêm {searchLoadMoreCount} sản phẩm</>}
+                </button>
+              </div>
             )}
 
             {!error && results.length > 0 && viewMode === "detail" && (

@@ -1,5 +1,6 @@
 import { apiGet } from "../api/apiClient";
 import { PUBLIC_RECENT_STOCK_LIMIT } from "../utils/publicRecentStockUpdates";
+import { PUBLIC_SEARCH_PAGE_SIZE } from "../utils/publicSearchPagination";
 
 let publicCategoriesPromise = null;
 let publicCatalogueSuggestionsPromise = null;
@@ -58,7 +59,7 @@ export async function listPublicRecentStockUpdates(options = {}) {
 export async function getPublicProductById(productId, options = {}) {
   const safeProductId = Number(productId);
   if (!Number.isSafeInteger(safeProductId) || safeProductId < 1) {
-    return { products: [], hasHiddenOutOfStockMatches: false, totalMatches: 0 };
+    return { products: [], hasHiddenOutOfStockMatches: false, page: 1, limit: 1, totalMatches: 0 };
   }
 
   const response = await apiGet("/public/products", { product_id: safeProductId, page: 1, limit: 1 }, options);
@@ -66,24 +67,28 @@ export async function getPublicProductById(productId, options = {}) {
   return {
     products: mapPublicProducts(products),
     hasHiddenOutOfStockMatches: response?.meta?.has_hidden_out_of_stock_matches === true,
-    totalMatches: Number(response?.meta?.total || products.length)
+    page: Number(response?.meta?.page ?? 1),
+    limit: Number(response?.meta?.limit ?? 1),
+    totalMatches: Number(response?.meta?.total ?? products.length)
   };
 }
 
 export async function searchPublicProducts(keyword, options = {}) {
   const trimmedKeyword = keyword?.trim();
+  const { page = 1, limit = PUBLIC_SEARCH_PAGE_SIZE, ...requestOptions } = options;
   if (!trimmedKeyword) {
-    return { products: [], hasHiddenOutOfStockMatches: false, totalMatches: 0 };
+    return { products: [], hasHiddenOutOfStockMatches: false, page, limit, totalMatches: 0 };
   }
 
-  const { limit = 20, ...requestOptions } = options;
-  const response = await apiGet("/public/products", { q: trimmedKeyword, page: 1, limit }, requestOptions);
+  const response = await apiGet("/public/products", { q: trimmedKeyword, page, limit }, requestOptions);
   const products = Array.isArray(response?.data) ? response.data : [];
 
   return {
     products: mapPublicProducts(products),
     hasHiddenOutOfStockMatches: response?.meta?.has_hidden_out_of_stock_matches === true,
-    totalMatches: Number(response?.meta?.total || products.length)
+    page: Number(response?.meta?.page ?? page),
+    limit: Number(response?.meta?.limit ?? limit),
+    totalMatches: Number(response?.meta?.total ?? products.length)
   };
 }
 
