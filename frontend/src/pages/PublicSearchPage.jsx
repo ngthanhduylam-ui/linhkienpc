@@ -6,6 +6,7 @@ import { PublicCatalogueHeader } from "../components/public/PublicCatalogueHeade
 import { PublicCatalogueFooter } from "../components/public/PublicCatalogueFooter";
 import { PublicCategoryNav } from "../components/public/PublicCategoryNav";
 import { PublicCategoryResultsSection } from "../components/public/PublicCategoryResultsSection";
+import { PublicFloatingContactWidget } from "../components/public/PublicFloatingContactWidget";
 import { PublicProductGrid, PublicProductGridSkeleton } from "../components/public/PublicProductGrid";
 import { PublicRecentStockUpdatesSection } from "../components/public/PublicRecentStockUpdatesSection";
 import { PublicResultViewSwitcher } from "../components/public/PublicResultViewSwitcher";
@@ -1394,6 +1395,7 @@ export function PublicSearchPage() {
           </section>
         )}
       </main>
+      <PublicFloatingContactWidget />
       <PublicCatalogueFooter />
     </div>
   );
