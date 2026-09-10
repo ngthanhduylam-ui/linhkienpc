@@ -6,6 +6,13 @@ export const PUBLIC_CONTACT_LINKS = Object.freeze({
     url: "https://www.facebook.com/mabu.m.bu.3",
     external: true
   }),
+  zalo: Object.freeze({
+    id: "zalo",
+    enabled: true,
+    label: "Chat Zalo",
+    url: "https://zalo.me/0933712571",
+    external: true
+  }),
   phone: Object.freeze({
     id: "phone",
     enabled: true,
@@ -13,13 +20,6 @@ export const PUBLIC_CONTACT_LINKS = Object.freeze({
     number: "0933712571",
     url: "tel:0933712571",
     external: false
-  }),
-  zalo: Object.freeze({
-    id: "zalo",
-    enabled: false,
-    label: "Zalo",
-    url: "",
-    external: true
   })
 });
 

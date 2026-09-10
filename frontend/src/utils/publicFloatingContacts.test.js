@@ -9,21 +9,25 @@ import {
   didPublicContactPointerMove,
   getDefaultPublicContactPosition,
   getPublicContactExpansionDirection,
+  getPublicContactStackSize,
+  PUBLIC_CONTACT_BUTTON_SIZE,
   PUBLIC_CONTACT_DEFAULT_BOTTOM,
   PUBLIC_CONTACT_DEFAULT_RIGHT,
-  PUBLIC_CONTACT_DRAG_THRESHOLD
+  PUBLIC_CONTACT_DRAG_THRESHOLD,
+  PUBLIC_CONTACT_STACK_GAP
 } from "./publicFloatingContacts.js";
 
-test("contact configuration enables Facebook and phone while keeping Zalo hidden", () => {
+test("contact configuration enables Facebook, Zalo, and phone in the approved order", () => {
   assert.equal(PUBLIC_CONTACT_LINKS.facebook.enabled, true);
   assert.equal(PUBLIC_CONTACT_LINKS.facebook.url, "https://www.facebook.com/mabu.m.bu.3");
+  assert.equal(PUBLIC_CONTACT_LINKS.zalo.enabled, true);
+  assert.equal(PUBLIC_CONTACT_LINKS.zalo.label, "Chat Zalo");
+  assert.equal(PUBLIC_CONTACT_LINKS.zalo.url, "https://zalo.me/0933712571");
   assert.equal(PUBLIC_CONTACT_LINKS.phone.enabled, true);
   assert.equal(PUBLIC_CONTACT_LINKS.phone.label, "0933.712.571");
   assert.equal(PUBLIC_CONTACT_LINKS.phone.url, "tel:0933712571");
-  assert.equal(PUBLIC_CONTACT_LINKS.zalo.enabled, false);
-  assert.equal(PUBLIC_CONTACT_LINKS.zalo.url, "");
 
-  assert.deepEqual(getEnabledPublicContactLinks().map((contact) => contact.id), ["facebook", "phone"]);
+  assert.deepEqual(getEnabledPublicContactLinks().map((contact) => contact.id), ["facebook", "zalo", "phone"]);
 });
 
 test("enabled contacts still require a non-empty destination", () => {
@@ -50,12 +54,26 @@ test("default placement is near the lower-right and resize uses the same clamp",
   const widget = { width: 150, height: 100 };
   const defaultPosition = getDefaultPublicContactPosition({ width: 1366, height: 768 }, widget);
   assert.equal(PUBLIC_CONTACT_DEFAULT_RIGHT, 20);
-  assert.equal(PUBLIC_CONTACT_DEFAULT_BOTTOM, 24);
-  assert.deepEqual(defaultPosition, { x: 1196, y: 644 });
+  assert.equal(PUBLIC_CONTACT_DEFAULT_BOTTOM, 152);
+  assert.deepEqual(defaultPosition, { x: 1196, y: 516 });
 
   const dragged = clampPublicContactPosition({ x: 1100, y: 500 }, { width: 1366, height: 768 }, widget);
   const resized = clampPublicContactPosition(dragged, { width: 430, height: 500 }, widget);
   assert.deepEqual(resized, { x: 268, y: 388 });
+});
+
+test("three-contact stack geometry is derived from button size and gap", () => {
+  assert.equal(PUBLIC_CONTACT_BUTTON_SIZE, 50);
+  assert.equal(PUBLIC_CONTACT_STACK_GAP, 8);
+  assert.deepEqual(getPublicContactStackSize(3), {
+    width: PUBLIC_CONTACT_BUTTON_SIZE,
+    height: PUBLIC_CONTACT_BUTTON_SIZE * 3 + PUBLIC_CONTACT_STACK_GAP * 2
+  });
+
+  assert.deepEqual(
+    getDefaultPublicContactPosition({ width: 390, height: 844 }, getPublicContactStackSize(3)),
+    { x: 320, y: 526 }
+  );
 });
 
 test("contact labels expand inward according to the widget half of the viewport", () => {
@@ -76,7 +94,7 @@ test("drag threshold protects clicks and supports primary mouse, touch, and pen 
   assert.equal(canStartPublicContactDrag({ pointerType: "touch", button: 0, isPrimary: false }), false);
 });
 
-test("click suppression is inactive below the drag threshold and consumed exactly once after a drag", () => {
+test("Zalo click remains native below threshold and one release click is suppressed after a real drag", () => {
   const suppressionRef = { current: false };
 
   assert.equal(didPublicContactPointerMove({ x: 10, y: 10 }, { x: 14, y: 13 }), false);
@@ -106,5 +124,12 @@ test("widget is mounted only on Public Lookup and keeps native link semantics wi
   assert.match(widgetSource, /isFacebook \? "Facebook" : contact\.label/);
   assert.match(widgetSource, /onMouseEnter=\{\(\) => setHoveredContactId\(contact\.id\)\}/);
   assert.match(widgetSource, /onFocus=\{\(\) => setFocusedContactId\(contact\.id\)\}/);
+  assert.match(widgetSource, /Mở Zalo VI TÍNH PHƯỚC TÀI/);
+  assert.match(widgetSource, /shadow-\[0_2px_6px_rgba\(15,23,42,0\.22\)\]/);
+  assert.match(widgetSource, /w-max/);
+  assert.match(widgetSource, /max-w-48 opacity-100/);
+  assert.match(widgetSource, /max-w-0 opacity-0/);
+  assert.doesNotMatch(widgetSource, /expandedWidth|w-\[126px\]|w-\[112px\]|w-\[148px\]/);
+  assert.doesNotMatch(widgetSource, /gradient|brightness-110|ring-inset|ring-white\/30|shadow-\[0_4px_14px/);
   assert.doesNotMatch(widgetSource, /localStorage|sessionStorage|apiGet|apiPost|fetch\(/);
 });

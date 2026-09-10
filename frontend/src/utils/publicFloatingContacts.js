@@ -1,10 +1,20 @@
 export const PUBLIC_CONTACT_SAFE_MARGIN = 12;
 export const PUBLIC_CONTACT_DRAG_THRESHOLD = 6;
 export const PUBLIC_CONTACT_DEFAULT_RIGHT = 20;
-export const PUBLIC_CONTACT_DEFAULT_BOTTOM = 24;
+export const PUBLIC_CONTACT_DEFAULT_BOTTOM = 152;
+export const PUBLIC_CONTACT_BUTTON_SIZE = 50;
+export const PUBLIC_CONTACT_STACK_GAP = 8;
 
 function finiteOrZero(value) {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+export function getPublicContactStackSize(contactCount) {
+  const count = Math.max(0, Math.floor(finiteOrZero(contactCount)));
+  return {
+    width: PUBLIC_CONTACT_BUTTON_SIZE,
+    height: count * PUBLIC_CONTACT_BUTTON_SIZE + Math.max(0, count - 1) * PUBLIC_CONTACT_STACK_GAP
+  };
 }
 
 export function clampPublicContactPosition(

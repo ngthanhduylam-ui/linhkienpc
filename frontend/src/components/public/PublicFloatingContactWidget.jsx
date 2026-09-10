@@ -6,12 +6,12 @@ import {
   consumePublicContactClickSuppression,
   didPublicContactPointerMove,
   getDefaultPublicContactPosition,
-  getPublicContactExpansionDirection
+  getPublicContactExpansionDirection,
+  getPublicContactStackSize,
+  PUBLIC_CONTACT_STACK_GAP
 } from "../../utils/publicFloatingContacts";
 
 const EMPTY_POSITION = Object.freeze({ x: 0, y: 0 });
-const CONTACT_BUTTON_SIZE = 50;
-const CONTACT_STACK_GAP = 8;
 
 function viewportSize() {
   return { width: window.innerWidth, height: window.innerHeight };
@@ -20,13 +20,6 @@ function viewportSize() {
 function elementSize(element) {
   const rect = element?.getBoundingClientRect();
   return { width: rect?.width || 0, height: rect?.height || 0 };
-}
-
-function contactStackSize(contactCount) {
-  return {
-    width: CONTACT_BUTTON_SIZE,
-    height: contactCount * CONTACT_BUTTON_SIZE + Math.max(0, contactCount - 1) * CONTACT_STACK_GAP
-  };
 }
 
 function MessengerIcon() {
@@ -47,10 +40,9 @@ function PhoneIcon() {
 
 function ZaloIcon() {
   return (
-    <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 5.5h16v11H9l-4 3v-3H4v-11Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m7.5 9 3 3m0-3-3 3h4l1.2-3 1.2 3m1.1-3v3h2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <span aria-hidden="true" className="text-[13px] font-bold leading-none tracking-[-0.04em]">
+      Zalo
+    </span>
   );
 }
 
@@ -62,19 +54,16 @@ const CONTACT_ICONS = {
 
 const CONTACT_STYLES = {
   facebook: {
-    background: "bg-blue-600",
-    focusRing: "focus-visible:ring-blue-600",
-    expandedWidth: "w-[126px]"
+    background: "bg-[#168aff]",
+    focusRing: "focus-visible:ring-[#168aff]"
   },
   phone: {
-    background: "bg-emerald-700",
-    focusRing: "focus-visible:ring-emerald-700",
-    expandedWidth: "w-[148px]"
+    background: "bg-[#11875d]",
+    focusRing: "focus-visible:ring-[#11875d]"
   },
   zalo: {
-    background: "bg-sky-600",
-    focusRing: "focus-visible:ring-sky-600",
-    expandedWidth: "w-[112px]"
+    background: "bg-[#0068ff]",
+    focusRing: "focus-visible:ring-[#0068ff]"
   }
 };
 
@@ -173,7 +162,7 @@ export function PublicFloatingContactWidget() {
       initializedRef.current = true;
       updatePosition(getDefaultPublicContactPosition(
         viewportSize(),
-        contactStackSize(contacts.length)
+        getPublicContactStackSize(contacts.length)
       ));
       setPositionReady(true);
       return;
@@ -220,8 +209,9 @@ export function PublicFloatingContactWidget() {
       ref={surfaceRef}
       aria-label="Liên hệ VI TÍNH PHƯỚC TÀI. Có thể kéo để di chuyển."
       title="Kéo để di chuyển"
-      className={`fixed left-0 top-0 z-40 flex w-[50px] max-w-[calc(100vw-1.5rem)] touch-none select-none flex-col gap-2 ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+      className={`fixed left-0 top-0 z-40 flex w-[50px] max-w-[calc(100vw-1.5rem)] touch-none select-none flex-col ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
       style={{
+        gap: `${PUBLIC_CONTACT_STACK_GAP}px`,
         transform: `translate3d(${Math.round(position.x)}px, ${Math.round(position.y)}px, 0)`,
         visibility: positionReady ? "visible" : "hidden"
       }}
@@ -236,6 +226,7 @@ export function PublicFloatingContactWidget() {
       {contacts.map((contact) => {
         const Icon = CONTACT_ICONS[contact.id];
         const isFacebook = contact.id === "facebook";
+        const isZalo = contact.id === "zalo";
         const contactStyle = CONTACT_STYLES[contact.id] || CONTACT_STYLES.zalo;
         const label = isFacebook ? "Facebook" : contact.label;
         const isExpanded = !dragging && (
@@ -247,8 +238,12 @@ export function PublicFloatingContactWidget() {
             href={contact.url}
             target={contact.external ? "_blank" : undefined}
             rel={contact.external ? "noopener noreferrer" : undefined}
-            aria-label={isFacebook ? "Mở Facebook VI TÍNH PHƯỚC TÀI" : `Gọi ${contact.label}`}
-            className={`relative block h-[50px] w-[50px] cursor-[inherit] rounded-full text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:text-sm ${contactStyle.focusRing}`}
+            aria-label={isFacebook
+              ? "Mở Facebook VI TÍNH PHƯỚC TÀI"
+              : isZalo
+                ? "Mở Zalo VI TÍNH PHƯỚC TÀI"
+                : `Gọi ${contact.label}`}
+            className={`relative block h-[50px] w-[50px] cursor-[inherit] rounded-full text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${contactStyle.focusRing}`}
             onMouseEnter={() => setHoveredContactId(contact.id)}
             onMouseLeave={() => setHoveredContactId((current) => (
               current === contact.id ? null : current
@@ -260,13 +255,15 @@ export function PublicFloatingContactWidget() {
           >
             <span
               aria-hidden="true"
-              className={`absolute top-0 z-10 flex h-[50px] items-center overflow-hidden rounded-full shadow-[0_4px_14px_rgba(15,47,95,0.2)] transition-[width,filter] duration-200 hover:brightness-110 motion-reduce:transition-none ${contactStyle.background} ${expansionDirection === "left" ? "right-0" : "left-0"} ${isExpanded ? contactStyle.expandedWidth : "w-[50px]"}`}
+              className={`absolute top-0 z-10 flex h-[50px] w-max items-center overflow-hidden rounded-full shadow-[0_2px_6px_rgba(15,23,42,0.22)] ${contactStyle.background} ${expansionDirection === "left" ? "right-0 flex-row-reverse" : "left-0"}`}
             >
-              <span className={`absolute top-0 flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full ring-2 ring-inset ring-white/30 ${expansionDirection === "left" ? "right-0" : "left-0"}`}>
+              <span className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full">
                 {Icon && <Icon />}
               </span>
-              <span className={`absolute whitespace-nowrap transition-opacity duration-150 motion-reduce:transition-none ${expansionDirection === "left" ? "right-[60px]" : "left-[60px]"} ${isExpanded ? "opacity-100" : "opacity-0"}`}>
-                {label}
+              <span className={`overflow-hidden transition-[max-width,opacity] duration-200 motion-reduce:transition-none ${isExpanded ? "max-w-48 opacity-100" : "max-w-0 opacity-0"}`}>
+                <span className="block whitespace-nowrap px-3">
+                  {label}
+                </span>
               </span>
             </span>
           </a>
