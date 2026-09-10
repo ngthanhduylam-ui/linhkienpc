@@ -11,12 +11,12 @@ const BANNER_SLIDES = [
   },
   { 
     id: "used-components",
-    image: "/catalogue-banners/used-components.webp",
-    alt: "Linh kiện máy tính cũ tại Phước Tài Computer"
+    image: "/catalogue-banners/linh-kien-cu-moi.webp",
+    alt: "Linh kiện máy tính cũ mới tại Phước Tài Computer"
   },
   {
   id: "trade-in-upgrade",
-  image: "/catalogue-banners/trade-in-upgrade.webp",
+  image: "/catalogue-banners/thu-cu-doi-moi.webp",
   alt: "Thu cũ đổi mới bù chênh lệch tại Phước Tài Computer"
   }
   ];
@@ -89,7 +89,7 @@ export function PublicAdvertisingCarousel() {
   return (
     <section aria-label="Quảng cáo PHƯỚC TÀI COMPUTER" className="w-full overflow-hidden border-b border-blue-200/20 bg-[#071a44]">
       <div
-        className="group relative aspect-[2169/191] w-full touch-pan-y overflow-hidden bg-[linear-gradient(110deg,#071a44_0%,#0b2f6a_55%,#0b4fb3_100%)]"
+        className="group relative aspect-[2169/240] w-full touch-pan-y overflow-hidden bg-[linear-gradient(110deg,#071a44_0%,#0b2f6a_55%,#0b4fb3_100%)]"
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onFocus={() => setIsFocusWithin(true)}
@@ -128,7 +128,7 @@ export function PublicAdvertisingCarousel() {
               type="button"
               aria-label="Banner trước"
               onClick={showPreviousSlide}
-              className="absolute left-3 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#0b4fb3] shadow-lg hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:flex"
+              className="absolute left-1 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md bg-transparent text-white/80 transition-colors hover:bg-black/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:flex"
             >
               <ArrowIcon direction="previous" />
             </button>
@@ -136,7 +136,7 @@ export function PublicAdvertisingCarousel() {
               type="button"
               aria-label="Banner tiếp theo"
               onClick={showNextSlide}
-              className="absolute right-3 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#0b4fb3] shadow-lg hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:flex"
+              className="absolute right-1 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md bg-transparent text-white/80 transition-colors hover:bg-black/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:flex"
             >
               <ArrowIcon direction="next" />
             </button>
