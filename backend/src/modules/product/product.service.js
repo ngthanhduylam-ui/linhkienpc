@@ -206,6 +206,7 @@ async function listAdminProducts(query) {
   const searchTokens = getSearchTokens(query.q);
   const categoryId = parseNullableInt(query.category_id, 'category_id');
   const isActive = parseBooleanQuery(query.is_active, true);
+  const inStock = parseBooleanQuery(query.in_stock, false);
 
   const whereParts = [];
   const params = [];
@@ -217,6 +218,9 @@ async function listAdminProducts(query) {
   if (categoryId !== null) {
     whereParts.push('p.category_id = ?');
     params.push(categoryId);
+  }
+  if (inStock) {
+    whereParts.push('COALESCE(pib.quantity, 0) > 0');
   }
   if (searchTokens.length) {
     const search = buildProductTokenSearch(searchTokens, { includeCategory: true });
@@ -231,6 +235,7 @@ async function listAdminProducts(query) {
       SELECT COUNT(*) AS total
       FROM products p
       JOIN categories c ON c.id = p.category_id
+      ${inStock ? 'LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id' : ''}
       ${whereSql}
     `,
     params

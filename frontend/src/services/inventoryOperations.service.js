@@ -1,14 +1,15 @@
-import { apiDelete, apiGet, apiGetBlob, apiPatch, apiPost } from "../api/apiClient";
+import { apiDelete, apiGet, apiGetBlob, apiPatch, apiPost } from "../api/apiClient.js";
 
 export async function listActiveProducts() {
   const response = await apiGet("/admin/products", { page: 1, limit: 100 });
   return response?.data || [];
 }
 
-export async function listProductsPage({ keyword = "", page = 1, limit = 20, is_active } = {}) {
+export async function listProductsPage({ keyword = "", page = 1, limit = 20, is_active, in_stock } = {}) {
   const query = { page, limit };
   if (keyword.trim()) query.q = keyword.trim();
   if (is_active !== undefined && is_active !== null) query.is_active = String(is_active);
+  if (in_stock !== undefined && in_stock !== null) query.in_stock = String(in_stock);
 
   const response = await apiGet("/admin/products", query);
   return {
@@ -30,7 +31,8 @@ export async function searchActiveProducts(keyword, limit = 12) {
     keyword: normalizedKeyword,
     page: 1,
     limit,
-    is_active: true
+    is_active: true,
+    in_stock: true
   });
   return result.items;
 }
