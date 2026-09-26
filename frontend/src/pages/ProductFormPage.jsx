@@ -37,7 +37,7 @@ const MAX_SALE_PRICE = 999999999999999;
 const SALE_PRICE_INTEGER_MESSAGE = "Giá bán phải là số nguyên không âm.";
 const SALE_PRICE_MAX_MESSAGE = "Giá bán vượt quá giới hạn cho phép.";
 const CATEGORY_REQUIRED_MESSAGE = "Vui lòng chọn loại sản phẩm.";
-const MAX_PRODUCT_IMAGES = 5;
+const MAX_PRODUCT_IMAGES = 6;
 const MAX_UPLOAD_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_SOURCE_IMAGE_BYTES = 50 * 1024 * 1024;
 const IMAGE_OPTIMIZATION_TRIGGER_BYTES = 8 * 1024 * 1024;
@@ -1200,7 +1200,7 @@ export function ProductFormPage() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Ảnh sản phẩm</h2>
-                  <p className="mt-1 text-xs text-slate-500">Tối đa 5 ảnh JPEG, PNG hoặc WebP. Ảnh lớn sẽ được tự tối ưu trước khi tải lên.</p>
+                  <p className="mt-1 text-xs text-slate-500">Tối đa {MAX_PRODUCT_IMAGES} ảnh JPEG, PNG hoặc WebP. Ảnh lớn sẽ được tự tối ưu trước khi tải lên.</p>
                 </div>
                 <label className="inline-flex h-9 cursor-pointer items-center rounded border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50">
                   + Thêm ảnh

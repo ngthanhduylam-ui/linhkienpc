@@ -39,7 +39,7 @@ module.exports = {
   productUploads: {
     root: path.resolve(backendRoot, process.env.PRODUCT_UPLOAD_ROOT || 'uploads/products'),
     maxFileBytes: numberFromEnv(process.env.PRODUCT_IMAGE_MAX_BYTES, 15 * 1024 * 1024),
-    maxImages: Math.min(5, Math.max(1, numberFromEnv(process.env.PRODUCT_IMAGE_MAX_COUNT, 5)))
+    maxImages: Math.min(6, Math.max(1, numberFromEnv(process.env.PRODUCT_IMAGE_MAX_COUNT, 6)))
   },
   db: {
     host: process.env.DB_HOST,
