@@ -21,9 +21,15 @@ test('migration 028 widens only the existing named CHECK and canonical schema ag
   assert.doesNotMatch(migration, /\b(INSERT|UPDATE|DELETE)\b/i);
 });
 
+test('example environment enables all six product image slots', () => {
+  const example = read('backend/.env.example');
+  const declarations = example.match(/^PRODUCT_IMAGE_MAX_COUNT=.*$/gm);
+  assert.deepEqual(declarations?.map((line) => line.trim()), ['PRODUCT_IMAGE_MAX_COUNT=6']);
+});
+
 test('backend image count defaults to six, caps overrides at six, and keeps lower configured limits', () => {
   const configFile = path.join(repoRoot, 'backend/src/config/env.js');
-  for (const [override, expected] of [[undefined, 6], ['invalid', 6], ['7', 6], ['5', 5]]) {
+  for (const [override, expected] of [[undefined, 6], ['6', 6], ['invalid', 6], ['7', 6], ['5', 5]]) {
     const context = {
       module: { exports: {} },
       __dirname: path.dirname(configFile),

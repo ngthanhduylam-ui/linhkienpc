@@ -171,7 +171,7 @@ Dữ liệu lịch sử từng bị uppercase/normalize không được backfill
 - CORS/auth-origin lấy từ `AUTH_ALLOWED_ORIGINS`; source default production là đúng một origin `https://vitinhphuoctai.com` nếu env không override.
 - `helmet()` global; unexpected errors được sanitize thành generic 500.
 - Public data limiter: 600 request/5 phút/IP cho product search, direct inventory và recent-stock; suggestions 120 request/5 phút/IP. Categories/images/health không bị limiter này.
-- Image upload: tối đa 5 file, 15 MB/file mặc định, JPEG/PNG/WebP, cap 20 MP, thumbnail WebP trong 720×720; Sharp decode có `limitInputPixels` defense-in-depth.
+- Image upload: tối đa 6 file/product (`PRODUCT_IMAGE_MAX_COUNT=6`, migration 028), 15 MB/file mặc định, JPEG/PNG/WebP, cap 20 MP, thumbnail WebP trong 720×720; Sharp decode có `limitInputPixels` defense-in-depth. OnlineListing/Chợ Tốt vẫn chỉ chọn tối đa 5 ảnh.
 - Public image list/thumbnail/download enforce active + positive stock; public filename được tạo generic.
 - Public API không serialize selling price.
 

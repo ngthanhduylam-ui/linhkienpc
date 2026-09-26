@@ -76,7 +76,7 @@ docs/                architecture, recovery và handoff
 - `/admin/stock-out`: POS full-screen, multi-order tabs trong memory, product/customer search, warranty group, serial/ghi chú, giá/snapshot và in phiếu.
 - `/admin/stock-in`: nhập hàng bulk, supplier optional, nhóm bảo hành/ghi chú.
 - `/admin/inventory-check`: tìm kiếm multi-token/compact, chuyển nhóm note và điều chỉnh số lượng có lịch sử.
-- `/admin/products`: quản lý sản phẩm/category/SKU rule/ảnh tối đa 5 ảnh.
+- `/admin/products`: quản lý sản phẩm/category/SKU rule/ảnh tối đa 6 ảnh.
 - `/admin/customers`, `/admin/suppliers`, `/admin/transaction-history`.
 - `/admin/quick-notes`: Sổ nhanh và widget nổi trong Admin/POS.
 - `/admin/settings/print-template`: cấu hình/editor/draft mẫu in; xem trạng thái integration trong handoff.

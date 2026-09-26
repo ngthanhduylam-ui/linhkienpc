@@ -55,7 +55,7 @@ Default local:
 ```env
 PRODUCT_UPLOAD_ROOT=./uploads/products
 PRODUCT_IMAGE_MAX_BYTES=15728640
-PRODUCT_IMAGE_MAX_COUNT=5
+PRODUCT_IMAGE_MAX_COUNT=6
 ```
 
 Production upload root:
@@ -65,6 +65,8 @@ Production upload root:
 ```
 
 Filesystem giữ originals/thumbnails; MySQL chỉ giữ metadata.
+
+Product lưu tối đa 6 ảnh; OnlineListing/Chợ Tốt vẫn chỉ chọn tối đa 5 ảnh. `.env` hiện có sẽ override default: nếu còn `PRODUCT_IMAGE_MAX_COUNT=5`, backend vẫn giới hạn 5; dùng `PRODUCT_IMAGE_MAX_COUNT=6` để bật đủ 6 ảnh sau khi migration 028 đã được áp dụng.
 
 ## POS pricing behavior
 

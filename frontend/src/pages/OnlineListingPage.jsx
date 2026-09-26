@@ -516,6 +516,7 @@ export function OnlineListingPage() {
       try {
         const nextImages = await listOnlineListingProductImages(selectedProduct.id);
         if (!active || imageRequestIdRef.current !== requestId) return;
+        // Online listing selection remains capped at 5 images even though a product may store up to 6.
         const limitedImages = nextImages.slice(0, 5);
         setImages(limitedImages);
         setSelectedImageIds(limitedImages.map((image) => String(image.id)));
