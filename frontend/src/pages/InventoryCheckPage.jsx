@@ -9,6 +9,7 @@ import {
 } from "../services/inventoryOperations.service";
 import { RECENT_PRODUCTS_KEY, filterRecentItemsByAvailable, readRecentItems, saveRecentItem } from "../utils/recentItems";
 import { formatWarrantyNote } from "../utils/warrantyNote";
+import { getInventoryNoteSuggestions } from "../utils/inventoryNoteSuggestions";
 
 const NO_NOTE_VALUE = "__NO_NOTE__";
 
@@ -75,10 +76,15 @@ export function InventoryCheckPage() {
   const [recentProducts, setRecentProducts] = useState(() => readRecentItems(RECENT_PRODUCTS_KEY));
   const [selectedSku, setSelectedSku] = useState("");
   const [detail, setDetail] = useState(null);
+  const detailRequestSequenceRef = useRef(0);
 
   const [adjustmentType, setAdjustmentType] = useState("INCREASE");
   const [adjustQuantity, setAdjustQuantity] = useState("");
   const [adjustNoteGroup, setAdjustNoteGroup] = useState("");
+  const [isAdjustNoteOpen, setIsAdjustNoteOpen] = useState(false);
+  const [activeAdjustNoteIndex, setActiveAdjustNoteIndex] = useState(-1);
+  const adjustNoteWrapperRef = useRef(null);
+  const adjustNoteListRef = useRef(null);
   const [adjustReason, setAdjustReason] = useState("");
   const [moveToNote, setMoveToNote] = useState("");
   const [moveFieldErrors, setMoveFieldErrors] = useState({});
@@ -88,6 +94,8 @@ export function InventoryCheckPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  useEffect(() => () => { detailRequestSequenceRef.current += 1; }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
@@ -155,6 +163,7 @@ export function InventoryCheckPage() {
   }, [debouncedSearch]);
 
   function resetQuantityForm() {
+    closeAdjustNoteSuggestions();
     setAdjustQuantity("");
     setAdjustReason("");
     setAdjustNoteGroup("");
@@ -163,25 +172,32 @@ export function InventoryCheckPage() {
   }
 
   async function loadProductDetail(sku, options = {}) {
+    const requestSequence = ++detailRequestSequenceRef.current;
+    closeAdjustNoteSuggestions();
     setIsLoadingDetail(true);
     setError("");
     try {
       const result = await getInventoryCheckProduct(sku);
+      if (requestSequence !== detailRequestSequenceRef.current) return null;
       setDetail(result);
       setSelectedSku(result?.product?.sku || sku);
       if (!options.keepForms) resetQuantityForm();
       return result;
     } catch (err) {
+      if (requestSequence !== detailRequestSequenceRef.current) return null;
       setDetail(null);
       setSelectedSku("");
       setError(err?.message || "Không thể tải thông tin kiểm hàng.");
       return null;
     } finally {
-      setIsLoadingDetail(false);
+      if (requestSequence === detailRequestSequenceRef.current) setIsLoadingDetail(false);
     }
   }
 
   function handleClearSearch() {
+    detailRequestSequenceRef.current += 1;
+    setIsLoadingDetail(false);
+    closeAdjustNoteSuggestions();
     setSearchInput("");
     setDebouncedSearch("");
     setProducts([]);
@@ -226,6 +242,81 @@ export function InventoryCheckPage() {
   }, [activeProducts, debouncedSearch, hasFocusedProductSearch, products, recentProducts]);
 
   const noteGroups = detail?.note_groups || [];
+  const adjustNoteSuggestions = getInventoryNoteSuggestions(noteGroups, adjustNoteGroup);
+  const showAdjustNoteSuggestions = isAdjustNoteOpen && adjustmentType === "INCREASE"
+    && !isLoadingDetail && !isSubmitting && adjustNoteSuggestions.length > 0;
+
+  function closeAdjustNoteSuggestions() {
+    setIsAdjustNoteOpen(false);
+    setActiveAdjustNoteIndex(-1);
+  }
+
+  function openAdjustNoteSuggestions() {
+    if (isLoadingDetail || isSubmitting) return;
+    setIsAdjustNoteOpen(true);
+    setActiveAdjustNoteIndex(-1);
+  }
+
+  function handleAdjustNoteChange(event) {
+    setAdjustNoteGroup(event.target.value);
+    openAdjustNoteSuggestions();
+  }
+
+  function selectAdjustNoteSuggestion(note) {
+    setAdjustNoteGroup(note);
+    closeAdjustNoteSuggestions();
+  }
+
+  function handleAdjustNoteKeyDown(event) {
+    if (event.nativeEvent?.isComposing || isLoadingDetail || isSubmitting) return;
+    if (event.key === "Escape" || event.key === "Tab") {
+      closeAdjustNoteSuggestions();
+      return;
+    }
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && adjustNoteSuggestions.length) {
+      event.preventDefault();
+      setIsAdjustNoteOpen(true);
+      const last = adjustNoteSuggestions.length - 1;
+      setActiveAdjustNoteIndex((index) => {
+        if (!showAdjustNoteSuggestions || index < 0) return event.key === "ArrowDown" ? 0 : last;
+        return Math.max(0, Math.min(last, index + (event.key === "ArrowDown" ? 1 : -1)));
+      });
+    } else if (event.key === "Enter" && showAdjustNoteSuggestions && adjustNoteSuggestions[activeAdjustNoteIndex]) {
+      event.preventDefault();
+      selectAdjustNoteSuggestion(adjustNoteSuggestions[activeAdjustNoteIndex]);
+    }
+  }
+
+  function handleAdjustNotePointerDown(event) {
+    // Keep mouse focus on the input; touch remains free to scroll the list and tap normally.
+    if (event.pointerType === "mouse" && event.button === 0) event.preventDefault();
+  }
+
+  useEffect(() => {
+    if (!showAdjustNoteSuggestions) return;
+    function closeOutside(event) {
+      if (!adjustNoteWrapperRef.current?.contains(event.target)) closeAdjustNoteSuggestions();
+    }
+    // Do not close on input blur: touch may focus an option before its click is dispatched.
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("focusin", closeOutside);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("focusin", closeOutside);
+    };
+  }, [showAdjustNoteSuggestions]);
+
+  useEffect(() => {
+    const list = adjustNoteListRef.current;
+    const option = list?.children[activeAdjustNoteIndex];
+    if (!showAdjustNoteSuggestions || !option) return;
+    // Scroll only the suggestion list, never the page.
+    if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
+    else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight;
+    }
+  }, [activeAdjustNoteIndex, showAdjustNoteSuggestions]);
+
   const selectedAdjustGroup = useMemo(
     () => noteGroups.find((group) => toGroupValue(group) === adjustNoteGroup) || null,
     [noteGroups, adjustNoteGroup]
@@ -264,6 +355,7 @@ export function InventoryCheckPage() {
 
     const sku = detail.product.sku;
     const previousTotal = Number(detail.product.total_quantity || 0);
+    const requestSequence = detailRequestSequenceRef.current;
     setIsSubmitting(true);
     try {
       const result = await moveInventoryNoteGroup({
@@ -273,6 +365,7 @@ export function InventoryCheckPage() {
         quantity: numericQuantity,
         reason: adjustReason.trim() || undefined
       });
+      if (requestSequence !== detailRequestSequenceRef.current) return;
 
       setAdjustNoteGroup("");
       setMoveToNote("");
@@ -282,6 +375,7 @@ export function InventoryCheckPage() {
 
       try {
         const refreshed = await getInventoryCheckProduct(result?.product?.sku || sku);
+        if (requestSequence !== detailRequestSequenceRef.current) return;
         setDetail(refreshed);
         setSelectedSku(refreshed?.product?.sku || sku);
         const currentTotal = Number(refreshed?.product?.total_quantity || previousTotal);
@@ -291,12 +385,14 @@ export function InventoryCheckPage() {
           }. Tổng tồn: ${currentTotal}.`
         );
       } catch {
+        if (requestSequence !== detailRequestSequenceRef.current) return;
         setDetail(result || detail);
         setSuccess(
           `Đã chuyển nhóm ghi chú thành công nhưng chưa thể làm mới dữ liệu. Tổng tồn trước thao tác: ${previousTotal}.`
         );
       }
     } catch (err) {
+      if (requestSequence !== detailRequestSequenceRef.current) return;
       const code = err?.payload?.error?.code;
       if (code === "SAME_NOTE_GROUP") {
         setMoveFieldErrors((prev) => ({ ...prev, destination: "Ghi chú mới phải khác nhóm hiện tại." }));
@@ -317,6 +413,7 @@ export function InventoryCheckPage() {
 
   async function handleQuantitySubmit(event) {
     event.preventDefault();
+    closeAdjustNoteSuggestions();
     setError("");
     setSuccess("");
 
@@ -348,6 +445,7 @@ export function InventoryCheckPage() {
       }
     }
 
+    let requestSequence = detailRequestSequenceRef.current;
     setIsSubmitting(true);
     try {
       const result = await adjustInventoryQuantity({
@@ -362,8 +460,12 @@ export function InventoryCheckPage() {
             : adjustNoteGroup.trim(),
         reason: adjustReason.trim() || undefined
       });
+      if (requestSequence !== detailRequestSequenceRef.current) return;
 
-      const refreshed = await loadProductDetail(result?.product?.sku || detail.product.sku, { keepForms: true });
+      const refreshPromise = loadProductDetail(result?.product?.sku || detail.product.sku, { keepForms: true });
+      requestSequence = detailRequestSequenceRef.current;
+      const refreshed = await refreshPromise;
+      if (requestSequence !== detailRequestSequenceRef.current) return;
       const nextDetail =
         refreshed || {
           ...detail,
@@ -382,6 +484,7 @@ export function InventoryCheckPage() {
         }.`
       );
     } catch (err) {
+      if (requestSequence !== detailRequestSequenceRef.current) return;
       setError(err?.message || "Điều chỉnh số lượng thất bại.");
     } finally {
       setIsSubmitting(false);
@@ -567,6 +670,7 @@ export function InventoryCheckPage() {
                         className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                         value={adjustmentType}
                         onChange={(event) => {
+                          closeAdjustNoteSuggestions();
                           setAdjustmentType(event.target.value);
                           setAdjustNoteGroup("");
                           setAdjustQuantity("");
@@ -613,19 +717,56 @@ export function InventoryCheckPage() {
 
                   {adjustmentType === "INCREASE" ? (
                     <div className="min-w-0 max-w-full">
-                      <label className="mb-1 block text-sm font-medium text-slate-700">
+                      <label htmlFor="inventory-adjust-note" className="mb-1 block text-sm font-medium text-slate-700">
                         Nhóm bảo hành / ghi chú
                       </label>
-                      <input
-                        className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                        value={adjustNoteGroup}
-                        onChange={(event) => setAdjustNoteGroup(event.target.value)}
-                        autoCapitalize="off"
-                        autoCorrect="off"
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
-                      />
+                      <div ref={adjustNoteWrapperRef} className="relative min-w-0 max-w-full">
+                        <input
+                          id="inventory-adjust-note"
+                          role="combobox"
+                          aria-autocomplete="list"
+                          aria-expanded={showAdjustNoteSuggestions}
+                          aria-controls={showAdjustNoteSuggestions ? "inventory-adjust-note-options" : undefined}
+                          aria-activedescendant={showAdjustNoteSuggestions && activeAdjustNoteIndex >= 0
+                            ? `inventory-adjust-note-option-${activeAdjustNoteIndex}` : undefined}
+                          className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                          value={adjustNoteGroup}
+                          onFocus={openAdjustNoteSuggestions}
+                          onClick={openAdjustNoteSuggestions}
+                          onChange={handleAdjustNoteChange}
+                          onKeyDown={handleAdjustNoteKeyDown}
+                          autoCapitalize="off"
+                          autoCorrect="off"
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
+                        />
+                        {showAdjustNoteSuggestions && (
+                          <div
+                            id="inventory-adjust-note-options"
+                            ref={adjustNoteListRef}
+                            role="listbox"
+                            aria-label="Nhóm bảo hành / ghi chú hiện có"
+                            className="absolute inset-x-0 top-full z-30 mt-1 max-h-24 overflow-y-auto overscroll-contain rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+                          >
+                            {adjustNoteSuggestions.map((note, index) => (
+                              <button
+                                key={note}
+                                id={`inventory-adjust-note-option-${index}`}
+                                type="button"
+                                role="option"
+                                aria-selected={activeAdjustNoteIndex === index}
+                                tabIndex={-1}
+                                onPointerDown={handleAdjustNotePointerDown}
+                                onClick={() => selectAdjustNoteSuggestion(note)}
+                                className={`block min-h-11 w-full whitespace-normal px-3 py-2 text-left text-sm text-slate-800 [overflow-wrap:anywhere] hover:bg-blue-50 focus:bg-blue-50 focus:outline-none ${activeAdjustNoteIndex === index ? "bg-blue-50" : "bg-white"}`}
+                              >
+                                {note}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <p className="mt-1 text-xs text-slate-500">Để trống nếu tăng vào nhóm Không ghi chú.</p>
                     </div>
                   ) : adjustmentType === "DECREASE" ? (
