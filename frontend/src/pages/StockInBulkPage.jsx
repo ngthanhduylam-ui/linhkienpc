@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { SupplierSelector } from "../components/SupplierSelector";
+import { StockInNoteInput } from "../components/StockInNoteInput";
 import {
   bulkStockInRequest,
   listActiveCategories,
@@ -438,20 +439,17 @@ export function StockInBulkPage() {
                                 >
                                   Nhóm bảo hành / ghi chú
                                 </label>
-                                <input
+                                <StockInNoteInput
+                                  key={item.product.id}
                                   id={`stock-in-note-${item.rowId}`}
-                                  ref={(element) => {
+                                  groups={item.product.note_groups}
+                                  inputRef={(element) => {
                                     if (element) rowNoteRefs.current[item.rowId] = element;
+                                    else delete rowNoteRefs.current[item.rowId];
                                   }}
-                                  className="stock-in-note-input h-11 w-full min-w-0 max-w-full rounded border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                   value={item.note}
-                                  onChange={(event) => updateItem(item.rowId, { note: event.target.value })}
+                                  onChange={(note) => updateItem(item.rowId, { note })}
                                   onKeyDown={(event) => handleNoteKeyDown(event, item.rowId)}
-                                  autoCapitalize="off"
-                                  autoCorrect="off"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  placeholder="Ví dụ: BH 12.28, để trống nếu không ghi chú"
                                 />
                               </div>
                               <div className="min-w-0">
