@@ -863,6 +863,7 @@ export function ProductFormPage() {
           name,
           sku,
           category_id: Number(categoryId),
+          spec_summary: form.spec_summary.trim() || null,
           sale_price: salePrice.value
         });
         if (pendingImages.length > 0) {
