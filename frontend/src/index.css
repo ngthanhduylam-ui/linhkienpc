@@ -20,6 +20,12 @@ body {
   max-width: 100%;
 }
 
+/* Align shell chrome with the page's existing wide opt-in, without widening
+   legacy Admin pages or changing any page-specific title/section spacing. */
+.admin-shell:has(.admin-page-container > .stock-in-workspace) .admin-topbar-inner {
+  max-width: 100%;
+}
+
 .stock-in-workspace {
   container: stock-in-workspace / inline-size;
 }

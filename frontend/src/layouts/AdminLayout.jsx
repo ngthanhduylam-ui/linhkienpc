@@ -50,7 +50,7 @@ export function AdminLayout() {
     location.pathname !== "/admin/settings/print-template/builder-lab";
 
   return (
-    <div className="min-h-screen min-w-0 bg-slate-50">
+    <div className="admin-shell min-h-screen min-w-0 bg-slate-50">
       <AdminSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}

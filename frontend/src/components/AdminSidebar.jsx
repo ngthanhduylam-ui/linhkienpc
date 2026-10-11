@@ -25,12 +25,12 @@ const settingsItems = [
 ];
 
 function navClassName(labelsVisible) {
-  return ({ isActive }) => `relative flex min-h-11 min-w-0 items-center rounded-lg py-2 text-sm outline-none transition-colors before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-r-full focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
+  return ({ isActive }) => `relative flex min-h-11 min-w-0 items-center rounded-md py-2 text-sm outline-none transition-colors before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-r-full focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
     labelsVisible ? "gap-3 px-3" : "justify-center px-0"
   } ${
     isActive
-      ? "bg-brand-50 font-semibold text-brand-700 before:bg-brand-500"
-      : "font-medium text-slate-700 before:bg-transparent hover:bg-slate-50 hover:text-slate-900"
+      ? "bg-brand-50 font-semibold text-brand-700 before:bg-brand-700"
+      : "font-normal text-slate-700 before:bg-transparent hover:bg-slate-100 hover:text-slate-900"
   }`;
 }
 
@@ -154,9 +154,9 @@ function SidebarLabel({ children, visible }) {
 
 function SidebarNavGroup({ title, items, divided = false, labelsVisible, onNavigate }) {
   return (
-    <div className={divided ? `border-t border-slate-200 ${labelsVisible ? "pt-4" : "pt-2"}` : ""}>
+    <div className={divided ? `border-t border-slate-200 ${labelsVisible ? "pt-3" : "pt-2"}` : ""}>
       {labelsVisible && (
-        <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+        <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           {title}
         </p>
       )}
@@ -267,10 +267,10 @@ export function AdminSidebar({ isOpen, onClose, desktopAutoCollapse = false }) {
         onClick={onClose}
       />
       <aside
-        className={`fixed left-0 top-0 z-30 h-screen w-72 overflow-x-hidden overflow-y-auto border-r border-slate-200 bg-white p-4 transition-[transform,width,box-shadow] duration-200 ease-out motion-reduce:transition-none md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-30 h-screen w-72 overflow-x-hidden overflow-y-auto border-r border-slate-200 bg-white px-3 py-3 transition-[transform,width,box-shadow] duration-200 ease-out motion-reduce:transition-none md:translate-x-0 ${
           desktopAutoCollapse
             ? desktopExpanded
-              ? "md:w-72 md:shadow-xl"
+              ? "md:w-72 md:shadow-md"
               : "md:w-[72px] md:shadow-none"
             : "md:w-72"
         } ${
@@ -281,8 +281,8 @@ export function AdminSidebar({ isOpen, onClose, desktopAutoCollapse = false }) {
         onFocusCapture={handleFocusCapture}
         onBlurCapture={handleBlurCapture}
       >
-        <div className={`mb-3 flex h-12 min-w-0 items-center ${labelsVisible ? "justify-start gap-3 px-2" : "justify-center"}`}>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+        <div className={`mb-4 flex h-11 min-w-0 items-center ${labelsVisible ? "justify-start gap-2 px-2" : "justify-center"}`}>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white p-0.5">
             <img
               src={ptcLogoUrl}
               alt="Logo VI TÍNH PHƯỚC TÀI"
@@ -297,23 +297,23 @@ export function AdminSidebar({ isOpen, onClose, desktopAutoCollapse = false }) {
                 : "w-0 -translate-x-1 overflow-hidden opacity-0"
             }`}
           >
-            <p className="truncate whitespace-nowrap text-sm font-bold tracking-[0.01em] text-brand-900">
+            <p className="truncate whitespace-nowrap text-sm font-semibold text-brand-900">
               VI TÍNH PHƯỚC TÀI
             </p>
-            <p className="mt-0.5 truncate whitespace-nowrap text-xs font-medium text-slate-500">
+            <p className="mt-0.5 truncate whitespace-nowrap text-[11px] text-slate-500">
               Quản trị hệ thống
             </p>
           </div>
         </div>
 
-        <nav className={labelsVisible ? "space-y-5" : "space-y-2"} aria-label="Điều hướng quản trị">
+        <nav className={labelsVisible ? "space-y-4" : "space-y-2"} aria-label="Điều hướng quản trị">
           <Link
             to="/"
             onClick={() => {
               saveAdminReturnLocation();
               handleNavigate();
             }}
-            className={`flex min-h-11 min-w-0 items-center rounded-lg border border-slate-300 bg-white py-2 text-sm font-medium text-slate-700 outline-none transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
+            className={`flex min-h-11 min-w-0 items-center rounded-md border border-slate-300 bg-white py-2 text-sm font-medium text-slate-700 outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
               labelsVisible ? "gap-3 px-3" : "justify-center px-0"
             }`}
             aria-label="Tra cứu"
