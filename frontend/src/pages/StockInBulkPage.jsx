@@ -251,61 +251,52 @@ export function StockInBulkPage() {
   }
 
   return (
-    <section className="min-h-[calc(100vh-5rem)] bg-slate-100">
+    <section className="stock-in-workspace min-w-0 max-w-full">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <header className="stock-in-page-header">
+          <div className="flex min-w-0 items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">Nhập hàng</h2>
-              <p className="mt-0.5 text-sm text-slate-500">Tạo phiếu nhập kho theo nhà cung cấp và nhóm bảo hành.</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Nhập hàng</h1>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => navigate("/admin/products")}
-                className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="stock-in-exit min-h-11 rounded border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 Thoát
               </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || isLoading || items.length === 0}
-                className="h-10 rounded-md bg-brand-700 px-5 text-sm font-semibold text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting ? "Đang xử lý..." : "Nhập hàng"}
-              </button>
             </div>
           </div>
-        </div>
+        </header>
 
-        <div className="px-4 pb-6">
+        <div className="min-w-0 pb-6">
           {(error || success) && (
-            <div className="mx-auto mb-4 max-w-7xl">
+            <div className="mb-4 min-w-0 [overflow-wrap:anywhere]" aria-live="polite">
               {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow-sm">{error}</p>}
               {success && <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700 shadow-sm">{success}</p>}
             </div>
           )}
 
-          <div className="mx-auto max-w-7xl space-y-4">
-              <section className="rounded-md border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-5 py-4">
-                  <h3 className="text-base font-semibold text-slate-900">Thông tin nhà cung cấp</h3>
+          <div className="min-w-0 space-y-4">
+              <section className="stock-in-supplier-context" aria-label="Nhà cung cấp">
+                <div>
+                  <label htmlFor="stock-in-supplier" className="text-sm font-medium text-slate-700">Nhà cung cấp</label>
+                  <p className="text-xs text-slate-500">Không bắt buộc</p>
                 </div>
-                <div className="px-5 py-4">
-                  <SupplierSelector selectedSupplier={selectedSupplier} onSelect={setSelectedSupplier} />
+                <div className="min-w-0 max-w-full">
+                  <SupplierSelector variant="compact" inputId="stock-in-supplier" selectedSupplier={selectedSupplier} onSelect={setSelectedSupplier} />
                 </div>
               </section>
 
-              <section className="rounded-md border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-5 py-4">
-                  <h3 className="text-base font-semibold text-slate-900">Thông tin sản phẩm</h3>
-                </div>
+              <section className="min-w-0" aria-label="Sản phẩm nhập hàng">
 
-                <div className="p-5">
+                <div className="min-w-0">
                   <div ref={dropdownRef} className="relative">
                     <input
                       ref={searchInputRef}
-                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-4 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                      className="stock-in-search h-11 w-full min-w-0 max-w-full rounded-md border border-slate-400 bg-white px-3 pr-12 text-base outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                      aria-label="Tìm theo tên sản phẩm hoặc SKU"
                       placeholder="Tìm theo tên sản phẩm hoặc SKU"
                       value={searchInput}
                       onFocus={() => setHasFocusedProductSearch(true)}
@@ -323,17 +314,17 @@ export function StockInBulkPage() {
                         type="button"
                         aria-label="Xóa tìm kiếm sản phẩm"
                         onClick={handleClearProductSearch}
-                        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-brand-500"
                       >
                         ×
                       </button>
                     )}
 
                     {showProductDropdown && (
-                      <div className="absolute left-0 right-0 z-20 mt-1 max-h-[52vh] overflow-y-auto rounded-md border border-slate-200 bg-white shadow-xl">
+                      <div className="stock-in-search-results absolute left-0 right-0 z-20 mt-1 rounded-md border border-slate-200 bg-white shadow-lg">
                         <Link
                           to={getCreateProductUrl(searchInput)}
-                          className="flex items-center gap-2 border-b border-slate-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-brand-700 hover:bg-blue-100"
+                          className="flex min-h-11 items-center gap-2 border-b border-slate-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-blue-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
                         >
                           <span className="flex h-6 w-6 items-center justify-center rounded-full border border-brand-500 text-base leading-none">+</span>
                           <span>Thêm mới sản phẩm</span>
@@ -358,17 +349,16 @@ export function StockInBulkPage() {
                             key={product.id}
                             type="button"
                             onClick={() => handleAddProduct(product)}
-                            className="block w-full border-b border-slate-100 bg-white px-4 py-3 text-left transition last:border-b-0 hover:bg-blue-50"
+                            className="stock-in-search-result block w-full border-b border-slate-100 bg-white px-3 py-1.5 text-left transition-colors last:border-b-0 hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
                           >
-                            <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-4">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-900">{product.name}</p>
-                                <p className="mt-0.5 truncate text-xs text-slate-500">{product.sku}</p>
+                            <div className="stock-in-search-result-grid">
+                              <div className="stock-in-search-result-identity min-w-0">
+                                <p className="break-words text-sm font-semibold leading-5 text-slate-900 [overflow-wrap:anywhere]">{product.name}</p>
+                                <p className="break-all text-xs leading-4 text-slate-500">{product.sku}</p>
                               </div>
-                              <div className="text-right">
-                                <p className="text-[11px] text-slate-500">Tồn hiện tại</p>
-                                <p className="text-sm font-semibold tabular-nums text-slate-900">{Number(product.total_quantity || 0)}</p>
-                              </div>
+                              <p className="stock-in-search-result-stock min-w-0 text-right text-xs text-slate-500 [overflow-wrap:anywhere]">
+                                Tồn: <span className="text-sm font-semibold tabular-nums text-slate-900">{Number(product.total_quantity || 0)}</span>
+                              </p>
                             </div>
                           </button>
                         ))}
@@ -388,50 +378,50 @@ export function StockInBulkPage() {
                     </div>
                   )}
 
-                  <div className="stock-in-products-container mt-5 min-w-0 max-w-full rounded-md border border-slate-200">
+                  <div className="stock-in-products-container mt-4 min-w-0 max-w-full border-t border-slate-200 bg-white">
                     <div>
                       <div
                         ref={selectedProductsGridHeaderRef}
                         className="stock-in-products-grid-header border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-600"
                       >
-                        <span>Tên sản phẩm</span>
-                        <span>SKU</span>
+                        <span>Sản phẩm</span>
                         <span>Nhóm bảo hành / ghi chú</span>
                         <span className="text-right">Số lượng</span>
                         <span className="text-center">Xóa</span>
                       </div>
 
                       {items.length === 0 ? (
-                        <div className="px-4 py-12 text-center">
-                          <p className="text-sm font-medium text-slate-700">Chưa có sản phẩm trong phiếu nhập.</p>
-                          <p className="mt-1 text-sm text-slate-500">Tìm sản phẩm ở ô phía trên để thêm vào danh sách nhập hàng.</p>
+                        <div className="px-3 py-5">
+                          <p className="text-sm text-slate-500">Tìm sản phẩm để thêm vào phiếu</p>
                         </div>
                       ) : (
-                        <div className="stock-in-products-list space-y-3 bg-slate-50 p-3">
+                        <div className="stock-in-products-list">
                           {items.map((item) => (
                             <div
                               key={item.rowId}
-                              className="stock-in-product-row grid min-w-0 max-w-full grid-cols-1 gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm hover:bg-blue-50/50"
+                              className="stock-in-product-row grid min-w-0 max-w-full grid-cols-1 gap-2 bg-white px-3 py-3 text-sm"
                             >
                               <div className="stock-in-product-main flex min-w-0 items-start gap-3">
                                 <div className="min-w-0 flex-1">
                                   <p className="stock-in-product-name break-words font-semibold text-slate-900">{item.product.name}</p>
-                                  <p className="stock-in-product-category mt-0.5 break-words text-xs text-slate-500">
-                                    {getCategoryName(item.product, categories)}
-                                  </p>
+                                  <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                                    <p className="stock-in-product-sku min-w-0 break-all" title={item.sku}>
+                                      {item.sku}
+                                    </p>
+                                    <p className="stock-in-product-category min-w-0 break-words">
+                                      {getCategoryName(item.product, categories)}
+                                    </p>
+                                  </div>
                                 </div>
                                 <button
                                   type="button"
                                   onClick={() => removeItem(item.rowId)}
-                                  className="stock-in-mobile-delete flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-slate-200 text-lg text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                  className="stock-in-mobile-delete flex h-11 w-11 shrink-0 items-center justify-center rounded text-lg text-slate-500 hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-red-500"
                                   aria-label="Xóa sản phẩm"
                                 >
                                   ×
                                 </button>
                               </div>
-                              <p className="stock-in-product-sku min-w-0 break-all text-sm text-slate-600" title={item.sku}>
-                                {item.sku}
-                              </p>
                               <div className="min-w-0">
                                 <label
                                   htmlFor={`stock-in-note-${item.rowId}`}
@@ -467,7 +457,7 @@ export function StockInBulkPage() {
                                   type="number"
                                   min={1}
                                   step={1}
-                                  className="stock-in-quantity-input h-11 w-full min-w-0 max-w-full rounded border border-slate-300 bg-white px-3 text-right text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                  className="stock-in-quantity-input h-11 w-full min-w-0 max-w-full rounded border border-slate-300 bg-white px-3 text-right text-base font-semibold tabular-nums text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                                   value={item.quantity}
                                   onChange={(event) => updateItem(item.rowId, { quantity: event.target.value })}
                                   onKeyDown={handleQuantityKeyDown}
@@ -477,7 +467,7 @@ export function StockInBulkPage() {
                               <button
                                 type="button"
                                 onClick={() => removeItem(item.rowId)}
-                                className="stock-in-desktop-delete mx-auto hidden h-8 w-8 items-center justify-center rounded text-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                className="stock-in-desktop-delete mx-auto hidden h-10 w-11 items-center justify-center rounded text-lg text-slate-500 hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-red-500"
                                 aria-label="Xóa sản phẩm"
                               >
                                 ×
@@ -489,7 +479,7 @@ export function StockInBulkPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="stock-in-summary flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-100/70 px-3 py-3">
                     <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
                       <div>
                         <span className="text-slate-500">Tổng số dòng: </span>
@@ -503,7 +493,7 @@ export function StockInBulkPage() {
                     <button
                       type="submit"
                       disabled={isSubmitting || isLoading || items.length === 0}
-                      className="h-10 rounded-md bg-brand-700 px-6 text-sm font-semibold text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="stock-in-submit min-h-11 rounded-md bg-brand-700 px-6 text-sm font-semibold text-white hover:bg-brand-900 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {isSubmitting ? "Đang xử lý..." : "Nhập hàng"}
                     </button>

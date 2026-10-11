@@ -8,7 +8,7 @@ import {
   saveRecentItem
 } from "../utils/recentItems";
 
-export function SupplierSelector({ selectedSupplier, onSelect }) {
+export function SupplierSelector({ selectedSupplier, onSelect, variant = "default", inputId }) {
   const wrapperRef = useRef(null);
   const inputRef = useRef(null);
   const [keyword, setKeyword] = useState("");
@@ -156,11 +156,12 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
   }
 
   return (
-    <div ref={wrapperRef} className="space-y-3">
+    <div ref={wrapperRef} className={variant === "compact" ? "supplier-selector-compact min-w-0 max-w-full space-y-2" : "space-y-3"}>
       {!selectedSupplier && (
         <div className="relative">
           <input
             ref={inputRef}
+            id={inputId}
             className="h-11 w-full rounded-md border border-slate-300 bg-white px-4 pr-10 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             placeholder="Tìm theo tên, SĐT nhà cung cấp"
             value={keyword}
@@ -235,7 +236,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
       )}
 
       {selectedSupplier ? (
-        <div className="rounded-md border border-brand-200 bg-blue-50/40 px-4 py-3">
+        <div className={variant === "compact" ? "supplier-compact-selection" : "rounded-md border border-brand-200 bg-blue-50/40 px-4 py-3"}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-base font-semibold text-slate-900">{selectedSupplier.name}</p>
@@ -257,7 +258,7 @@ export function SupplierSelector({ selectedSupplier, onSelect }) {
             </button>
           </div>
         </div>
-      ) : (
+      ) : variant === "compact" ? null : (
         <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
           Chưa có thông tin nhà cung cấp
         </div>
