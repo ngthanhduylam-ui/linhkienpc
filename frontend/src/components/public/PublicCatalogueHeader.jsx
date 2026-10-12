@@ -99,7 +99,10 @@ export function PublicCatalogueHeader({
             onSubmit(searchInput);
           }}
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) {
+            // A touch tap may blur the input without focusing the result button.
+            // A null target is not proof of leaving the form: keep it mounted
+            // for its native click. Outside pointerdown and Escape still dismiss.
+            if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) {
               onDismissDropdown(event.relatedTarget);
             }
           }}
