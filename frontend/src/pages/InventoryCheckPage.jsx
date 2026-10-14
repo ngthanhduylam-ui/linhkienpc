@@ -501,15 +501,16 @@ export function InventoryCheckPage() {
         <p className="mt-1 text-sm text-slate-600">Kiểm tra tồn kho và điều chỉnh số lượng thực tế.</p>
       </div>
 
-      <div className="inventory-check-primary-grid min-w-0 max-w-full gap-4">
+      <div className="inventory-check-primary-grid min-w-0 max-w-full gap-6">
         <section className="min-w-0 max-w-full">
-          <div className="min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="inventory-check-search min-w-0 max-w-full">
             <h3 className="text-base font-semibold text-slate-900">Tìm sản phẩm</h3>
-            <label className="mt-3 mb-1 block text-sm font-medium text-slate-700">
+            <label htmlFor="inventory-product-search" className="mt-3 mb-1 block text-sm font-medium text-slate-700">
               Tìm sản phẩm theo tên hoặc SKU
             </label>
             <div className="relative">
               <input
+                id="inventory-product-search"
                 ref={searchInputRef}
                 className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                 placeholder="Nhập tên sản phẩm hoặc SKU"
@@ -536,7 +537,7 @@ export function InventoryCheckPage() {
                   type="button"
                   aria-label="Xóa tìm kiếm sản phẩm"
                   onClick={handleClearSearch}
-                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
                 >
                   ×
                 </button>
@@ -544,7 +545,7 @@ export function InventoryCheckPage() {
             </div>
 
             {isProductResultsOpen && isSearching && (
-              <p className="mt-3 text-sm text-slate-500">Đang tìm sản phẩm...</p>
+              <p role="status" className="mt-3 text-sm text-slate-500">Đang tìm sản phẩm...</p>
             )}
 
             {isProductResultsOpen && !isSearching && debouncedSearch && products.length === 0 && (
@@ -555,7 +556,7 @@ export function InventoryCheckPage() {
                 </p>
                 <Link
                   to={`/admin/products/new?name=${encodeURIComponent(debouncedSearch)}`}
-                  className="mt-3 inline-flex h-9 items-center rounded-md border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                  className="mt-3 inline-flex min-h-11 items-center rounded-md border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50"
                 >
                   + Thêm sản phẩm mới
                 </Link>
@@ -563,7 +564,7 @@ export function InventoryCheckPage() {
             )}
 
             {isProductResultsOpen && displayProducts.length > 0 && (
-              <div className="mt-3 min-w-0 max-w-full divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200">
+              <div className="inventory-check-results mt-3 min-w-0 max-w-full divide-y divide-slate-200 border-y border-slate-200">
                 {!debouncedSearch && (
                   <p className="bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-500">Sản phẩm gần đây</p>
                 )}
@@ -573,9 +574,10 @@ export function InventoryCheckPage() {
                     <button
                       key={product.id}
                       type="button"
+                      aria-pressed={isSelected}
                       onClick={() => handleSelectProduct(product)}
                       className={[
-                        "w-full px-3 py-2 text-left transition",
+                        "inventory-check-result w-full px-3 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500",
                         isSelected
                           ? "bg-brand-50"
                           : "bg-white hover:bg-brand-50"
@@ -583,8 +585,8 @@ export function InventoryCheckPage() {
                     >
                       <div className="flex min-w-0 max-w-full items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 break-words text-sm font-semibold text-slate-900">{product.name}</p>
-                          <p className="mt-1 break-all text-xs text-slate-600">SKU: {product.sku}</p>
+                          <p className="inventory-check-sku text-sm font-semibold text-slate-900">{product.name}</p>
+                          <p className="inventory-check-sku text-xs text-slate-500">SKU: {product.sku}{product.category?.name ? ` · ${product.category.name}` : ""}</p>
                         </div>
                         <p className="shrink-0 text-sm font-semibold text-brand-800">
                           Tồn: {Number(product.total_quantity || 0)}
@@ -599,23 +601,25 @@ export function InventoryCheckPage() {
         </section>
 
         <aside className="inventory-check-detail min-w-0 max-w-full">
-          <div className="inventory-check-detail-card min-w-0 max-w-full rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="inventory-check-detail-card min-w-0 max-w-full">
+            {isLoadingDetail && <p role="status" className="mb-3 text-sm text-slate-600">Đang tải chi tiết sản phẩm...</p>}
             {!detail ? (
-              <div className="p-4">
+              <div>
                 <h3 className="text-base font-semibold text-slate-900">Điều chỉnh số lượng</h3>
-                <p className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-600">
-                  Chọn sản phẩm bên trái để kiểm hàng.
+                <p className="mt-2 text-sm text-slate-600">
+                  Chọn sản phẩm từ kết quả tìm kiếm để kiểm hàng.
                 </p>
+                {error && <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
               </div>
             ) : (
               <>
-                <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="border-b border-slate-200 pb-3">
                   <div className="inventory-check-product-summary min-w-0 max-w-full gap-3">
                     <div className="min-w-0">
-                      <p className="line-clamp-2 break-words text-xl font-bold text-slate-900">{detail.product.name}</p>
-                      <p className="inventory-check-sku mt-1 min-w-0 text-xs font-medium text-slate-500">SKU: {detail.product.sku}</p>
+                      <h3 className="inventory-check-sku text-lg font-semibold text-slate-900">{detail.product.name}</h3>
+                      <p className="inventory-check-sku mt-1 min-w-0 text-xs text-slate-500">SKU: {detail.product.sku}{detail.product.category?.name ? ` · ${detail.product.category.name}` : ""}</p>
                     </div>
-                    <div className="inventory-check-stock-summary rounded-md border border-blue-100 bg-white shadow-sm">
+                    <div className="inventory-check-stock-summary">
                       <p className="inventory-check-stock-label text-slate-500">Tồn hiện tại</p>
                       <p className="inventory-check-stock-value text-brand-800">
                         {Number(detail.product.total_quantity || 0)}
@@ -624,7 +628,7 @@ export function InventoryCheckPage() {
                   </div>
                 </div>
 
-                <div className="px-4 py-3">
+                <div className="py-3">
                   <div className="flex min-w-0 max-w-full items-center justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="text-sm font-semibold text-slate-900">Nhóm bảo hành / ghi chú</h3>
@@ -636,11 +640,11 @@ export function InventoryCheckPage() {
                   </div>
 
                   {noteGroups.length > 0 ? (
-                    <div className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
+                    <div className="mt-2 divide-y divide-slate-100">
                       {noteGroups.map((group) => (
-                        <div key={toGroupValue(group)} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_72px] items-center gap-3 px-3 py-2 hover:bg-slate-50">
+                        <div key={toGroupValue(group)} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2">
                           <p className="inventory-check-sku min-w-0 text-sm font-medium text-slate-800">{getGroupLabel(group)}</p>
-                          <p className="rounded bg-blue-50 px-2 py-1 text-right text-sm font-bold tabular-nums text-brand-800">
+                          <p className="text-right text-sm font-semibold tabular-nums text-slate-900">
                             {group.quantity}
                           </p>
                         </div>
@@ -654,7 +658,7 @@ export function InventoryCheckPage() {
                 </div>
 
                 <form
-                  className="min-w-0 max-w-full space-y-3 border-t border-slate-200 px-4 py-4"
+                  className="min-w-0 max-w-full space-y-3 border-t border-slate-200 pt-3"
                   onSubmit={handleQuantitySubmit}
                   noValidate
                 >
@@ -665,8 +669,9 @@ export function InventoryCheckPage() {
 
                   <div className="inventory-check-form-grid min-w-0 max-w-full gap-3">
                     <div className="min-w-0 max-w-full">
-                      <label className="mb-1 block text-sm font-medium text-slate-700">Loại điều chỉnh *</label>
+                      <label htmlFor="inventory-adjust-type" className="mb-1 block text-sm font-medium text-slate-700">Loại điều chỉnh *</label>
                       <select
+                        id="inventory-adjust-type"
                         className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                         value={adjustmentType}
                         onChange={(event) => {
@@ -686,8 +691,9 @@ export function InventoryCheckPage() {
                     </div>
 
                     <div className="min-w-0 max-w-full">
-                      <label className="mb-1 block text-sm font-medium text-slate-700">Số lượng *</label>
+                      <label htmlFor="inventory-adjust-quantity" className="mb-1 block text-sm font-medium text-slate-700">Số lượng *</label>
                       <input
+                        id="inventory-adjust-quantity"
                         type="number"
                         min={1}
                         max={
@@ -771,10 +777,11 @@ export function InventoryCheckPage() {
                     </div>
                   ) : adjustmentType === "DECREASE" ? (
                     <div className="min-w-0 max-w-full">
-                      <label className="mb-1 block text-sm font-medium text-slate-700">
+                      <label htmlFor="inventory-decrease-group" className="mb-1 block text-sm font-medium text-slate-700">
                         Nhóm bảo hành / ghi chú *
                       </label>
                       <select
+                        id="inventory-decrease-group"
                         className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                         value={adjustNoteGroup}
                         onChange={(event) => setAdjustNoteGroup(event.target.value)}
@@ -790,8 +797,9 @@ export function InventoryCheckPage() {
                   ) : (
                     <div className="inventory-check-form-grid min-w-0 max-w-full gap-3">
                       <div className="min-w-0 max-w-full">
-                        <label className="mb-1 block text-sm font-medium text-slate-700">Nhóm hiện tại *</label>
+                        <label htmlFor="inventory-move-source" className="mb-1 block text-sm font-medium text-slate-700">Nhóm hiện tại *</label>
                         <select
+                          id="inventory-move-source"
                           className={[
                             "h-10 w-full min-w-0 max-w-full rounded-md border px-3 text-sm outline-none focus:ring-2",
                             moveFieldErrors.source
@@ -818,8 +826,9 @@ export function InventoryCheckPage() {
                       </div>
 
                       <div className="min-w-0 max-w-full">
-                        <label className="mb-1 block text-sm font-medium text-slate-700">Ghi chú mới</label>
+                        <label htmlFor="inventory-move-destination" className="mb-1 block text-sm font-medium text-slate-700">Ghi chú mới</label>
                         <input
+                          id="inventory-move-destination"
                           list="inventory-note-group-options"
                           className={[
                             "h-10 w-full min-w-0 max-w-full rounded-md border px-3 text-sm outline-none focus:ring-2",
@@ -858,8 +867,9 @@ export function InventoryCheckPage() {
                   )}
 
                   <div className="min-w-0 max-w-full">
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Lý do</label>
+                    <label htmlFor="inventory-adjust-reason" className="mb-1 block text-sm font-medium text-slate-700">Lý do</label>
                     <input
+                      id="inventory-adjust-reason"
                       className="h-10 w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500"
                       value={adjustReason}
                       onChange={(event) => setAdjustReason(event.target.value)}
@@ -868,8 +878,8 @@ export function InventoryCheckPage() {
                     />
                   </div>
 
-                  {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-                  {success && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
+                  {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+                  {success && <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p>}
 
                   <button
                     type="submit"
@@ -878,7 +888,7 @@ export function InventoryCheckPage() {
                       isLoadingDetail ||
                       (["DECREASE", "MOVE_NOTE"].includes(adjustmentType) && noteGroups.length === 0)
                     }
-                    className="h-10 w-full min-w-0 max-w-full rounded-md bg-brand-700 px-5 text-sm font-medium text-white hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inventory-check-submit min-h-11 w-full min-w-0 max-w-full rounded-md bg-brand-700 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSubmitting
                       ? "Đang xử lý..."
@@ -894,9 +904,9 @@ export function InventoryCheckPage() {
       </div>
 
       {recentNoteAdjustments.length > 0 && (
-        <section className="min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="inventory-check-history min-w-0 max-w-full border-t border-slate-200 pt-4">
           <h3 className="text-base font-semibold text-slate-900">Lịch sử chuyển nhóm ghi chú gần đây</h3>
-          <div className="inventory-check-table-scroll mt-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-slate-200">
+          <div className="inventory-check-table-scroll mt-3 min-w-0 max-w-full overflow-x-auto border-y border-slate-200" tabIndex={0} role="region" aria-label="Lịch sử chuyển nhóm ghi chú gần đây">
             <table className="w-max min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>
@@ -926,9 +936,9 @@ export function InventoryCheckPage() {
       )}
 
       {recentQuantityAdjustments.length > 0 && (
-        <section className="min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="inventory-check-history min-w-0 max-w-full border-t border-slate-200 pt-4">
           <h3 className="text-base font-semibold text-slate-900">Lịch sử điều chỉnh số lượng gần đây</h3>
-          <div className="inventory-check-table-scroll mt-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-slate-200">
+          <div className="inventory-check-table-scroll mt-3 min-w-0 max-w-full overflow-x-auto border-y border-slate-200" tabIndex={0} role="region" aria-label="Lịch sử điều chỉnh số lượng gần đây">
             <table className="w-max min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>

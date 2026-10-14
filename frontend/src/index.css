@@ -170,6 +170,12 @@ body {
 
 .inventory-check-container {
   container: inventory-check / inline-size;
+  /* Leave scroll clearance below actions/history for the existing Quick Note launcher. */
+  padding-bottom: 6rem;
+}
+
+.admin-page-container:has(> .inventory-check-container) {
+  max-width: 100%;
 }
 
 .transaction-history-container {
@@ -1100,6 +1106,37 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
 }
 
+.inventory-check-primary-grid {
+  align-items: start;
+  padding: 1rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.375rem;
+  background: white;
+}
+
+.inventory-check-detail {
+  container: inventory-detail / inline-size;
+  border-top: 1px solid rgb(226 232 240);
+  padding-top: 1rem;
+}
+
+.inventory-check-container input,
+.inventory-check-container select {
+  min-height: 2.75rem;
+  font-size: 1rem;
+  background-color: white;
+}
+
+.inventory-check-results {
+  max-height: min(28rem, 60vh);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.inventory-check-result {
+  min-height: 3.25rem;
+}
+
 .inventory-check-sku {
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1113,7 +1150,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.375rem 0.75rem;
+  padding: 0;
 }
 
 .inventory-check-stock-label {
@@ -1126,7 +1163,7 @@ body {
 .inventory-check-stock-value {
   flex: 0 0 auto;
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.75rem;
 }
 
@@ -1134,46 +1171,32 @@ body {
   overscroll-behavior-inline: contain;
 }
 
-@container inventory-check (min-width: 560px) {
+@container inventory-detail (min-width: 560px) {
   .inventory-check-product-summary {
-    grid-template-columns: minmax(0, 1fr) 130px;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
   }
 
   .inventory-check-stock-summary {
-    min-height: 0;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
-    padding: 0.75rem 1rem;
-    text-align: center;
-  }
-
-  .inventory-check-stock-label {
-    order: 2;
-    margin-top: 0.25rem;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    line-height: 1rem;
-    letter-spacing: 0.025em;
-    text-transform: uppercase;
-  }
-
-  .inventory-check-stock-value {
-    order: 1;
-    font-size: 2.25rem;
-    line-height: 1;
+    border-left: 1px solid rgb(226 232 240);
+    padding-left: 1rem;
   }
 }
 
 @container inventory-check (min-width: 960px) {
   .inventory-check-primary-grid {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
   }
 
-  .inventory-check-detail-card {
-    position: sticky;
-    top: 1.5rem;
+  .inventory-check-detail {
+    border-top: 0;
+    border-left: 1px solid rgb(226 232 240);
+    padding-top: 0;
+    padding-left: 1.5rem;
+  }
+
+  .inventory-check-submit {
+    width: auto;
   }
 }
 
