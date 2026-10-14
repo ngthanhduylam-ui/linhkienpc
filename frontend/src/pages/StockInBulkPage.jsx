@@ -5,21 +5,12 @@ import { StockInNoteInput } from "../components/StockInNoteInput";
 import {
   bulkStockInRequest,
   listActiveCategories,
-  listActiveProducts
+  listActiveProducts,
+  listProductsPage
 } from "../services/inventoryOperations.service";
 import { RECENT_PRODUCTS_KEY, filterRecentItemsByAvailable, readRecentItems, saveRecentItem } from "../utils/recentItems";
 
-function stripDiacritics(value) {
-  return (value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\u0111/g, "d")
-    .replace(/\u0110/g, "D");
-}
-
-function normalizeText(value) {
-  return stripDiacritics(value).trim().toLowerCase();
-}
+const STOCK_IN_SEARCH_PAGE_SIZE = 14;
 
 function getCategoryName(product, categories) {
   if (product?.category?.name) return product.category.name;
@@ -55,11 +46,61 @@ export function StockInBulkPage() {
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [productSearch, setProductSearch] = useState({
+    query: "", items: [], page: 0, totalPages: 1, loading: false, error: ""
+  });
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchRetry, setSearchRetry] = useState(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
+
+  useEffect(() => {
+    const keyword = searchInput.trim();
+    if (!keyword || keyword !== debouncedSearch) return;
+    let active = true;
+    setProductSearch((current) => ({
+      query: keyword,
+      items: searchPage > 1 && current.query === keyword ? current.items : [],
+      page: searchPage - 1,
+      totalPages: current.query === keyword ? current.totalPages : 1,
+      loading: true,
+      error: ""
+    }));
+
+    // Search the full catalogue on the server, not the recent-products preload.
+    // Stock In intentionally includes zero-stock products (no POS in_stock flag).
+    listProductsPage({ keyword, page: searchPage, limit: STOCK_IN_SEARCH_PAGE_SIZE, is_active: true })
+      .then((result) => {
+        if (!active) return;
+        setProductSearch((current) => {
+          const candidates = searchPage === 1 ? result.items : [...current.items, ...result.items];
+          const seen = new Set();
+          return {
+            query: keyword,
+            items: candidates.filter((item) => {
+              if (seen.has(item.id)) return false;
+              seen.add(item.id);
+              return true;
+            }),
+            page: searchPage,
+            totalPages: Number(result.meta.total_pages || 1),
+            loading: false,
+            error: ""
+          };
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setProductSearch((current) => ({
+          ...current, loading: false, error: "Không thể tìm sản phẩm. Vui lòng thử lại."
+        }));
+      });
+    // Also invalidate immediately on raw input changes, before the next debounce.
+    return () => { active = false; };
+  }, [searchInput, debouncedSearch, searchPage, searchRetry]);
 
   useEffect(() => {
     let active = true;
@@ -106,30 +147,22 @@ export function StockInBulkPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredProducts = useMemo(() => {
-    const keyword = normalizeText(debouncedSearch);
-    if (!keyword) return [];
-
-    return products
-      .filter((item) => {
-        const sku = normalizeText(item.sku);
-        const name = normalizeText(item.name);
-        const categoryName = normalizeText(getCategoryName(item, categories));
-        return sku.includes(keyword) || name.includes(keyword) || categoryName.includes(keyword);
-      })
-      .slice(0, 14);
-  }, [products, categories, debouncedSearch]);
-
+  const searchKeyword = searchInput.trim();
+  const hasSearchQuery = searchKeyword.length > 0;
+  const isCurrentSearch = productSearch.query === searchKeyword && debouncedSearch === searchKeyword;
+  const searchError = isCurrentSearch ? productSearch.error : "";
+  const isSearching = hasSearchQuery && (!isCurrentSearch || productSearch.loading ||
+    (!searchError && productSearch.page !== searchPage));
   const displayProducts = useMemo(() => {
-    if (debouncedSearch) return filteredProducts;
+    if (hasSearchQuery) return isCurrentSearch ? productSearch.items : [];
     if (hasFocusedProductSearch) return filterRecentItemsByAvailable(recentProducts, products).slice(0, 14);
     return [];
-  }, [debouncedSearch, filteredProducts, hasFocusedProductSearch, products, recentProducts]);
+  }, [hasSearchQuery, isCurrentSearch, productSearch.items, hasFocusedProductSearch, products, recentProducts]);
 
   const totalRowsQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const showProductDropdown =
-    hasFocusedProductSearch && !isLoading && (displayProducts.length > 0 || debouncedSearch.length > 0 || products.length === 0);
-  const showNoResultState = !isLoading && debouncedSearch.length > 0 && filteredProducts.length === 0;
+    hasFocusedProductSearch && (hasSearchQuery || (!isLoading && (displayProducts.length > 0 || products.length === 0)));
+  const showNoResultState = hasSearchQuery && !isSearching && !searchError && displayProducts.length === 0;
 
   function handleAddProduct(product) {
     const rowId = createRowId(product);
@@ -146,6 +179,7 @@ export function StockInBulkPage() {
     ]);
     setSearchInput("");
     setDebouncedSearch("");
+    setSearchPage(1);
     setHasFocusedProductSearch(false);
     setSuccess("");
     setError("");
@@ -159,6 +193,7 @@ export function StockInBulkPage() {
   function handleClearProductSearch() {
     setSearchInput("");
     setDebouncedSearch("");
+    setSearchPage(1);
     setSuccess("");
     setHasFocusedProductSearch(true);
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
@@ -305,6 +340,7 @@ export function StockInBulkPage() {
                       }}
                       onChange={(event) => {
                         setSearchInput(event.target.value);
+                        setSearchPage(1);
                         setHasFocusedProductSearch(true);
                         setSuccess("");
                       }}
@@ -330,15 +366,24 @@ export function StockInBulkPage() {
                           <span>Thêm mới sản phẩm</span>
                         </Link>
 
-                        {!debouncedSearch && displayProducts.length > 0 && (
+                        {!hasSearchQuery && displayProducts.length > 0 && (
                           <p className="border-b border-slate-100 bg-slate-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                             Sản phẩm gần đây
                           </p>
                         )}
 
-                        {isLoading && <p className="px-4 py-3 text-sm text-slate-500">Đang tải dữ liệu sản phẩm...</p>}
+                        {isSearching && <p role="status" className="px-4 py-3 text-sm text-slate-500">Đang tìm sản phẩm...</p>}
 
-                        {!isLoading && displayProducts.length === 0 && (
+                        {searchError && (
+                          <div role="alert" className="px-4 py-3 text-sm text-red-700">
+                            <p>{searchError}</p>
+                            <button type="button" onClick={() => setSearchRetry((value) => value + 1)} className="mt-1 min-h-11 underline focus-visible:ring-2 focus-visible:ring-brand-500">
+                              Thử lại tìm kiếm
+                            </button>
+                          </div>
+                        )}
+
+                        {(hasSearchQuery ? showNoResultState : !isLoading && !error && displayProducts.length === 0) && (
                           <div className="px-4 py-3">
                             <p className="text-sm text-slate-600">Không tìm thấy sản phẩm phù hợp.</p>
                           </div>
@@ -362,6 +407,16 @@ export function StockInBulkPage() {
                             </div>
                           </button>
                         ))}
+                        {hasSearchQuery && isCurrentSearch && !searchError && productSearch.page < productSearch.totalPages && (
+                          <button
+                            type="button"
+                            disabled={isSearching}
+                            onClick={() => setSearchPage(productSearch.page + 1)}
+                            className="min-h-11 w-full border-t border-slate-100 px-4 text-sm font-semibold text-brand-700 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
+                          >
+                            Xem thêm sản phẩm
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

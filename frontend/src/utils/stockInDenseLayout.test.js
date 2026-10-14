@@ -182,6 +182,7 @@ test("bounded search results keep identity/stock, add-product click and Escape b
   state[5] = "Tên";
   state[6] = "Tên";
   state[7] = true;
+  state[12] = { query: "Tên", items: [product], page: 1, totalPages: 1, loading: false, error: "" };
   const h = renderHarness(page, "StockInBulkPage", state);
   const result = find(h, (n) => n.props.className?.split(" ").includes("stock-in-search-result"));
   assert.ok(result);

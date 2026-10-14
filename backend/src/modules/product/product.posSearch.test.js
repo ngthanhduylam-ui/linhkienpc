@@ -138,6 +138,28 @@ test('Admin Products keeps out-of-stock matches when in_stock is absent or false
   }
 });
 
+test('Stock In searches the whole catalogue before paging and includes zero stock with AND/model/SKU queries', async () => {
+  const target = product(1, 'Màn hình AOC Gaming 24G50Z/71 (24 inch) IPS', 1);
+  const zeroStock = product(2, target.name, 0);
+  target.sku = 'lcd.aoc.24g50z.71';
+  zeroStock.sku = 'lcd.aoc.zero';
+  const queries = mockSearch([
+    target, zeroStock,
+    ...Array.from({ length: 350 }, (_, i) => product(100 + i, `RAM fixture ${i}`, 1)),
+    product(3, target.name, 1, 0)
+  ]);
+  const preload = await productService.listAdminProducts({ page: 1, limit: 100 });
+  assert.equal(preload.items.length, 100);
+  assert.equal(preload.items.some((row) => row.id === target.id), false);
+  for (const q of ['Aoc 24', '24g50z', target.sku, zeroStock.sku]) {
+    const result = await productService.listAdminProducts({ q, page: 1, limit: 14, is_active: 'true' });
+    assert.deepEqual(result.items.map((row) => row.id), q === target.sku ? [1] : q === zeroStock.sku ? [2] : [2, 1]);
+  }
+  for (const { sql } of queries.filter(({ sql }) => /FROM products p/.test(sql))) {
+    assert.doesNotMatch(sql, /COALESCE\(pib\.quantity, 0\) > 0/);
+  }
+});
+
 test('Public retains positive-stock filtering, AND matching and private-price exclusion', async () => {
   mockSearch([
     product(1, 'AOC 24"', 1), product(2, 'AOC 24"', 0),
