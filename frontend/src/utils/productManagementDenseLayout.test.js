@@ -132,15 +132,47 @@ test("search remains debounced server-side and resets pagination with the unchan
   h.unmount();
 });
 
-test("status filters preserve true/false/undefined API contract and reset to page one", async () => {
+test("status filters send explicit all/true/false and reset to page one with the same search", async () => {
   const h = harness(); await h.settle();
-  for (const [filter, value] of [["inactive", false], ["all", undefined], ["active", true]]) {
+  h.byId("product-list-search").props.onChange({ target: { value: "aoc 24" } }); h.flush(); await h.debounce();
+  for (const [filter, value] of [["inactive", false], ["all", "all"], ["active", true]]) {
     h.button("Sau").props.onClick(); h.flush(); await h.settle();
     h.byId("product-list-status").props.onChange({ target: { value: filter } }); h.flush(); await h.settle();
     assert.equal(h.calls.at(-1).page, 1);
     assert.equal(h.calls.at(-1).is_active, value);
+    assert.equal(h.calls.at(-1).keyword, "aoc 24");
     assert.equal(h.calls.at(-1).in_stock, undefined);
   }
+  h.unmount();
+});
+
+test("changing status/search ignores stale success and error responses including old pagination", async () => {
+  const requests = [];
+  const h = harness({ listProductsPage: (query) => new Promise((resolve, reject) => requests.push({ query, resolve, reject })) });
+  const response = (items, total = items.length) => ({ items, meta: { total, total_pages: Math.max(1, Math.ceil(total / 20)) } });
+  requests[0].resolve(response([product], 43)); await h.settle();
+  h.button("Sau").props.onClick(); h.flush();
+  h.byId("product-list-status").props.onChange({ target: { value: "all" } }); h.flush();
+  assert.deepEqual(requests[2].query, { keyword: "", page: 1, limit: 20, is_active: "all" });
+  assert.equal(h.rows().length, 0, "old rows are hidden while the new filter loads");
+  requests[1].reject(new Error("stale page error")); await h.settle();
+  assert.ok(texts(h).includes("Đang tải danh sách sản phẩm..."));
+  assert.equal(h.find((n) => n.props.role === "alert"), undefined);
+  h.byId("product-list-status").props.onChange({ target: { value: "inactive" } }); h.flush();
+  requests[3].resolve(response([otherProduct])); await h.settle();
+  requests[2].resolve(response([product, otherProduct], 99)); await h.settle();
+  assert.equal(h.rows().length, 1);
+  assert.ok(texts(h, h.rows()[0]).includes(otherProduct.name));
+  assert.match(texts(h), /Tổng: 1 sản phẩm/);
+  assert.match(texts(h), /Trang 1 \/ 1/);
+  h.byId("product-list-search").props.onChange({ target: { value: "old" } }); h.flush(); await h.debounce();
+  h.byId("product-list-search").props.onChange({ target: { value: "new" } }); h.flush(); await h.debounce();
+  assert.equal(requests[5].query.is_active, false);
+  requests[5].resolve(response([])); await h.settle();
+  requests[4].resolve(response([otherProduct], 99)); await h.settle();
+  assert.equal(h.rows().length, 0);
+  assert.match(texts(h), /Tổng: 0 sản phẩm/);
+  assert.equal(h.find((n) => n.props.role === "alert"), undefined);
   h.unmount();
 });
 

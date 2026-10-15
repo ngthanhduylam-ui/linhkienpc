@@ -111,7 +111,7 @@ function getProductErrorMessage(error, fallbackMessage) {
 function getStatusQueryValue(statusFilter) {
   if (statusFilter === PRODUCT_STATUS_ACTIVE) return true;
   if (statusFilter === PRODUCT_STATUS_INACTIVE) return false;
-  return undefined;
+  return "all";
 }
 
 function getProductStatusBadge(product) {

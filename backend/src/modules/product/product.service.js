@@ -205,7 +205,8 @@ async function listAdminProducts(query) {
   const { page, limit, offset } = parsePagination(query);
   const searchTokens = getSearchTokens(query.q);
   const categoryId = parseNullableInt(query.category_id, 'category_id');
-  const isActive = parseBooleanQuery(query.is_active, true);
+  // Explicit Admin-only ALL; omitted status retains the legacy active-only default.
+  const isActive = query.is_active === 'all' ? null : parseBooleanQuery(query.is_active, true);
   const inStock = parseBooleanQuery(query.in_stock, false);
 
   const whereParts = [];

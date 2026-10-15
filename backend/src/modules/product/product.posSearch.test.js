@@ -33,13 +33,14 @@ function mockSearch(rows) {
       throw new Error(`Unexpected SQL: ${sql}`);
     }
 
-    const where = sql.slice(sql.indexOf('WHERE ')).split(/ORDER BY|LIMIT/)[0];
+    const where = sql.includes('WHERE ') ? sql.slice(sql.indexOf('WHERE ')).split(/ORDER BY|LIMIT/)[0] : '';
     const requiresStock = /COALESCE\(pib\.quantity, 0\) > 0/.test(where);
     if (requiresStock) {
       assert.match(sql, /LEFT JOIN product_inventory_balances pib ON pib.product_id = p.id/);
     }
     const isPublic = /p\.is_active = 1/.test(where);
-    const tokenParams = params.slice(isPublic ? 0 : 1, /LIMIT \? OFFSET \?/.test(sql) ? -2 : undefined);
+    const hasStatusParam = /p\.is_active = \?/.test(where);
+    const tokenParams = params.slice(hasStatusParam ? 1 : 0, /LIMIT \? OFFSET \?/.test(sql) ? -2 : undefined);
     const perToken = 5; // raw sku/name, compact sku/name, category or IN-note.
     assert.equal(tokenParams.length % perToken, 0);
     const patterns = [];
@@ -55,7 +56,8 @@ function mockSearch(rows) {
     const literal = (pattern) => pattern.slice(1, -1).replace(/\\([%_\\])/g, '$1');
     const compact = (value) => value.toLowerCase().replace(/[.\- ]/g, '');
     const matches = rows.filter((row) => (
-      row.is_active === (isPublic ? 1 : params[0])
+      (!isPublic || row.is_active === 1)
+      && (!hasStatusParam || row.is_active === params[0])
       && (!requiresStock || Number(row.total_quantity || 0) > 0)
       && patterns.every(([raw, , condensed]) => (
         row.sku.toLowerCase().includes(literal(raw))
@@ -163,12 +165,62 @@ test('Stock In searches the whole catalogue before paging and includes zero stoc
 test('Public retains positive-stock filtering, AND matching and private-price exclusion', async () => {
   mockSearch([
     product(1, 'AOC 24"', 1), product(2, 'AOC 24"', 0),
-    product(3, 'Asus 24"', 1), product(4, 'AOC 27"', 1)
+    product(3, 'Asus 24"', 1), product(4, 'AOC 27"', 1), product(5, 'AOC 24"', 4, 0)
   ]);
-  const result = await productService.searchPublicProducts({ q: '24" aoc', limit: 12 });
+  const result = await productService.searchPublicProducts({ q: '24" aoc', limit: 12, is_active: 'all' });
   assert.deepEqual(result.items.map((row) => row.id), [1]);
   assert.equal(result.total, 1);
   assert.equal('sale_price' in result.items[0], false);
+});
+
+test('Admin ALL, ACTIVE and INACTIVE combine with search before count and pagination, including zero stock', async () => {
+  const queries = mockSearch([
+    product(1, 'AOC Gaming 24 inch', 0), product(2, 'AOC Gaming 24 inch', 0, 0),
+    product(3, 'AOC Gaming 24 inch', 3), product(4, 'AOC Gaming 24 inch', 2, 0),
+    product(5, 'AOC 27 inch', 1), product(6, 'Asus 24 inch', 1, 0)
+  ]);
+  const all = await productService.listAdminProducts({ is_active: 'all' });
+  assert.deepEqual(all.items.map((row) => row.id), [6, 5, 4, 3, 2, 1]);
+  assert.equal(all.total, 6);
+  for (const [is_active, expected] of [['all', [4, 3, 2, 1]], ['true', [3, 1]], ['false', [4, 2]]]) {
+    const ids = [];
+    for (let page = 1; page <= expected.length; page++) {
+      const result = await productService.listAdminProducts({ q: 'aoc 24', is_active, page, limit: 1 });
+      assert.equal(result.total, expected.length);
+      assert.equal(result.total_pages, expected.length);
+      assert.equal(result.page, page);
+      assert.equal(result.limit, 1);
+      ids.push(...result.items.map((row) => row.id));
+      if (is_active !== 'all') assert.ok(result.items.every((row) => row.is_active === (is_active === 'true')));
+    }
+    assert.deepEqual(ids, expected);
+  }
+  const productQueries = queries.filter(({ sql }) => /FROM products p/.test(sql));
+  for (let i = 0; i < productQueries.length; i += 2) {
+    const count = productQueries[i];
+    const data = productQueries[i + 1];
+    assert.deepEqual(count.params, data.params.slice(0, -2));
+    const predicates = (sql) => (sql.match(/WHERE ([\s\S]*?)(?:ORDER BY|$)/)?.[1] || '').trim();
+    assert.equal(predicates(count.sql), predicates(data.sql));
+    assert.doesNotMatch(count.sql, /COALESCE\(pib\.quantity, 0\) > 0/);
+  }
+});
+
+test('Admin missing/empty status retains active default and existing boolean spellings remain valid', async () => {
+  mockSearch([product(1, 'Monitor', 0), product(2, 'Monitor', 2, 0)]);
+  for (const is_active of [undefined, null, '', true, 'true', 1, '1']) {
+    assert.deepEqual((await productService.listAdminProducts({ is_active })).items.map((row) => row.id), [1]);
+  }
+  for (const is_active of [false, 'false', 0, '0']) {
+    assert.deepEqual((await productService.listAdminProducts({ is_active })).items.map((row) => row.id), [2]);
+  }
+});
+
+test('Admin invalid status still fails validation before querying the database', async () => {
+  pool.query = async () => { assert.fail('Invalid status must not query the database'); };
+  for (const is_active of ['ALL', 'invalid', ['all'], {}]) {
+    await assert.rejects(productService.listAdminProducts({ is_active }), { code: 'VALIDATION_ERROR' });
+  }
 });
 
 test('invalid in_stock values fail validation before any database query', async () => {

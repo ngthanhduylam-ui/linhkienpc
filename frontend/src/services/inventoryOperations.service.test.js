@@ -34,3 +34,20 @@ test("empty POS query makes no API request", async () => {
   globalThis.fetch = async () => { throw new Error("Unexpected request"); };
   assert.deepEqual(await searchActiveProducts("   "), []);
 });
+
+test("Admin listing serializes explicit all/true/false and preserves missing status and pagination metadata", async () => {
+  let requestUrl;
+  const meta = { page: 2, limit: 20, total: 42, total_pages: 3 };
+  globalThis.fetch = async (url) => {
+    requestUrl = new URL(url);
+    return new Response(JSON.stringify({ success: true, data: [], meta }));
+  };
+  for (const status of [undefined, 'all', true, false]) {
+    const result = await listProductsPage({ keyword: ' aoc 24 ', page: 2, limit: 20, is_active: status });
+    assert.equal(requestUrl.searchParams.get('is_active'), status === undefined ? null : String(status));
+    assert.equal(requestUrl.searchParams.get('q'), 'aoc 24');
+    assert.equal(requestUrl.searchParams.get('page'), '2');
+    assert.equal(requestUrl.searchParams.has('in_stock'), false);
+    assert.deepEqual(result.meta, meta);
+  }
+});
